@@ -57,6 +57,13 @@ interface Runtime {
   hoverDevice: string | null;
   hits: LegendHit[];
   phase: Phase;
+  /**
+   * Presentation chrome idle (pointer resting, cursor hidden): the crosshair, its markers, the
+   * tooltip and any legend highlight are hidden until the pointer moves again.
+   */
+  idle: boolean;
+  /** useAppStore.presentSafeLeft: the in-canvas title keeps clear of the exit button. */
+  safeLeft: number;
 }
 
 /** Glide duration for a jump of `dq` sweep lengths: short hops are quick, long ones ≤ 1.2 s. */
@@ -88,6 +95,7 @@ export default function Chart2DView() {
   const clipLowGray = useAppStore((s) => s.clipLowGray);
   const presenting = useAppStore((s) => s.presenting);
   const presentBlack = useAppStore((s) => s.presentBlack);
+  const presentSafeLeft = useAppStore((s) => s.presentSafeLeft);
   // H shortcut (C2): overlays.title -> title + subtitle, overlays.colorbar -> legend.
   const showTitle = useAppStore((s) => s.overlays.title);
   const showLegend = useAppStore((s) => s.overlays.colorbar);
@@ -116,7 +124,7 @@ export default function Chart2DView() {
   const toolbarRef = useRef<HTMLDivElement>(null);
   const tooltipElRef = useRef<HTMLDivElement>(null);
   const tooltipRef = useRef<ChartTooltip | null>(null);
-  const rt = useRef<Runtime>({ w: 0, h: 0, dpr: 1, raf: 0, visible: false, pointer: null, hoverId: null, hoverDevice: null, hits: [], phase: { kind: 'static' } });
+  const rt = useRef<Runtime>({ w: 0, h: 0, dpr: 1, raf: 0, visible: false, pointer: null, hoverId: null, hoverDevice: null, hits: [], phase: { kind: 'static' }, idle: false, safeLeft: 0 });
 
   /** Scene options of the frame on screen now (advances finished glides). */
   const frameOptions = useCallback(
@@ -152,10 +160,11 @@ export default function Chart2DView() {
     const scene = buildScene(inp, frameOptions(!inp.presenting));
     const s = screenScale(r.w, r.h);
     const res = renderChart(ctx, r.w, r.h, s, scene, {
-      hoverId: r.hoverId,
-      hoverDevice: r.hoverDevice,
-      pointer: r.pointer,
+      hoverId: r.idle ? null : r.hoverId,
+      hoverDevice: r.idle ? null : r.hoverDevice,
+      pointer: r.idle ? null : r.pointer,
       insetBottom: inp.presenting ? BAND_H : 0,
+      safeLeft: inp.presenting ? r.safeLeft : 0,
     });
     r.hits = res.hits;
     if (tooltipElRef.current) {
@@ -189,6 +198,12 @@ export default function Chart2DView() {
     requestDraw();
   }, [inputs, requestDraw]);
 
+  // Title clear of the presentation exit button.
+  useLayoutEffect(() => {
+    rt.current.safeLeft = presentSafeLeft;
+    requestDraw();
+  }, [presentSafeLeft, requestDraw]);
+
   // Visibility: inactive tabs stay mounted but must not run a render loop.
   useEffect(() => {
     const r = rt.current;
@@ -199,6 +214,16 @@ export default function Chart2DView() {
       r.raf = 0;
     }
   }, [isActiveTab, requestDraw]);
+
+  // Hidden tab: the sweep pauses (as the 3D intro does) instead of running on unseen; back on
+  // the tab it waits where it was. A glide into the sweep lands on its first frame, paused
+  // (the glide would otherwise start the sweep by itself on return).
+  useEffect(() => {
+    if (isActiveTab) return;
+    const r = rt.current;
+    if (r.phase.kind === 'enter') r.phase = { kind: 'sweep' };
+    if (tl.playing) tl.pause();
+  }, [isActiveTab, tl]);
 
   // Size: ResizeObserver + devicePixelRatio; redraw synchronously (no blank frame).
   useEffect(() => {
@@ -312,17 +337,40 @@ export default function Chart2DView() {
   useRegisterActiveTimeline(tl, sweeping && isActiveTab);
 
   // ---------------------------------------------------------------- presentation chrome auto-hide
+  // Idle (no pointer activity for 2.5 s): the chrome fades and the hover read-out (crosshair,
+  // markers, tooltip, legend highlight) goes too, so a recording never keeps a stale tooltip.
+  // The next pointer move brings both back.
   useEffect(() => {
+    const r = rt.current;
+    const setIdle = (idle: boolean) => {
+      if (r.idle === idle) return;
+      r.idle = idle;
+      if (idle) {
+        r.hoverId = null;
+        r.hoverDevice = null;
+        const cv = canvasRef.current;
+        if (cv) {
+          cv.style.cursor = '';
+          cv.title = '';
+        }
+      }
+      requestDraw();
+    };
     if (!presenting) {
       setChromeVisible(true);
+      setIdle(false);
       return;
     }
     const el = rootRef.current;
     let timer = 0;
     const poke = () => {
       setChromeVisible(true);
+      setIdle(false);
       window.clearTimeout(timer);
-      timer = window.setTimeout(() => setChromeVisible(false), 2500);
+      timer = window.setTimeout(() => {
+        setChromeVisible(false);
+        setIdle(true);
+      }, 2500);
     };
     poke();
     el?.addEventListener('pointermove', poke);
@@ -331,8 +379,9 @@ export default function Chart2DView() {
       window.clearTimeout(timer);
       el?.removeEventListener('pointermove', poke);
       el?.removeEventListener('pointerdown', poke);
+      setIdle(false);
     };
-  }, [presenting]);
+  }, [presenting, requestDraw]);
 
   // ---------------------------------------------------------------- pointer
   const hitAt = (x: number, y: number) => rt.current.hits.find((h) => x >= h.x && x <= h.x + h.w && y >= h.y && y <= h.y + h.h) ?? null;

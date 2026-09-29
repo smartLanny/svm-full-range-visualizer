@@ -15,6 +15,8 @@
  * axis: a point whose neighbouring row / column is missing stays at its measured value and
  * fades out over that interval (and fades in on the way back), so nothing pops. Along the
  * curve a missing sample is a gap; the renderer marks it (dotted) instead of bridging it.
+ * Those fades are for sweeps only: a static slice snaps every point to a reading or nothing
+ * (settleSlice), so it never shows faint ghost segments.
  */
 import type { SvmRecord, SliceMode } from '../types';
 import { bracket, gridView, logNits, type SlicePoint } from '../data/grid';
@@ -246,10 +248,52 @@ export function smoothSliceAtLevel(rec: Pick<SvmRecord, 'matrix'>, levelNits: nu
 }
 
 // ---------------------------------------------------------------------------------------------
+// Static slices: readings only.
+
+/**
+ * Opacity from which a slice point counts as a reading: the tooltip, the data table and the
+ * stats read the curve only where it is at least this opaque (evalCurve, curveXRange).
+ */
+export const READING_ALPHA = 0.5;
+
+/**
+ * A slice as drawn in a frame that is `w` static: 1 = a static slice, 0 = a sweep frame, in
+ * between while gliding from one to the other (`ref` = the same record's slice at the static
+ * end of the glide; default: `pts` itself, i.e. a static slice).
+ *
+ * The fades of sampleAlong / LEVEL_EDGE_FADE are there so a SWEEP never pops. A static slice
+ * shows readings only: a point is either a reading (opacity ≥ READING_ALPHA, drawn fully opaque)
+ * or not drawn, never a faint ghost; the dropped point's column / row becomes a gap, so the curve
+ * keeps its measured-backed segments plus the dotted gap bridges (buildCurve).
+ *
+ * In between, each point's opacity is scaled by a per-key gain that goes from its static value
+ * (1 / a_static for a reading, 0 otherwise) to 1: a continuous function of both w and the moving
+ * slice, so a glide between a static slice and a sweep never pops either (a point that is not in
+ * the moving slice has opacity 0 there, whatever its gain).
+ */
+export function settleSlice(pts: CurvePoint[], w = 1, ref: CurvePoint[] = pts): CurvePoint[] {
+  if (!(w > 0)) return pts;
+  const gain = new Map<number, number>();
+  for (const p of ref) gain.set(p.key, p.a >= READING_ALPHA ? 1 / p.a : 0);
+  const out: CurvePoint[] = [];
+  for (const p of pts) {
+    const k = w * (gain.get(p.key) ?? 0) + (1 - w);
+    const a = p.a * k > 1 - 1e-9 ? 1 : p.a * k; // a reading ends exactly opaque
+    if (a > 1e-6) out.push(a === p.a ? p : { ...p, a });
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------------------------
 // Slice dispatch, sweeps and data extents.
 
 export function sliceFor(rec: SvmRecord, mode: SliceMode, param: number, clipLowGray: boolean): CurvePoint[] {
   return mode === 'gray' ? smoothSliceAtGray(rec, param) : smoothSliceAtLevel(rec, param, { clipLowGray });
+}
+
+/** The static slice (readings only, see settleSlice) of a record. */
+export function staticSliceFor(rec: SvmRecord, mode: SliceMode, param: number, clipLowGray: boolean): CurvePoint[] {
+  return settleSlice(sliceFor(rec, mode, param, clipLowGray));
 }
 
 export const SWEEP_DURATION = 10;

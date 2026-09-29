@@ -62,6 +62,11 @@ export interface RenderView {
    * plot never reflows when the bar appears.
    */
   insetBottom?: number;
+  /**
+   * Presentation: the title band must start at x ≥ safeLeft (CSS px; the shell's exit button sits
+   * at the stage's top-left, useAppStore.presentSafeLeft). 0 / absent = no constraint.
+   */
+  safeLeft?: number;
 }
 
 export interface HoverValue {
@@ -114,25 +119,35 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
 // (titleSlot.mix = 1), so neither the text before nor the text after the value ever moves;
 // a static title (mix = 0) is set tight. Digits are tabular (every digit as wide as the widest).
 
-function drawTitle(ctx: CanvasRenderingContext2D, scene: Scene, cx: number, cy: number, px: number): Rect {
-  ctx.font = font(600, px);
+function drawTitle(ctx: CanvasRenderingContext2D, scene: Scene, cx: number, cy: number, px: number, minX: number, maxX: number): Rect {
+  const [pre, val, post] = scene.title;
+  const slot = scene.titleSlot;
+  const mix = Math.min(1, Math.max(0, slot.mix));
+  const measure = (fpx: number) => {
+    ctx.font = font(600, fpx);
+    let digitW = 0;
+    for (let d = 0; d <= 9; d++) digitW = Math.max(digitW, ctx.measureText(String(d)).width);
+    const charW = (ch: string) => (ch >= '0' && ch <= '9' ? digitW : ctx.measureText(ch).width);
+    const width = (str: string) => [...str].reduce((a, ch) => a + charW(ch), 0);
+    const preW = ctx.measureText(pre).width;
+    const postW = ctx.measureText(post).width;
+    const valW = width(val);
+    const reserveW = Math.max(valW, width(slot.reserve));
+    const slotW = valW + (reserveW - valW) * mix;
+    return { charW, preW, valW, slotW, total: preW + slotW + postW };
+  };
+  let M = measure(px);
+  // Too wide for the free band (narrow stage with the exit button at its top-left): shrink.
+  if (M.total > maxX - minX && maxX > minX) {
+    px *= (maxX - minX) / M.total;
+    M = measure(px);
+  }
   ctx.fillStyle = C.title;
   ctx.textBaseline = 'middle';
   ctx.textAlign = 'left';
-  const [pre, val, post] = scene.title;
-  const slot = scene.titleSlot;
-  let digitW = 0;
-  for (let d = 0; d <= 9; d++) digitW = Math.max(digitW, ctx.measureText(String(d)).width);
-  const charW = (ch: string) => (ch >= '0' && ch <= '9' ? digitW : ctx.measureText(ch).width);
-  const width = (str: string) => [...str].reduce((a, ch) => a + charW(ch), 0);
-  const preW = ctx.measureText(pre).width;
-  const postW = ctx.measureText(post).width;
-  const valW = width(val);
-  const reserveW = Math.max(valW, width(slot.reserve));
-  const mix = Math.min(1, Math.max(0, slot.mix));
-  const slotW = valW + (reserveW - valW) * mix;
-  const total = preW + slotW + postW;
-  const x0 = cx - total / 2;
+  const { charW, preW, valW, slotW, total } = M;
+  // centred, unless that would put it left of minX
+  const x0 = Math.max(minX, Math.min(cx - total / 2, maxX - total));
   ctx.fillText(pre, x0, cy);
   let x = slot.align === 'left' ? x0 + preW : x0 + preW + slotW - valW;
   for (const ch of val) {
@@ -147,9 +162,14 @@ function drawTitle(ctx: CanvasRenderingContext2D, scene: Scene, cx: number, cy: 
 // ---------------------------------------------------------------------------------------------
 // Legend (inside the plot, top-right).
 
+/**
+ * A legend line. Layouts are cached across frames (placeLegend), so an item refers to its group
+ * by index: it is painted from the CURRENT scene's groups (hidden state, colours), never from the
+ * scene the layout was measured for.
+ */
 interface LegendItem {
   kind: 'header' | 'row';
-  group: LegendGroup;
+  gi: number;
   rowIndex: number;
   h: number;
   w: number;
@@ -162,10 +182,23 @@ interface LegendLayout {
   h: number;
 }
 
+/** Legend font size at k = 1 (units). */
+const LEGEND_FS = 12.5;
+/** Legend text floor (px at the reference layout, docs/adr/0006): legible on a 1280×720 screen. */
+export const LEGEND_MIN_FS = 9;
+
+/**
+ * Smallest legend scale k at UI scale s: the text never gets smaller than LEGEND_MIN_FS CSS px
+ * on screen (s ≤ 1), and never smaller than the same share of the picture in larger exports.
+ */
+export function legendMinK(s: number): number {
+  return LEGEND_MIN_FS / (LEGEND_FS * Math.min(1, s));
+}
+
 function legendMetrics(s: number, k: number) {
   const u = s * k;
   return {
-    fs: 12.5 * u,
+    fs: LEGEND_FS * u,
     pad: 10 * u,
     rowH: 21 * u,
     headH: 23 * u,
@@ -179,12 +212,12 @@ function legendMetrics(s: number, k: number) {
 
 function layoutLegend(ctx: CanvasRenderingContext2D, groups: LegendGroup[], s: number, k: number, ncols: number): LegendLayout {
   const m = legendMetrics(s, k);
-  const items: LegendItem[][] = groups.map((g) => {
+  const items: LegendItem[][] = groups.map((g, gi) => {
     ctx.font = font(600, m.fs);
-    const out: LegendItem[] = [{ kind: 'header', group: g, rowIndex: -1, h: m.headH, w: m.chip + m.gap + ctx.measureText(g.label).width }];
+    const out: LegendItem[] = [{ kind: 'header', gi, rowIndex: -1, h: m.headH, w: m.chip + m.gap + ctx.measureText(g.label).width }];
     ctx.font = font(500, m.fs);
     g.rows.forEach((r, i) =>
-      out.push({ kind: 'row', group: g, rowIndex: i, h: m.rowH, w: m.sampleW + m.gap + ctx.measureText(r.label).width + (r.excluded ? ctx.measureText(' *').width + 2 * s * k : 0) }),
+      out.push({ kind: 'row', gi, rowIndex: i, h: m.rowH, w: m.sampleW + m.gap + ctx.measureText(r.label).width + (r.excluded ? ctx.measureText(' *').width + 2 * s * k : 0) }),
     );
     return out;
   });
@@ -217,25 +250,45 @@ function layoutLegend(ctx: CanvasRenderingContext2D, groups: LegendGroup[], s: n
   return { k, cols, w, h };
 }
 
+/** Size limits of the legend inside the plot (share of the plot's width / height / area). */
+const LEGEND_LIMITS = [
+  // compact: the preferred size
+  { w: 0.52, h: 0.72, area: 0.24 },
+  // when the text floor does not fit the compact limits (long labels, small plots): wider
+  // two-column layouts before anything else gives
+  { w: 0.62, h: 0.8, area: 0.3 },
+];
+
 /**
- * Largest legend layout (scale k ≤ kStart, one or two columns) within the size limits. Narrow
- * or short plots get a compact legend: at most ~52 % of the plot width, ~72 % of its height and
- * ~24 % of its area.
+ * Largest legend layout (scale k from kStart down to the text floor kMin, one or two columns)
+ * within the size limits (LEGEND_LIMITS, compact first). If nothing at the floor is within the
+ * limits, the smallest layout at the floor that still fits inside the plot; only a plot too
+ * small for even that gets smaller text.
  */
-function fitLegend(ctx: CanvasRenderingContext2D, groups: LegendGroup[], s: number, plot: Rect, kStart: number): LegendLayout {
-  const maxH = plot.h * 0.72;
-  const maxW = plot.w * 0.52;
-  const maxArea = plot.w * plot.h * 0.24;
-  let last: LegendLayout | null = null;
-  for (let k = kStart; k >= 0.6 - 1e-9; k -= 0.05) {
-    for (const n of [1, 2]) {
-      const L = layoutLegend(ctx, groups, s, k, n);
-      last = L;
-      if (L.h <= maxH && L.w <= maxW && L.w * L.h <= maxArea) return L;
-      if (L.w > maxW) break; // two columns only get wider
+function fitLegend(ctx: CanvasRenderingContext2D, groups: LegendGroup[], s: number, plot: Rect, kStart: number, kMin: number): LegendLayout {
+  const k0 = Math.max(kStart, kMin);
+  const ks: number[] = [];
+  for (let k = k0; k > kMin + 1e-6; k -= 0.05) ks.push(k);
+  ks.push(kMin);
+  for (const lim of LEGEND_LIMITS) {
+    const maxW = plot.w * lim.w;
+    const maxH = plot.h * lim.h;
+    const maxArea = plot.w * plot.h * lim.area;
+    for (const k of ks) {
+      for (const n of [1, 2]) {
+        const L = layoutLegend(ctx, groups, s, k, n);
+        if (L.h <= maxH && L.w <= maxW && L.w * L.h <= maxArea) return L;
+        if (L.w > maxW) break; // two columns only get wider
+      }
     }
   }
-  return last ?? layoutLegend(ctx, groups, s, 0.6, 1);
+  const inset = 12 * s;
+  const fits = (L: LegendLayout) => L.w <= plot.w - 2 * inset && L.h <= plot.h - 2 * inset;
+  for (let k = kMin; k >= 0.4 - 1e-9; k -= 0.05) {
+    const opts = [1, 2].map((n) => layoutLegend(ctx, groups, s, k, n)).filter(fits);
+    if (opts.length) return opts.reduce((a, b) => (b.w * b.h < a.w * a.h ? b : a));
+  }
+  return layoutLegend(ctx, groups, s, 0.4, 1);
 }
 
 type Corner = 'tr' | 'tl' | 'br' | 'bl';
@@ -315,6 +368,7 @@ interface LegendPlacement {
   L: LegendLayout;
   x: number;
   y: number;
+  corner: Corner;
 }
 
 const placementCache = new WeakMap<LegendProbe, { key: string; value: LegendPlacement }>();
@@ -322,8 +376,9 @@ const placementCache = new WeakMap<LegendProbe, { key: string; value: LegendPlac
 /**
  * Legend auto-placement (docs/adr/0006 keeps the legend inside the plot, preferably top-right):
  * the preferred top-right corner is kept whenever it covers no curve; otherwise the other
- * corners, then compacter layouts, are tried; if every option covers something, the one covering
- * the least curve length wins. For a sweep the probe holds samples of the whole sweep, so one
+ * corners, then compacter layouts (never below the text floor, legendMinK), then the other
+ * column count are tried; if every option covers something, the one covering the least curve
+ * length wins. For a sweep the probe holds samples of the whole sweep, so one
  * corner is chosen for the entire animation (the legend never jumps while it plays).
  */
 function placeLegend(ctx: CanvasRenderingContext2D, groups: LegendGroup[], s: number, plot: Rect, probe: LegendProbe, map: Mapping, sig: string): LegendPlacement {
@@ -334,11 +389,20 @@ function placeLegend(ctx: CanvasRenderingContext2D, groups: LegendGroup[], s: nu
   const pad = 4 * s;
   const tol = 2 * s;
   const pts = sampleProbe(probe, map, plot);
-  const L0 = fitLegend(ctx, groups, s, plot, 1);
+  const kMin = legendMinK(s);
+  const L0 = fitLegend(ctx, groups, s, plot, 1, kMin);
   const layouts = [L0];
   for (const f of [0.85, 0.72]) {
-    const k = Math.max(0.6, L0.k * f);
-    if (k < layouts[layouts.length - 1].k - 1e-6) layouts.push(fitLegend(ctx, groups, s, plot, k));
+    const k = Math.max(kMin, L0.k * f);
+    if (k < layouts[layouts.length - 1].k - 1e-6) layouts.push(fitLegend(ctx, groups, s, plot, k, kMin));
+  }
+  // The other column count at the most compact scale, when it stays within the size limits: a
+  // short, wide legend can clear curves that a tall, narrow one covers (and vice versa).
+  const last = layouts[layouts.length - 1];
+  if (groups.length > 1) {
+    const alt = layoutLegend(ctx, groups, s, last.k, last.cols.length === 1 ? 2 : 1);
+    const lim = LEGEND_LIMITS[LEGEND_LIMITS.length - 1];
+    if (alt.w <= plot.w * lim.w && alt.h <= plot.h * lim.h && alt.w * alt.h <= plot.w * plot.h * lim.area) layouts.push(alt);
   }
   let best: { score: number; value: LegendPlacement } | null = null;
   let chosen: LegendPlacement | null = null;
@@ -348,11 +412,11 @@ function placeLegend(ctx: CanvasRenderingContext2D, groups: LegendGroup[], s: nu
       const pos = cornerPos(CORNERS[ci], L, plot, inset);
       const ov = overlap(pts, { x: pos.x, y: pos.y, w: L.w, h: L.h }, pad);
       if (ov <= tol) {
-        chosen = { L, ...pos };
+        chosen = { L, ...pos, corner: CORNERS[ci] };
         break outer;
       }
       const score = ov * (1 + 0.25 * li) + ci * 0.5 * s;
-      if (!best || score < best.score) best = { score, value: { L, ...pos } };
+      if (!best || score < best.score) best = { score, value: { L, ...pos, corner: CORNERS[ci] } };
     }
   }
   const value = chosen ?? best!.value;
@@ -373,25 +437,58 @@ function drawDashSample(ctx: CanvasRenderingContext2D, x: number, y: number, w: 
   ctx.restore();
 }
 
+/** Smooth 0→1 ramp (zero slope at both ends). */
+const smooth01 = (u: number) => {
+  const v = Math.min(1, Math.max(0, u));
+  return v * v * (3 - 2 * v);
+};
+
+/** Anchor of a placement: the corner point it hugs, and that corner as fractions of its box. */
+function anchorOf(pl: LegendPlacement) {
+  const fx = pl.corner === 'tr' || pl.corner === 'br' ? 1 : 0;
+  const fy = pl.corner === 'br' || pl.corner === 'bl' ? 1 : 0;
+  return { ax: pl.x + fx * pl.L.w, ay: pl.y + fy * pl.L.h, fx, fy };
+}
+
 function drawLegend(ctx: CanvasRenderingContext2D, scene: Scene, s: number, plot: Rect, map: Mapping, view: RenderView, hits: LegendHit[]): Rect | null {
   const groups = scene.legend;
   if (groups.length === 0 || !scene.showLegend) return null;
   const sig = `${scene.lang}|${groups.map((g) => `${g.label}:${g.rows.map((r) => r.label + (r.excluded ? '*' : '')).join(',')}`).join(';')}`;
   const to = placeLegend(ctx, groups, s, plot, scene.legendProbe, map, sig);
-  let { L, x: x0, y: y0 } = to;
-  if (scene.legendProbeFrom && scene.legendMix < 1) {
-    // Transition into / out of a sweep: glide from the static placement to the sweep's.
-    const from = placeLegend(ctx, groups, s, plot, scene.legendProbeFrom, map, sig);
-    const p = Math.min(1, Math.max(0, scene.legendMix));
-    if (from.L.k === to.L.k && from.L.cols.length === to.L.cols.length) {
-      x0 = from.x + (to.x - from.x) * p;
-      y0 = from.y + (to.y - from.y) * p;
-    } else if (p < 0.5) ({ L, x: x0, y: y0 } = from);
+  if (!scene.legendProbeFrom || scene.legendMix >= 1) return paintLegend(ctx, scene, s, to.L, to.x, to.y, 1, view, hits);
+  // Transition into / out of a sweep: the static placement and the sweep's may differ in corner
+  // and in scale. Never switch in one frame (docs/adr/0003):
+  const from = placeLegend(ctx, groups, s, plot, scene.legendProbeFrom, map, sig);
+  const p = Math.min(1, Math.max(0, scene.legendMix));
+  if (from.L.cols.length === to.L.cols.length) {
+    // same columns: scale and position glide together (the box hugs the corner(s) it glides between)
+    const k = from.L.k + (to.L.k - from.L.k) * p;
+    const L = Math.abs(k - to.L.k) < 1e-9 ? to.L : Math.abs(k - from.L.k) < 1e-9 ? from.L : layoutLegend(ctx, groups, s, k, to.L.cols.length);
+    const A = anchorOf(from);
+    const B = anchorOf(to);
+    const lerp = (u: number, v: number) => u + (v - u) * p;
+    const x = lerp(A.ax, B.ax) - lerp(A.fx, B.fx) * L.w;
+    const y = lerp(A.ay, B.ay) - lerp(A.fy, B.fy) * L.h;
+    return paintLegend(ctx, scene, s, L, x, y, 1, view, hits);
   }
+  // one column <-> two: fade the one out, then the other in (never two legends at once)
+  const aFrom = 1 - smooth01(p * 2);
+  const aTo = smooth01(p * 2 - 1);
+  if (aFrom > 0) {
+    const r = paintLegend(ctx, scene, s, from.L, from.x, from.y, aFrom, view, p < 0.5 ? hits : null);
+    if (p < 0.5) return r;
+  }
+  return paintLegend(ctx, scene, s, to.L, to.x, to.y, aTo, view, p >= 0.5 ? hits : null);
+}
+
+function paintLegend(ctx: CanvasRenderingContext2D, scene: Scene, s: number, L: LegendLayout, x0: number, y0: number, alpha: number, view: RenderView, hits: LegendHit[] | null): Rect | null {
+  const box = { x: x0, y: y0, w: L.w, h: L.h };
+  if (!(alpha > 0)) return box;
   const m = legendMetrics(s, L.k);
   const black = scene.background === '#000000';
 
   ctx.save();
+  ctx.globalAlpha = alpha;
   roundRect(ctx, x0, y0, L.w, L.h, 8 * s);
   ctx.fillStyle = black ? 'rgba(0,0,0,0.78)' : 'rgba(11,14,20,0.84)';
   ctx.fill();
@@ -399,24 +496,25 @@ function drawLegend(ctx: CanvasRenderingContext2D, scene: Scene, s: number, plot
   ctx.strokeStyle = 'rgba(255,255,255,0.08)';
   ctx.stroke();
 
+  const groups = scene.legend;
   let cx = x0 + m.pad;
   for (const col of L.cols) {
     let y = y0 + m.pad - (m.headH - m.rowH) * 0.25;
-    let prevGroup: LegendGroup | null = null;
+    let prevGroup = -1;
     for (const it of col.items) {
-      if (prevGroup && it.group !== prevGroup) y += m.groupGap;
-      prevGroup = it.group;
+      if (prevGroup >= 0 && it.gi !== prevGroup) y += m.groupGap;
+      prevGroup = it.gi;
       const mid = y + it.h / 2;
       const hitRect = { x: cx - m.pad * 0.5, y, w: col.w + m.pad, h: it.h };
       if (it.kind === 'header') {
-        const g = it.group;
+        const g = groups[it.gi];
         const hot = scene.interactive && view.hoverDevice === g.device;
         if (hot) {
           roundRect(ctx, hitRect.x, hitRect.y + 1 * s, hitRect.w, hitRect.h - 2 * s, 5 * s);
           ctx.fillStyle = 'rgba(255,255,255,0.06)';
           ctx.fill();
         }
-        ctx.globalAlpha = g.hidden ? 0.4 : 1;
+        ctx.globalAlpha = alpha * (g.hidden ? 0.4 : 1);
         roundRect(ctx, cx + (m.sampleW - m.chip) / 2, mid - m.chip / 2, m.chip, m.chip, 2.5 * s * L.k);
         ctx.fillStyle = g.color;
         ctx.fill();
@@ -425,17 +523,17 @@ function drawLegend(ctx: CanvasRenderingContext2D, scene: Scene, s: number, plot
         ctx.textAlign = 'left';
         ctx.textBaseline = 'middle';
         ctx.fillText(g.label, cx + m.sampleW + m.gap, mid + 0.5 * s);
-        ctx.globalAlpha = 1;
-        if (scene.interactive) hits.push({ ...hitRect, kind: 'device', device: g.device });
+        ctx.globalAlpha = alpha;
+        if (scene.interactive && hits) hits.push({ ...hitRect, kind: 'device', device: g.device });
       } else {
-        const r = it.group.rows[it.rowIndex];
+        const r = groups[it.gi].rows[it.rowIndex];
         const hot = scene.interactive && view.hoverId === r.id;
         if (hot) {
           roundRect(ctx, hitRect.x, hitRect.y + 1 * s, hitRect.w, hitRect.h - 2 * s, 5 * s);
           ctx.fillStyle = 'rgba(255,255,255,0.07)';
           ctx.fill();
         }
-        ctx.globalAlpha = r.hidden ? 0.5 : 1;
+        ctx.globalAlpha = alpha * (r.hidden ? 0.5 : 1);
         drawDashSample(ctx, cx, mid, m.sampleW, r.style.color, r.style.dash, 2.5 * s * Math.max(0.8, L.k), s * L.k);
         ctx.font = font(500, m.fs);
         ctx.fillStyle = r.hidden ? C.ink4 : C.ink2;
@@ -455,15 +553,15 @@ function drawLegend(ctx: CanvasRenderingContext2D, scene: Scene, s: number, plot
           ctx.lineTo(cx + m.sampleW + m.gap + tw, mid + 0.5 * s);
           ctx.stroke();
         }
-        ctx.globalAlpha = 1;
-        if (scene.interactive) hits.push({ ...hitRect, kind: 'record', id: r.id });
+        ctx.globalAlpha = alpha;
+        if (scene.interactive && hits) hits.push({ ...hitRect, kind: 'record', id: r.id });
       }
       y += it.h;
     }
     cx += col.w + m.colGap;
   }
   ctx.restore();
-  return { x: x0, y: y0, w: L.w, h: L.h };
+  return box;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -603,15 +701,20 @@ export function renderChart(ctx: CanvasRenderingContext2D, w: number, h: number,
   // ----- title + subtitle (overlays.title, H)
   let titleRect: Rect | null = null;
   if (scene.showTitle) {
-    const tr = drawTitle(ctx, scene, w / 2, 32 * s, 24 * s);
+    // Centred; in presentation never left of the exit button (view.safeLeft).
+    const minX = Math.max(0, view.safeLeft ?? 0);
+    const maxX = w - (minX > 0 ? 8 * s : 0);
+    const tr = drawTitle(ctx, scene, w / 2, 32 * s, 24 * s, minX, maxX);
     ctx.font = font(400, 12 * s);
     ctx.fillStyle = C.axisText;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(scene.subtitle, w / 2, 60 * s);
     const sw = ctx.measureText(scene.subtitle).width;
-    const x0 = Math.min(tr.x, w / 2 - sw / 2);
-    const x1 = Math.max(tr.x + tr.w, w / 2 + sw / 2);
+    // under the title (which may have moved right of the exit button), inside the free band
+    const sx = minX > 0 ? Math.max(minX + sw / 2, Math.min(tr.x + tr.w / 2, maxX - sw / 2)) : w / 2;
+    ctx.fillText(scene.subtitle, sx, 60 * s);
+    const x0 = Math.min(tr.x, sx - sw / 2);
+    const x1 = Math.max(tr.x + tr.w, sx + sw / 2);
     titleRect = { x: x0, y: tr.y, w: x1 - x0, h: 60 * s + 9 * s - tr.y };
   }
 
