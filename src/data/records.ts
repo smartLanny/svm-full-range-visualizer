@@ -1,4 +1,4 @@
-import type { Dataset, DataPoint, Lang, RecordSource, SvmRecord } from '../types';
+import type { Dataset, DataPoint, ExcludedPoint, Lang, RecordSource, SvmRecord } from '../types';
 
 let idCounter = 0;
 export const generateId = () =>
@@ -23,27 +23,65 @@ export function guessDeviceMode(name: string): { device: string; mode: string } 
   return { device: tokens.slice(0, k).join(' '), mode: tokens.slice(k).join(' ') };
 }
 
-/** Structural validation for imported JSON. Throws on invalid input. */
+/** A number, or a numeric string ("500", " 0.2 ") as written by Excel / CSV → JSON converters; else NaN. */
+function num(v: unknown): number {
+  if (typeof v === 'number') return v;
+  if (typeof v === 'string' && v.trim() !== '') return Number(v.trim().replace(/%$/, ''));
+  return NaN;
+}
+
+/**
+ * Structural validation + normalisation for imported / stored JSON. Throws an error code on
+ * invalid input: INVALID_JSON, INVALID_MATRIX (shape), NO_VALID_CELLS (no cell with a finite
+ * nits and SVM). Numeric strings are converted; cells that are not objects with finite nits and
+ * SVM become null (missing, never 0); `excluded` keeps only well-formed points.
+ */
 export function validateDataset(json: unknown): Dataset {
   const ds = json as Dataset;
-  if (!ds || typeof ds !== 'object') throw new Error('INVALID_JSON');
-  const m = ds.matrix;
-  if (!m || !Array.isArray(m.rows) || !Array.isArray(m.cols) || !Array.isArray(m.grid)) throw new Error('INVALID_MATRIX');
+  if (!ds || typeof ds !== 'object' || Array.isArray(ds)) throw new Error('INVALID_JSON');
+  const m = ds.matrix as Dataset['matrix'] | undefined;
+  if (!m || typeof m !== 'object' || !Array.isArray(m.rows) || !Array.isArray(m.cols) || !Array.isArray(m.grid)) throw new Error('INVALID_MATRIX');
   if (m.grid.length !== m.rows.length) throw new Error('INVALID_MATRIX');
+  const rows = m.rows.map(num);
+  const cols = m.cols.map(num);
+  if (!rows.every(Number.isFinite) || !cols.every(Number.isFinite)) throw new Error('INVALID_MATRIX');
   for (const row of m.grid) {
-    if (!Array.isArray(row) || row.length !== m.cols.length) throw new Error('INVALID_MATRIX');
+    if (!Array.isArray(row) || row.length !== cols.length) throw new Error('INVALID_MATRIX');
   }
-  if (!Array.isArray(m.headerNits) || m.headerNits.length !== m.cols.length) {
+  const grid: (DataPoint | null)[][] = m.grid.map((row, r) =>
+    row.map((cell: unknown, c: number) => {
+      if (!cell || typeof cell !== 'object') return null;
+      const p = cell as Partial<Record<keyof DataPoint, unknown>>;
+      const nits = num(p.nits);
+      const svm = num(p.svm);
+      if (!Number.isFinite(nits) || !Number.isFinite(svm)) return null;
+      const gray = num(p.gray);
+      const pct = num(p.brightnessPercent);
+      return { gray: Number.isFinite(gray) ? gray : rows[r], brightnessPercent: Number.isFinite(pct) ? pct : cols[c], nits, svm };
+    }),
+  );
+  const data: DataPoint[] = [];
+  for (const row of grid) for (const p of row) if (p) data.push(p);
+  if (!data.length) throw new Error('NO_VALID_CELLS');
+
+  let headerNits = Array.isArray(m.headerNits) ? m.headerNits.map(num) : [];
+  if (headerNits.length !== cols.length || !headerNits.every(Number.isFinite)) {
     // Rebuild level luminance from the max gray row.
     let maxIdx = 0;
-    m.rows.forEach((g, i) => {
-      if (g > m.rows[maxIdx]) maxIdx = i;
+    rows.forEach((g, i) => {
+      if (g > rows[maxIdx]) maxIdx = i;
     });
-    m.headerNits = m.cols.map((_, c) => m.grid[maxIdx][c]?.nits ?? 0);
+    headerNits = cols.map((_, c) => grid[maxIdx][c]?.nits ?? 0);
   }
-  const data: DataPoint[] = [];
-  for (const row of m.grid) for (const p of row) if (p) data.push(p);
-  return { ...ds, name: String(ds.name ?? '').trim() || 'Untitled', data };
+
+  const out: Dataset = { ...ds, name: String(ds.name ?? '').trim() || 'Untitled', data, matrix: { ...m, rows, cols, headerNits, grid } };
+  if (ds.excluded !== undefined) {
+    out.excluded = (Array.isArray(ds.excluded) ? ds.excluded : [])
+      .filter((x): x is ExcludedPoint => !!x && typeof x === 'object')
+      .map((x) => ({ ...x, gray: num(x.gray), brightnessPercent: num(x.brightnessPercent), nits: num(x.nits), svm: num(x.svm), reason: String(x.reason ?? '') }))
+      .filter((x) => Number.isFinite(x.gray) && Number.isFinite(x.brightnessPercent) && Number.isFinite(x.nits) && Number.isFinite(x.svm));
+  }
+  return out;
 }
 
 /** Wrap a Dataset as an app record. */
@@ -67,10 +105,25 @@ export function toRecord(
   };
 }
 
-/** Strip app-only fields for JSON export (keeps v1 compatibility, adds device/mode). */
-export function toDatasetJson(rec: SvmRecord): Dataset {
-  const { source: _s, deviceEn: _de, modeEn: _me, ...rest } = rec;
-  return rest;
+/** Exported JSON: a v1-compatible Dataset plus the optional English display names (v1 readers ignore them). */
+export type DatasetJson = Dataset & Partial<Pick<SvmRecord, 'deviceEn' | 'modeEn'>>;
+
+/** Strip app-only fields for JSON export (keeps v1 compatibility, adds device/mode and their English aliases). */
+export function toDatasetJson(rec: SvmRecord): DatasetJson {
+  const { source: _s, deviceEn, modeEn, ...rest } = rec;
+  const out: DatasetJson = { ...rest };
+  if (deviceEn) out.deviceEn = deviceEn;
+  if (modeEn) out.modeEn = modeEn;
+  return out;
+}
+
+/** English aliases carried by an exported JSON (strings only). */
+export function englishAliases(json: unknown): Partial<Pick<SvmRecord, 'deviceEn' | 'modeEn'>> {
+  const j = (json && typeof json === 'object' ? json : {}) as Record<string, unknown>;
+  const out: Partial<Pick<SvmRecord, 'deviceEn' | 'modeEn'>> = {};
+  if (typeof j.deviceEn === 'string' && j.deviceEn.trim()) out.deviceEn = j.deviceEn.trim();
+  if (typeof j.modeEn === 'string' && j.modeEn.trim()) out.modeEn = j.modeEn.trim();
+  return out;
 }
 
 export function deviceLabel(rec: Pick<SvmRecord, 'device' | 'deviceEn'>, lang: Lang): string {

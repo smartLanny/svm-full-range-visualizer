@@ -1,12 +1,14 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronRight, Eye, EyeOff, FileDown, FolderOpen, MoreHorizontal, PanelLeftClose, PanelLeftOpen, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
+import { AlertTriangle, ArrowUpDown, ChevronRight, Eye, EyeOff, FileDown, FolderOpen, MoreHorizontal, PanelLeftClose, PanelLeftOpen, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import { useAppStore } from '../store/appStore';
 import { useRecordStyles } from '../store/hooks';
-import { useLang, useT } from '../i18n';
+import { useLang, useT, type TFunction } from '../i18n';
 import { deviceLabel, modeLabel, recordLabel } from '../data/records';
 import { deviceOrder } from '../data/colors';
+import { exclusionSummary, type ExclusionSummary } from '../data/anomalies';
+import { reasonsText } from './screening';
 import type { RecordStyle } from '../data/colors';
 import type { Lang, SvmRecord } from '../types';
 import { Button, ColorSwatch, MenuItem, cn, toast } from '../ui';
@@ -201,12 +203,13 @@ function RecordsPanelBody() {
 
       {menu && menuRec && (
         <RowMenu
+          rec={menuRec}
           x={menu.x}
           y={menu.y}
           align={menu.align}
           onClose={closeMenu}
           onEdit={() => setEditing(menuRec)}
-          onExport={() => toast(t('shell.toast.exported', { file: downloadRecordJson(menuRec) }), 'success')}
+          onExport={() => toast(t('shell.toast.exported', { file: downloadRecordJson(menuRec, lang) }), 'success')}
           onRemove={() => setRemoving(menuRec)}
         />
       )}
@@ -219,20 +222,39 @@ function RecordsPanelBody() {
         body={
           removing && (
             <>
-              <p className="text-ink-1">{t('shell.remove.body', { name: removing.name })}</p>
+              <p className="text-ink-1">{t('shell.remove.body', { name: recordLabel(removing, lang) })}</p>
               <p className="mt-2 text-xs text-ink-3">{removing.source === 'bundled' ? t('shell.remove.bundled') : t('shell.remove.user')}</p>
             </>
           )
         }
         onConfirm={() => {
           if (!removing) return;
-          useAppStore.getState().removeRecord(removing.id);
-          toast(t('shell.remove.done', { name: removing.name }));
+          removeWithUndo(removing, t, lang);
         }}
         onClose={() => setRemoving(null)}
       />
     </div>
   );
+}
+
+/** Delete a record; the toast offers Undo (re-inserted at its index with its A / B / hidden state). */
+function removeWithUndo(rec: SvmRecord, t: TFunction, lang: Lang) {
+  const st = useAppStore.getState();
+  const index = st.records.findIndex((r) => r.id === rec.id);
+  if (index < 0) return;
+  const roles = { a: st.activeId === rec.id, b: st.compareId === rec.id, hidden: st.hiddenIds.includes(rec.id) };
+  const layout = st.layout;
+  st.removeRecord(rec.id);
+  toast(t('shell.remove.done', { name: recordLabel(rec, lang) }), 'info', 8000, {
+    label: t('shell.remove.undo'),
+    onClick: () => {
+      const s = useAppStore.getState();
+      if (s.records.some((r) => r.id === rec.id)) return;
+      s.insertRecord(rec, Math.min(index, s.records.length), roles);
+      // Deleting down to one record forced the single layout: bring the comparison back.
+      if (layout !== 'single' && useAppStore.getState().records.length >= 2) useAppStore.getState().set('layout', layout);
+    },
+  });
 }
 
 function ListSkeleton() {
@@ -341,14 +363,24 @@ function RecordRow({
   onMenu: (id: string, x: number, y: number, align: 'start' | 'end') => void;
 }) {
   const t = useT();
-  const { isA, isB } = useAppStore(
+  const { isA, isB, single } = useAppStore(
     useShallow((s) => ({
       isA: s.activeId === rec.id,
       isB: s.compareId === rec.id,
+      single: s.layout === 'single',
     })),
   );
   const label = modeLabel(rec, lang) || rec.name || t('shell.sidebar.untitledMode');
-  const full = `${recordLabel(rec, lang)}${rec.name && rec.name !== recordLabel(rec, lang) ? `\n${rec.name}` : ''}`;
+  const nominal = rec.matrix.rows.length * rec.matrix.cols.length;
+  const valid = rec.data.length;
+  const summary = useMemo(() => exclusionSummary(rec), [rec]);
+  const full = [
+    recordLabel(rec, lang),
+    rec.name && rec.name !== recordLabel(rec, lang) && rec.name !== `${rec.device} ${rec.mode}`.trim() ? rec.name : '',
+    t('common.exclusion.coverage', { valid, nominal }),
+  ]
+    .filter(Boolean)
+    .join('\n');
   const store = useAppStore.getState;
   const rowRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -373,7 +405,7 @@ function RecordRow({
         onMenu(rec.id, e.clientX, e.clientY, 'start');
       }}
       className={cn(
-        'shell-row group/row relative flex h-10 cursor-pointer select-none items-center gap-2 rounded-md pl-2 pr-1 transition-colors',
+        'shell-row group/row relative flex min-h-10 cursor-pointer select-none items-center gap-2 rounded-md py-1 pl-2 pr-1 transition-colors',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent-ring',
         isA ? 'bg-accent-muted ring-1 ring-inset ring-accent/35' : isB ? 'bg-surface-3 ring-1 ring-inset ring-line-strong' : 'hover:bg-surface-2',
       )}
@@ -381,12 +413,19 @@ function RecordRow({
       {isA && <span className="absolute inset-y-1.5 left-0 w-[3px] rounded-full bg-accent" aria-hidden="true" />}
       <LineSample style={style} dim={hidden} />
       <div className="min-w-0 flex-1">
-        <div className={cn('truncate text-xs leading-4', hidden ? 'text-ink-3' : 'text-ink-1', isA && 'font-medium')}>{label}</div>
-        <div className="mt-px flex items-center gap-1.5 text-[10px] leading-3 text-ink-3">
-          <span className={cn('rounded-[3px] px-1 py-px', rec.source === 'bundled' ? 'bg-surface-4 text-ink-3' : 'bg-accent-muted text-accent-hover')}>
+        {/* Two lines before truncating: the distinguishing tail of a mode ("… Pro off") stays visible. */}
+        <div className={cn('line-clamp-2 break-words text-xs leading-4', hidden ? 'text-ink-3' : 'text-ink-1', isA && 'font-medium')} data-testid="record-label">
+          {label}
+        </div>
+        {/* Wraps instead of truncating: the exclusion badge must stay readable. */}
+        <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-[10px] leading-3 text-ink-3">
+          <span className={cn('shrink-0 rounded-[3px] px-1 py-px', rec.source === 'bundled' ? 'bg-surface-4 text-ink-3' : 'bg-accent-muted text-accent-hover')}>
             {rec.source === 'bundled' ? t('common.bundled') : t('common.user')}
           </span>
-          <span className="font-mono tabular-nums">{t('shell.sidebar.points', { n: rec.data.length })}</span>
+          <span className="shrink-0 font-mono tabular-nums" data-testid="record-points">
+            {valid < nominal ? t('shell.sidebar.pointsPartial', { valid, nominal }) : t('shell.sidebar.points', { n: valid })}
+          </span>
+          {summary && <ExclusionBadge summary={summary} />}
         </div>
       </div>
 
@@ -401,8 +440,12 @@ function RecordRow({
           </span>
         ) : isB ? (
           <span
-            title={t('shell.sidebar.isB')}
-            className="inline-flex h-[18px] w-[18px] items-center justify-center rounded bg-ink-2 text-[10px] font-bold text-canvas"
+            title={single ? t('shell.sidebar.isBUnused') : t('shell.sidebar.isB')}
+            data-testid="record-b-badge"
+            className={cn(
+              'inline-flex h-[18px] w-[18px] items-center justify-center rounded text-[10px] font-bold',
+              single ? 'text-ink-3 ring-1 ring-inset ring-line-strong' : 'bg-ink-2 text-canvas',
+            )}
           >
             B
           </span>
@@ -451,8 +494,45 @@ function RecordRow({
   );
 }
 
+/** "已剔除 N" with a tooltip breaking the exclusions down by reason (docs/adr/0012, contract C4). */
+function ExclusionBadge({ summary }: { summary: ExclusionSummary }) {
+  const t = useT();
+  const tip = [
+    t('common.exclusion.title', { n: summary.total }),
+    reasonsText(t, summary.byReason, '\n'),
+    t('common.exclusion.coverage', { valid: summary.valid, nominal: summary.nominal }),
+    t('common.exclusion.detail'),
+  ].join('\n');
+  return (
+    <span
+      title={tip}
+      aria-label={tip}
+      data-testid="record-excluded"
+      className="inline-flex shrink-0 items-center gap-0.5 whitespace-nowrap rounded-[3px] bg-amber-400/10 px-1 py-px text-amber-300/90"
+    >
+      <AlertTriangle size={9} className="shrink-0" />
+      {t('common.exclusion.badge', { n: summary.total })}
+    </span>
+  );
+}
+
+function RoleIcon({ role }: { role: 'A' | 'B' }) {
+  return (
+    <span
+      aria-hidden="true"
+      className={cn(
+        'inline-flex h-[14px] w-[14px] items-center justify-center rounded-[3px] text-[9px] font-bold',
+        role === 'A' ? 'bg-accent text-white' : 'bg-ink-2 text-canvas',
+      )}
+    >
+      {role}
+    </span>
+  );
+}
+
 /** Record actions menu, rendered in a portal so the scrolling list never clips it. */
 function RowMenu({
+  rec,
   x,
   y,
   align,
@@ -461,6 +541,7 @@ function RowMenu({
   onExport,
   onRemove,
 }: {
+  rec: SvmRecord;
   x: number;
   y: number;
   align: 'start' | 'end';
@@ -470,6 +551,9 @@ function RowMenu({
   onRemove: () => void;
 }) {
   const t = useT();
+  const { isA, isB, hasA, hasB } = useAppStore(
+    useShallow((s) => ({ isA: s.activeId === rec.id, isB: s.compareId === rec.id, hasA: s.activeId !== null, hasB: s.compareId !== null })),
+  );
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState({ left: x, top: y });
   useLayoutEffect(() => {
@@ -494,7 +578,7 @@ function RowMenu({
     document.addEventListener('mousedown', onDown);
     window.addEventListener('keydown', onKey, true);
     window.addEventListener('resize', onClose);
-    ref.current?.querySelector('button')?.focus();
+    ref.current?.querySelector<HTMLButtonElement>('button:not([disabled])')?.focus();
     return () => {
       document.removeEventListener('mousedown', onDown);
       window.removeEventListener('keydown', onKey, true);
@@ -506,7 +590,26 @@ function RowMenu({
     fn();
   };
   return createPortal(
-    <div ref={ref} role="menu" data-testid="record-menu" className="fixed z-50 w-44 rounded-xl bg-surface-2 p-1.5 shadow-panel ring-1 ring-line" style={pos}>
+    <div ref={ref} role="menu" data-testid="record-menu" className="fixed z-50 w-48 rounded-xl bg-surface-2 p-1.5 shadow-panel ring-1 ring-line" style={pos}>
+      <MenuItem role="menuitem" icon={<RoleIcon role="A" />} disabled={isA} onClick={run(() => useAppStore.getState().setActive(rec.id))} data-testid="menu-set-a">
+        {t('shell.sidebar.setA')}
+      </MenuItem>
+      <MenuItem role="menuitem" icon={<RoleIcon role="B" />} disabled={isB} onClick={run(() => useAppStore.getState().setCompare(rec.id))} data-testid="menu-set-b">
+        {t('shell.sidebar.setB')}
+      </MenuItem>
+      <MenuItem
+        role="menuitem"
+        icon={<ArrowUpDown size={14} />}
+        disabled={!hasA || !hasB}
+        onClick={run(() => {
+          const s = useAppStore.getState();
+          if (s.compareId) s.setActive(s.compareId);
+        })}
+        data-testid="menu-swap"
+      >
+        {t('shell.sidebar.swap')}
+      </MenuItem>
+      <div className="mx-2 my-1 h-px bg-line" />
       <MenuItem role="menuitem" icon={<Pencil size={14} />} onClick={run(onEdit)}>
         {t('shell.sidebar.edit')}
       </MenuItem>

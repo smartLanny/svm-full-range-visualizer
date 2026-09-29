@@ -16,10 +16,14 @@ export interface SelectProps<T extends string> {
   size?: 'sm' | 'md';
   'aria-label'?: string;
   disabled?: boolean;
+  /** Shown (disabled) when `value` matches no option, instead of the browser showing the first option. */
+  placeholder?: string;
+  title?: string;
 }
 
 /** Styled native select (keyboard + screen-reader friendly). Options with `group` are grouped. */
-export function Select<T extends string>({ value, onChange, options, className, size = 'sm', disabled, ...rest }: SelectProps<T>) {
+export function Select<T extends string>({ value, onChange, options, className, size = 'sm', disabled, placeholder, title, ...rest }: SelectProps<T>) {
+  const known = options.some((o) => o.value === value);
   const groups: { name: string | undefined; items: SelectOption<T>[] }[] = [];
   for (const o of options) {
     const g = groups.find((x) => x.name === o.group);
@@ -30,7 +34,8 @@ export function Select<T extends string>({ value, onChange, options, className, 
     <div className={cn('relative inline-flex', className)}>
       <select
         aria-label={rest['aria-label']}
-        value={value}
+        title={title}
+        value={known ? value : ''}
         disabled={disabled}
         onChange={(e) => onChange(e.target.value as T)}
         className={cn(
@@ -39,6 +44,11 @@ export function Select<T extends string>({ value, onChange, options, className, 
           size === 'sm' ? 'h-7 pl-2 text-xs' : 'h-8 pl-3 text-sm',
         )}
       >
+        {!known && (
+          <option value="" disabled hidden={!placeholder}>
+            {placeholder ?? ''}
+          </option>
+        )}
         {groups.map((g) =>
           g.name ? (
             <optgroup key={g.name} label={g.name}>

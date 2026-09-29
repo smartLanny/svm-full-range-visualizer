@@ -20,6 +20,7 @@ import { openJsonFiles } from './fileImport';
 import { restoreBundled } from './actions';
 import { INSPECTOR_DOCK_MIN, shellUi, useShellUi } from './uiStore';
 import { Logo } from './Logo';
+import { ErrorBoundary } from './ErrorBoundary';
 
 const subscribeResize = (fn: () => void) => {
   window.addEventListener('resize', fn);
@@ -78,7 +79,7 @@ export function Shell() {
       <AboutDialog />
       <ClearDataDialog />
       <DropOverlay />
-      {!presenting && <Toaster />}
+      {!presenting && <Toaster closeLabel={translate(lang, 'shell.toast.dismiss')} />}
     </div>
   );
 }
@@ -155,8 +156,10 @@ function MainArea({ docked }: { docked: boolean }) {
   return (
     <main className="relative min-w-0 flex-1 overflow-hidden" data-testid="main">
       {/* Stage: fills the area, or a centred fixed-aspect box with black bars in presentation. */}
+      {/* `isolate`: the views' own z-indexed chrome (toolbars, timelines) stays inside the stage, so
+          the loading / empty states above it cover it completely. */}
       <div
-        className={cn('absolute inset-0', boxed && 'flex items-center justify-center')}
+        className={cn('absolute inset-0 isolate', boxed && 'flex items-center justify-center')}
         style={{
           background: presenting && (presentBlack || boxed) ? '#000' : undefined,
         }}
@@ -177,7 +180,9 @@ function MainArea({ docked }: { docked: boolean }) {
                   pointerEvents: active ? 'auto' : 'none',
                 }}
               >
-                <Component />
+                <ErrorBoundary scope="view">
+                  <Component />
+                </ErrorBoundary>
               </div>
             );
           })}
@@ -210,7 +215,8 @@ function LoadingState() {
 function EmptyState() {
   const t = useT();
   return (
-    <div className="absolute inset-0 z-10 flex items-center justify-center bg-canvas/95 p-6" data-testid="empty-state">
+    // Opaque: the views' own empty cards and chrome must not show through.
+    <div className="absolute inset-0 z-10 flex items-center justify-center bg-canvas p-6" data-testid="empty-state">
       <div className="flex max-w-md flex-col items-center text-center">
         <Logo size={56} className="opacity-90" />
         <h2 className="mt-5 text-base font-semibold text-ink-1">{t('shell.empty.title')}</h2>

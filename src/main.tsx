@@ -9,11 +9,15 @@ import App from './App';
 import { bootstrap } from './store/bootstrap';
 import { useAppStore } from './store/appStore';
 import { getActiveTimeline } from './timeline/timeline';
+import { getT } from './i18n';
+import { toast } from './ui';
 
 const rootElement = document.getElementById('root');
 if (!rootElement) throw new Error('Could not find root element to mount to');
 
-void bootstrap();
+void bootstrap().then(({ droppedRecords }) => {
+  if (droppedRecords) toast(getT()('shell.toast.droppedRecords', { n: droppedRecords }), 'error', 8000);
+});
 
 // Automation / debugging handle (visual smoke tests drive the app through this).
 (window as unknown as { __svm: unknown }).__svm = { store: useAppStore, timeline: getActiveTimeline };

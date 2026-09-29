@@ -1,9 +1,9 @@
-import React, { useMemo } from 'react';
-import * as THREE from 'three';
+import React, { useEffect, useMemo, useRef } from 'react';
 import {
   ArrowUpDown,
   Box,
   Camera,
+  ChevronDown,
   Clapperboard,
   Crosshair,
   Eye,
@@ -13,9 +13,7 @@ import {
   Palette,
   PanelRightClose,
   PanelRightOpen,
-  Play,
   Ruler,
-  Square,
   SlidersHorizontal,
   Sigma,
   ScanLine,
@@ -24,10 +22,12 @@ import {
 import { useShallow } from 'zustand/react/shallow';
 import { useAppStore, type AnimTab, type Overlays } from '../store/appStore';
 import { useLang, useT } from '../i18n';
-import { recordLabel } from '../data/records';
-import { getJsColor } from '../colormaps';
-import { ColormapType, type AxisMode, type LightingMode, type Representation, type SceneLayout, type SliceMode, type ViewPreset } from '../types';
-import { Button, Field, Section, Segmented, Select, Slider, Switch, cn } from '../ui';
+import { deviceLabel, modeLabel, recordLabel } from '../data/records';
+import { fmtLevel, sweepParam } from '../chart2d/slices';
+import { useActiveTimeline } from '../timeline/timeline';
+import { colormapGradientCss } from '../colormaps';
+import { ColormapType, type SvmRecord, type AxisMode, type LightingMode, type Representation, type SceneLayout, type SliceMode, type ViewPreset } from '../types';
+import { Button, Field, Kbd, Section, Segmented, Select, Slider, Switch, cn } from '../ui';
 import { IconButton } from './IconBtn';
 import { DataRangeControls } from './SettingsPanel';
 
@@ -93,38 +93,88 @@ export function InspectorRail({ onOpen }: { onOpen: () => void }) {
 
 // ---------------------------------------------------------------------------------------
 
-function AnimationControl({ tab, label, hint }: { tab: AnimTab; label: string; hint: string }) {
+/**
+ * What the view's animation shows. Playing is done from the header's tab-specific button (or
+ * Space), so the inspector no longer repeats a third play button.
+ */
+function AnimationInfo({ tab, hint }: { tab: AnimTab; hint: string }) {
   const t = useT();
   const animating = useAppStore((s) => s.animating[tab]);
-  const requestPlay = useAppStore((s) => s.requestPlay);
-  const requestStop = useAppStore((s) => s.requestStop);
   return (
     <>
-      {animating ? (
-        <Button
-          size="sm"
-          variant="secondary"
-          className="w-full"
-          icon={<Square size={11} fill="currentColor" />}
-          onClick={() => requestStop(tab)}
-          data-testid="inspector-stop"
-        >
-          {t('common.stop')}
-        </Button>
-      ) : (
-        <Button
-          size="sm"
-          variant="subtle"
-          className="w-full"
-          icon={<Play size={12} fill="currentColor" />}
-          onClick={() => requestPlay(tab)}
-          data-testid="inspector-play"
-        >
-          {label}
-        </Button>
-      )}
-      <p className="-mt-1 text-2xs leading-snug text-ink-3">{hint}</p>
+      <p className="text-2xs leading-snug text-ink-2">{hint}</p>
+      <p className="-mt-1.5 flex flex-wrap items-center gap-1 text-2xs leading-snug text-ink-3" data-testid={`inspector-anim-${tab}`}>
+        {animating ? (
+          <span className="inline-flex items-center gap-1.5 text-accent-hover">
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent" aria-hidden="true" />
+            {t('shell.inspector.playing')}
+          </span>
+        ) : (
+          <>
+            <Kbd>{t('shell.shortcuts.spaceKey')}</Kbd>
+            {t('shell.inspector.playHowTo')}
+          </>
+        )}
+      </p>
     </>
+  );
+}
+
+/**
+ * A / B record picker: grouped by device, and the closed control shows device and mode on two
+ * lines so records of one device (which differ only at the end of the mode) stay distinguishable.
+ * A transparent native <select> on top keeps keyboard and screen-reader behaviour.
+ */
+function RecordSelect({
+  role,
+  value,
+  onChange,
+  records,
+  placeholder,
+}: {
+  role: 'A' | 'B';
+  value: string | null;
+  onChange: (id: string) => void;
+  records: SvmRecord[];
+  placeholder: string;
+}) {
+  const lang = useLang();
+  const rec = records.find((r) => r.id === value) ?? null;
+  const options = useMemo(
+    () =>
+      records.map((r) => ({
+        value: r.id,
+        label: modeLabel(r, lang) || deviceLabel(r, lang),
+        group: deviceLabel(r, lang),
+      })),
+    [records, lang],
+  );
+  const full = rec ? recordLabel(rec, lang) : placeholder;
+  return (
+    <div className="group relative min-w-0 flex-1" title={full} data-testid={`record-select-${role}`}>
+      <div
+        aria-hidden="true"
+        className="pointer-events-none flex h-9 min-w-0 flex-col justify-center rounded-md bg-surface-3 pl-2 pr-7 ring-1 ring-inset ring-line transition-colors group-hover:bg-surface-4 group-focus-within:ring-2 group-focus-within:ring-accent-ring"
+      >
+        {rec ? (
+          <>
+            <span className="truncate text-[10px] leading-3 text-ink-3">{deviceLabel(rec, lang)}</span>
+            <span className="truncate text-xs leading-4 text-ink-1">{modeLabel(rec, lang) || deviceLabel(rec, lang)}</span>
+          </>
+        ) : (
+          <span className="truncate text-xs text-ink-4">{placeholder}</span>
+        )}
+        <ChevronDown size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-3" />
+      </div>
+      <Select<string>
+        aria-label={`${role} · ${full}`}
+        className="!absolute inset-0 opacity-0 [&_select]:h-9 [&_select]:cursor-pointer"
+        value={value ?? ''}
+        placeholder={placeholder}
+        onChange={onChange}
+        options={options}
+      />
+    </div>
   );
 }
 
@@ -141,37 +191,32 @@ function RoleTag({ role }: { role: 'A' | 'B' }) {
   );
 }
 
-/** Mini color bar for a colormap (SVM 0–4), with the 0.4 / 1.0 thresholds marked. */
-function ColormapPreview({ type, disabled }: { type: ColormapType; disabled?: boolean }) {
-  const gradient = useMemo(() => {
-    const c = new THREE.Color();
-    const stops: string[] = [];
-    const N = 32;
-    for (let i = 0; i <= N; i++) {
-      const svm = (i / N) * 4;
-      getJsColor(svm, type, c);
-      stops.push(`#${c.getHexString()} ${((i / N) * 100).toFixed(1)}%`);
-    }
-    return `linear-gradient(to right, ${stops.join(', ')})`;
-  }, [type]);
+/** Mini color bar for a colormap (SVM 0 → colorMax), with the 0.4 / 1.0 thresholds marked. */
+function ColormapPreview({ type, max, disabled }: { type: ColormapType; max: number; disabled?: boolean }) {
+  // The map spans 0 → max whatever max is: only the tick positions depend on it.
+  const gradient = useMemo(() => colormapGradientCss(type, 32), [type]);
+  const ticks = [0, 0.4, 1, ...[2, 3, 4, 5, 6, 7, 8].filter((v) => v < max - 0.35), max];
+  const fmt = (v: number) => (v === max ? `${Number(v.toFixed(1))}+` : String(v));
   return (
     <div className={cn('select-none', disabled && 'opacity-40')} aria-hidden="true">
       <div className="relative h-2.5 rounded-sm ring-1 ring-inset ring-white/10" style={{ background: gradient }}>
         {[0.4, 1].map((v) => (
-          <span key={v} className="absolute -bottom-0.5 -top-0.5 w-px bg-white/70" style={{ left: `${(v / 4) * 100}%` }} />
+          <span key={v} className="absolute -bottom-0.5 -top-0.5 w-px bg-white/70" style={{ left: `${(v / max) * 100}%` }} />
         ))}
       </div>
       <div className="relative mt-1 h-3 font-mono text-[10px] text-ink-3">
-        {[0, 0.4, 1, 2, 3, 4].map((v) => (
+        {ticks.map((v) => (
           <span
             key={v}
             className="absolute -translate-x-1/2"
             style={{
-              left: `${(v / 4) * 100}%`,
-              transform: v === 0 ? 'none' : v === 4 ? 'translateX(-100%)' : undefined,
+              left: `${(v / max) * 100}%`,
+              transform: v === 0 ? 'none' : v === max ? 'translateX(-100%)' : undefined,
+              // 0.4 and 1 crowd each other on a wide scale: keep 1 only.
+              display: v === 0.4 && max > 5 ? 'none' : undefined,
             }}
           >
-            {v === 4 ? '4+' : v}
+            {fmt(v)}
           </span>
         ))}
       </div>
@@ -191,6 +236,7 @@ function Inspector3D() {
       lighting: st.lighting,
       heightScale: st.heightScale,
       heightCap: st.heightCap,
+      colorMax: st.colorMax,
       overlays: st.overlays,
       activeId: st.activeId,
       compareId: st.compareId,
@@ -198,12 +244,13 @@ function Inspector3D() {
   );
   const records = useAppStore((st) => st.records);
   const { set, setOverlay, setActive, setCompare } = useAppStore.getState();
-  const recordOptions = useMemo(() => records.map((r) => ({ value: r.id, label: recordLabel(r, lang) })), [records, lang]);
   const twoPlus = records.length >= 2;
   const showB = s.layout !== 'single';
+  const diff = s.layout === 'diff';
   const overlayKeys: (keyof Overlays)[] = ['contours', 'values', 'axes', 'colorbar', 'title'];
   const overlayHints: Partial<Record<keyof Overlays, string>> = {
-    contours: t('shell.inspector.scene3d.contoursHint'),
+    // Diff contours are ± ΔSVM levels whose spacing follows the diverging color range.
+    contours: t(diff ? 'shell.inspector.scene3d.contoursHintDiff' : 'shell.inspector.scene3d.contoursHint'),
     values: t('shell.inspector.scene3d.valuesHint'),
   };
 
@@ -239,7 +286,7 @@ function Inspector3D() {
             <div className="flex items-center gap-2">
               <RoleTag role="A" />
               {records.length > 0 ? (
-                <Select<string> className="min-w-0 flex-1" aria-label="A" value={s.activeId ?? ''} onChange={(v) => setActive(v)} options={recordOptions} />
+                <RecordSelect role="A" value={s.activeId} onChange={setActive} records={records} placeholder={t('shell.inspector.scene3d.pickA')} />
               ) : (
                 <span className="text-xs text-ink-4">{t('common.none')}</span>
               )}
@@ -247,7 +294,7 @@ function Inspector3D() {
             {showB && (
               <div className="flex items-center gap-2">
                 <RoleTag role="B" />
-                <Select<string> className="min-w-0 flex-1" aria-label="B" value={s.compareId ?? ''} onChange={(v) => setCompare(v)} options={recordOptions} />
+                <RecordSelect role="B" value={s.compareId} onChange={setCompare} records={records} placeholder={t('shell.inspector.scene3d.pickB')} />
               </div>
             )}
           </div>
@@ -320,7 +367,25 @@ function Inspector3D() {
             label: t(`shell.colormaps.${c}`),
           }))}
         />
-        <ColormapPreview type={s.colormap} disabled={s.layout === 'diff'} />
+        <ColormapPreview type={s.colormap} max={s.colorMax} disabled={diff} />
+        <div>
+          <Slider
+            label={t('shell.inspector.scene3d.colorMax')}
+            value={s.colorMax}
+            min={2}
+            max={8}
+            step={0.5}
+            disabled={diff}
+            format={(v) => `SVM ${v.toFixed(1)}`}
+            onChange={(v) => set('colorMax', Math.round(v * 2) / 2)}
+            presets={[
+              { value: 3, label: '3' },
+              { value: 4, label: '4' },
+              { value: 6, label: '6' },
+            ]}
+          />
+          <p className="mt-1 text-2xs leading-snug text-ink-3">{t('shell.inspector.scene3d.colorMaxHint')}</p>
+        </div>
         {s.layout === 'diff' && (
           <p className="flex items-start gap-1.5 text-2xs leading-snug text-ink-3">
             <Info size={12} className="mt-px shrink-0" />
@@ -358,10 +423,10 @@ function Inspector3D() {
             min={2}
             max={12}
             step={0.5}
-            format={(v) => `SVM ${v.toFixed(1)}`}
+            format={(v) => (diff ? `ΔSVM ±${v.toFixed(1)}` : `SVM ${v.toFixed(1)}`)}
             onChange={(v) => set('heightCap', Math.round(v * 2) / 2)}
           />
-          <p className="mt-1 text-2xs leading-snug text-ink-3">{t('shell.inspector.scene3d.heightCapHint')}</p>
+          <p className="mt-1 text-2xs leading-snug text-ink-3">{t(diff ? 'shell.inspector.scene3d.heightCapHintDiff' : 'shell.inspector.scene3d.heightCapHint')}</p>
         </div>
       </Section>
 
@@ -370,7 +435,7 @@ function Inspector3D() {
       </Section>
 
       <Section title={t('shell.inspector.scene3d.animation')} icon={<Clapperboard size={12} />}>
-        <AnimationControl tab="scene3d" label={t('shell.inspector.scene3d.playIntro')} hint={t('shell.inspector.scene3d.intro')} />
+        <AnimationInfo tab="scene3d" hint={t('shell.inspector.scene3d.intro')} />
       </Section>
     </>
   );
@@ -395,10 +460,13 @@ function Inspector2D() {
       visible: st.records.filter((r) => !st.hiddenIds.includes(r.id)).length,
     })),
   );
+  const sweeping = useAppStore((st) => st.animating.chart2d);
   const { set, setHidden } = useAppStore.getState();
   const allIds = () => useAppStore.getState().records.map((r) => r.id);
+  const gray = s.sliceMode === 'gray';
   const axisHint: Record<AxisMode, string> = {
-    standard: t('shell.inspector.chart2d.standardHint'),
+    // The standard x range depends on the slice: measured nits (gray slice) or gray 0–255.
+    standard: t(gray ? 'shell.inspector.chart2d.standardHint' : 'shell.inspector.chart2d.standardHintBrightness'),
     adaptive: t('shell.inspector.chart2d.adaptiveHint'),
     free: t('shell.inspector.chart2d.freeHint'),
   };
@@ -422,7 +490,9 @@ function Inspector2D() {
         <p className="-mt-1 text-2xs leading-snug text-ink-3">
           {s.sliceMode === 'gray' ? t('shell.inspector.chart2d.sliceGrayHint') : t('shell.inspector.chart2d.sliceBrightnessHint')}
         </p>
-        {s.sliceMode === 'gray' ? (
+        {sweeping ? (
+          <SweepReadout mode={s.sliceMode} />
+        ) : s.sliceMode === 'gray' ? (
           <Slider
             label={t('shell.inspector.chart2d.gray')}
             value={s.sliceGray}
@@ -463,7 +533,7 @@ function Inspector2D() {
       </Section>
 
       <Section title={t('shell.inspector.chart2d.animation')} icon={<Clapperboard size={12} />}>
-        <AnimationControl tab="chart2d" label={t('shell.inspector.chart2d.playSweep')} hint={t('shell.inspector.chart2d.sweepHint')} />
+        <AnimationInfo tab="chart2d" hint={t(gray ? 'shell.inspector.chart2d.sweepHint' : 'shell.inspector.chart2d.sweepHintLevel')} />
       </Section>
 
       <Section title={t('shell.inspector.chart2d.display')} icon={<Eye size={12} />}>
@@ -492,6 +562,55 @@ function Inspector2D() {
         <p className="-mt-1 text-2xs leading-snug text-ink-3">{t('shell.inspector.chart2d.visibleCount', { v: visible, n: total })}</p>
       </Section>
     </>
+  );
+}
+
+/**
+ * The slice slider while the 2D sweep plays: disabled, showing the swept value live (the chart's
+ * title value), so it is clear what is on screen. Written straight to the DOM from the timeline's
+ * clock — no React state per frame. The slider comes back with the setting when the sweep ends.
+ */
+function SweepReadout({ mode }: { mode: SliceMode }) {
+  const t = useT();
+  const tl = useActiveTimeline();
+  const valueRef = useRef<HTMLSpanElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [lo, hi] = mode === 'gray' ? [0, 255] : [2, 500];
+  const toPos = (v: number) => (mode === 'gray' ? ((v - lo) / (hi - lo)) * 1000 : (Math.log(v / lo) / Math.log(hi / lo)) * 1000);
+  const text = (v: number) => (mode === 'gray' ? `G${Math.round(v)}` : `${fmtLevel(v)} nits`);
+  useEffect(() => {
+    let raf = 0;
+    let last = '';
+    const frame = () => {
+      const v = sweepParam(mode, tl ? tl.time : 0);
+      const label = text(v);
+      if (label !== last) {
+        last = label;
+        if (valueRef.current) valueRef.current.textContent = label;
+        const pos = Math.max(0, Math.min(1000, toPos(v)));
+        if (inputRef.current) {
+          inputRef.current.value = String(pos);
+          inputRef.current.style.setProperty('--pos', `${pos / 10}%`);
+        }
+      }
+      raf = requestAnimationFrame(frame);
+    };
+    frame();
+    return () => cancelAnimationFrame(raf);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tl, mode]);
+  return (
+    <div className="flex flex-col gap-1.5" data-testid="sweep-readout">
+      <div className="flex items-center justify-between text-xs">
+        <span className="text-ink-2">{t(mode === 'gray' ? 'shell.inspector.chart2d.gray' : 'shell.inspector.chart2d.level')}</span>
+        <span className="flex items-center gap-1.5">
+          <span className="rounded bg-accent-muted px-1 text-2xs text-accent-hover">{t('shell.inspector.chart2d.sweeping')}</span>
+          <span ref={valueRef} className="font-mono tabular-nums text-ink-1" />
+        </span>
+      </div>
+      <input ref={inputRef} type="range" min={0} max={1000} disabled aria-label={t('shell.inspector.chart2d.sweeping')} className="svm-range w-full" />
+      <p className="text-2xs leading-snug text-ink-3">{t('shell.inspector.chart2d.sweepLocked')}</p>
+    </div>
   );
 }
 

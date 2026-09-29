@@ -1,20 +1,28 @@
-import type { SvmRecord } from '../types';
-import { generateId, guessDeviceMode, toDatasetJson, toRecord, validateDataset } from '../data/records';
-import { parseRawData } from '../data/parse';
+import type { Lang, SvmRecord } from '../types';
+import { englishAliases, generateId, guessDeviceMode, recordLabel, toDatasetJson, toRecord, validateDataset } from '../data/records';
+import { parseRawData, splitTables } from '../data/parse';
 import { safeFileName } from '../export/registry';
 import { useAppStore } from '../store/appStore';
 import type { TFunction } from '../i18n';
 import { toast } from '../ui';
+import { applyScreening, screenDataset, type Screening } from './screening';
+import { shellUi } from './uiStore';
 
 export interface FileResult {
   fileName: string;
+  /** 1-based table number and table count when one .tsv / .txt file holds several tables. */
+  table?: number;
+  tables?: number;
   ok: boolean;
+  /** Parsed record as read (not yet screened). */
   record?: SvmRecord;
+  /** Anomaly screening (null: the JSON already carries an `excluded` field). */
+  screening?: Screening | null;
   /** Error code (key under shell.importer.errors) or raw message. */
   error?: string;
 }
 
-const KNOWN_ERRORS = ['TOO_FEW_LINES', 'NO_HEADER', 'NO_ROWS', 'INVALID_JSON', 'INVALID_MATRIX', 'PARSE', 'UNSUPPORTED', 'READ'];
+const KNOWN_ERRORS = ['TOO_FEW_LINES', 'NO_HEADER', 'NO_ROWS', 'NO_VALID_CELLS', 'DUPLICATE_GRAY', 'INVALID_JSON', 'INVALID_MATRIX', 'PARSE', 'UNSUPPORTED', 'READ'];
 
 /** Translate a parse / validation error code. */
 export function errorText(t: TFunction, code: string | undefined): string {
@@ -24,91 +32,133 @@ export function errorText(t: TFunction, code: string | undefined): string {
 }
 
 export const isImportableFile = (name: string) => /\.(json|tsv|txt)$/i.test(name);
+export const isTableFile = (name: string) => /\.(tsv|txt)$/i.test(name);
 
-const baseName = (name: string) => name.replace(/\.[^.]+$/, '');
+export const baseName = (name: string) => name.replace(/\.[^.]+$/, '');
 
 /** Turn a parsed JSON value into a user record (fresh id, so re-importing never collides). */
 export function jsonToRecord(json: unknown): SvmRecord {
   const ds = validateDataset(json);
-  return toRecord(ds, 'user', { id: generateId(), name: ds.name });
+  return toRecord(ds, 'user', { id: generateId(), name: ds.name, ...englishAliases(json) });
 }
 
-/** Read .json / .tsv / .txt files into user records. Never throws. */
+/**
+ * Parse a pasted / dropped table text into records, one per table (stacked tables are split
+ * by their title / header rows). The record is named after the table's title line, or
+ * `fallbackName` (+ " #i" when there are several untitled tables).
+ */
+export function tableTextToResults(text: string, fileName: string, fallbackName: string, factor = 1): FileResult[] {
+  const tables = splitTables(text);
+  return tables.map((tb, i): FileResult => {
+    const extra = tables.length > 1 ? { table: i + 1, tables: tables.length } : {};
+    try {
+      const title = tb.title || (tables.length > 1 ? `${fallbackName} #${i + 1}` : fallbackName);
+      const ds = parseRawData(tb.text, title, factor);
+      const { device, mode } = guessDeviceMode(ds.name);
+      const record = toRecord(ds, 'user', { device: device || ds.name, mode, name: ds.name });
+      return { fileName, ...extra, ok: true, record, screening: screenDataset(record) };
+    } catch (e) {
+      return { fileName, ...extra, ok: false, error: (e as Error).message };
+    }
+  });
+}
+
+/** Read .json / .tsv / .txt files into user records (every table of a table file). Never throws. */
 export async function readRecordFiles(files: File[]): Promise<FileResult[]> {
-  return Promise.all(
-    files.map(async (file): Promise<FileResult> => {
+  const perFile = await Promise.all(
+    files.map(async (file): Promise<FileResult[]> => {
       const fileName = file.name;
       let text: string;
       try {
         text = await file.text();
       } catch {
-        return { fileName, ok: false, error: 'READ' };
+        return [{ fileName, ok: false, error: 'READ' }];
       }
-      const looksJson = /\.json$/i.test(fileName) || (!/\.(tsv|txt)$/i.test(fileName) && text.trimStart().startsWith('{'));
+      const looksJson = /\.json$/i.test(fileName) || (!isTableFile(fileName) && text.trimStart().startsWith('{'));
       if (looksJson) {
         let json: unknown;
         try {
           json = JSON.parse(text);
         } catch {
-          return { fileName, ok: false, error: 'PARSE' };
+          return [{ fileName, ok: false, error: 'PARSE' }];
         }
         try {
-          return { fileName, ok: true, record: jsonToRecord(json) };
+          const record = jsonToRecord(json);
+          return [{ fileName, ok: true, record, screening: screenDataset(record) }];
         } catch (e) {
-          return { fileName, ok: false, error: (e as Error).message };
+          return [{ fileName, ok: false, error: (e as Error).message }];
         }
       }
-      if (/\.(tsv|txt)$/i.test(fileName) || !/\.[a-z0-9]+$/i.test(fileName)) {
-        try {
-          const name = baseName(fileName);
-          const ds = parseRawData(text, name, 1);
-          const { device, mode } = guessDeviceMode(ds.name);
-          return {
-            fileName,
-            ok: true,
-            record: toRecord(ds, 'user', { device, mode, name: ds.name }),
-          };
-        } catch (e) {
-          return { fileName, ok: false, error: (e as Error).message };
-        }
-      }
-      return { fileName, ok: false, error: 'UNSUPPORTED' };
+      if (isTableFile(fileName) || !/\.[a-z0-9]+$/i.test(fileName)) return tableTextToResults(text, fileName, baseName(fileName));
+      return [{ fileName, ok: false, error: 'UNSUPPORTED' }];
     }),
   );
+  return perFile.flat();
 }
 
-/** Read files and add every valid one to the store, reporting the outcome as toasts. */
+/** Display name of a result: "raw.tsv · 表 2" for one of several tables. */
+export function resultFileLabel(t: TFunction, r: FileResult): string {
+  return r.table ? `${r.fileName} · ${t('shell.importer.untitled', { i: r.table })}` : r.fileName;
+}
+
+/**
+ * Window drop / "Open JSON": a single table file opens the paste tab with its text (preview,
+ * device / mode, correction factor and screening before anything is imported). Other files are
+ * read; when any of them has anomalies to decide on, the importer's file tab opens with them,
+ * otherwise they are imported right away.
+ */
 export async function importFiles(files: File[], t: TFunction): Promise<FileResult[]> {
+  if (files.length === 1 && isTableFile(files[0].name)) {
+    let text: string | null = null;
+    try {
+      text = await files[0].text();
+    } catch {
+      text = null;
+    }
+    if (text !== null) {
+      shellUi.openImporter('paste', { text, name: baseName(files[0].name) });
+      return [];
+    }
+  }
   const results = await readRecordFiles(files);
+  if (results.some((r) => r.ok && r.screening?.anomalies.length)) {
+    shellUi.openImporter('json', { files: results });
+    return results;
+  }
   addResults(results, t);
   return results;
 }
 
-export function addResults(results: FileResult[], t: TFunction) {
-  const ok = results.filter((r) => r.ok && r.record).map((r) => r.record!);
+/** Add every valid result to the store (screened when `exclude`), reporting the outcome as toasts. */
+export function addResults(results: FileResult[], t: TFunction, exclude = true) {
+  const ok = results.filter((r) => r.ok && r.record).map((r) => applyScreening(r.record!, r.screening, exclude));
   const failed = results.filter((r) => !r.ok);
   if (ok.length) {
     const store = useAppStore.getState();
     store.addRecords(ok);
     // Newly imported records become A so the user immediately sees them in 3D.
     store.setActive(ok[0].id);
-    toast(ok.length === 1 ? t('shell.importer.imported', { name: ok[0].name }) : t('shell.importer.importedN', { n: ok.length }), 'success');
+    const lang = store.lang;
+    const excluded = exclude ? results.reduce((n, r) => n + (r.ok && r.screening ? r.screening.anomalies.length : 0), 0) : 0;
+    const msg = ok.length === 1 ? t('shell.importer.imported', { name: recordLabel(ok[0], lang) }) : t('shell.importer.importedN', { n: ok.length });
+    toast(excluded ? `${msg}${t('shell.importer.importedExcluded', { n: excluded })}` : msg, 'success', excluded ? 5000 : 3200);
   }
   if (failed.length) {
     const first = failed[0];
+    const label = resultFileLabel(t, first);
     toast(
       failed.length === 1
-        ? `${first.fileName}: ${errorText(t, first.error)}`
-        : `${t('shell.importer.failedN', { n: failed.length })} — ${first.fileName}: ${errorText(t, first.error)}`,
+        ? `${label}: ${errorText(t, first.error)}`
+        : `${t('shell.importer.failedN', { n: failed.length })} — ${label}: ${errorText(t, first.error)}`,
       'error',
       5000,
     );
   }
 }
 
-/** Download a record as a v1-compatible JSON dataset. Returns the file name. */
-export function downloadRecordJson(rec: SvmRecord): string {
-  const fileName = `${safeFileName(rec.name)}.json`;
+/** Download a record as a v1-compatible JSON dataset, named after its label in `lang`. Returns the file name. */
+export function downloadRecordJson(rec: SvmRecord, lang: Lang = useAppStore.getState().lang): string {
+  const fileName = `${safeFileName(recordLabel(rec, lang).replace(/ · /g, ' '))}.json`;
   const blob = new Blob([JSON.stringify(toDatasetJson(rec), null, 2)], {
     type: 'application/json',
   });

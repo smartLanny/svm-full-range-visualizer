@@ -1,6 +1,7 @@
 import { loadBundledRecords } from '../data/bundled';
 import { useAppStore } from '../store/appStore';
-import { clearPersisted } from '../store/persistence';
+import { clearPersisted, resetPersistedView, suspendAutoSave } from '../store/persistence';
+import type { Lang } from '../types';
 import type { TFunction } from '../i18n';
 import { toast } from '../ui';
 
@@ -33,9 +34,9 @@ export async function restoreBundled(t: TFunction): Promise<void> {
   toast(t('shell.settings.restoreDone', { n: missing.length }), 'success');
 }
 
-/** Wipe local persistence and reload. Waits out the autosave debounce so nothing is re-written. */
+/** Wipe local persistence and reload. Autosave is stopped first so nothing is re-written on the way out. */
 export async function clearLocalDataAndReload(): Promise<void> {
-  await new Promise((r) => setTimeout(r, 500));
+  suspendAutoSave();
   try {
     localStorage.removeItem('svm.shell.ui.v1');
   } catch {
@@ -43,6 +44,22 @@ export async function clearLocalDataAndReload(): Promise<void> {
   }
   try {
     await clearPersisted();
+  } finally {
+    location.reload();
+  }
+}
+
+/** Reset the display settings (and A / B roles) to defaults, keeping records, then reload. */
+export async function resetViewAndReload(): Promise<void> {
+  suspendAutoSave();
+  let lang: Lang | undefined;
+  try {
+    lang = useAppStore.getState().lang;
+  } catch {
+    lang = undefined;
+  }
+  try {
+    await resetPersistedView(lang);
   } finally {
     location.reload();
   }
