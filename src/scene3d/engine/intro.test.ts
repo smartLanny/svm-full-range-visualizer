@@ -65,6 +65,8 @@ describe('intro storyboard', () => {
     const dt = 1 / 120;
     let prev = snapshot(p.evaluate(0, makeFrameParams()));
     let worstCam = 0;
+    let worstGrowth = 0;
+    let worstReveal = 0;
     for (let t = dt; t <= INTRO_DURATION; t += dt) {
       const cur = snapshot(p.evaluate(t, makeFrameParams()));
       // Screen-space camera motion proxy: target move and zoom relative to the visible height.
@@ -80,10 +82,12 @@ describe('intro storyboard', () => {
       expect(Math.abs(cur.surface - prev.surface)).toBeLessThan(0.02);
       expect(Math.abs(cur.values - prev.values)).toBeLessThan(0.03);
       expect(Math.abs(cur.title - prev.title)).toBeLessThan(0.03);
-      for (let i = 0; i < cur.growth.length; i++) expect(Math.abs(cur.growth[i] - prev.growth[i])).toBeLessThan(0.03);
-      for (let i = 0; i < cur.reveal.length; i++) expect(Math.abs(cur.reveal[i] - prev.reveal[i])).toBeLessThan(0.02);
+      for (let i = 0; i < cur.growth.length; i++) worstGrowth = Math.max(worstGrowth, Math.abs(cur.growth[i] - prev.growth[i]));
+      for (let i = 0; i < cur.reveal.length; i++) worstReveal = Math.max(worstReveal, Math.abs(cur.reveal[i] - prev.reveal[i]));
       prev = cur;
     }
+    expect(worstGrowth).toBeLessThan(0.03);
+    expect(worstReveal).toBeLessThan(0.02);
     expect(worstCam).toBeGreaterThan(0);
   });
 
@@ -126,6 +130,9 @@ describe('intro storyboard', () => {
     const n = (p.evaluate(0, makeFrameParams()).growth ?? []).length;
     const first = new Array(n).fill(-1);
     let prevFade = new Float32Array(n);
+    let onsetGrowth = 0;
+    let onsetFade = 0;
+    let fadeStep = 0;
     for (let t = 0; t <= INTRO_DURATION; t += dt) {
       const fp = p.evaluate(t, makeFrameParams());
       for (let i = 0; i < n; i++) {
@@ -134,13 +141,16 @@ describe('intro storyboard', () => {
         if (first[i] < 0 && (g > 0 || f > 0)) {
           first[i] = t;
           // First visible frame: a sliver of height, mostly plate-colored (fade just begun).
-          expect(g).toBeLessThan(2e-4);
-          expect(f).toBeLessThan(0.02);
+          onsetGrowth = Math.max(onsetGrowth, g);
+          onsetFade = Math.max(onsetFade, f);
         }
-        expect(Math.abs(f - prevFade[i])).toBeLessThan(0.2);
+        fadeStep = Math.max(fadeStep, Math.abs(f - prevFade[i]));
       }
       prevFade = Float32Array.from(fp.barFade!);
     }
+    expect(onsetGrowth).toBeLessThan(2e-4);
+    expect(onsetFade).toBeLessThan(0.02);
+    expect(fadeStep).toBeLessThan(0.2);
     expect(first.every((x) => x >= 0)).toBe(true);
   });
 
