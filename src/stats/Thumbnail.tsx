@@ -4,6 +4,7 @@ import type { ColormapType, SvmRecord } from '../types';
 import { SVM_CRITICAL, SVM_SAFE } from '../types';
 import { cellEdges, fmtNits, gridView, logNits, type GridView } from '../data/grid';
 import { getJsColor } from '../colormaps';
+import { ANOMALY_KINDS, type AnomalyKind } from '../data/anomalies';
 import { useT } from '../i18n';
 
 /** Shared extent of all thumbnails, so cards compare at the same scale. */
@@ -57,8 +58,9 @@ interface Props {
 
 /**
  * Mini heatmap (Canvas2D): gray up, level luminance (log) right, cells exactly as in the 3D top
- * view. Missing cells are hatched (never drawn as 0). Stepped 0.4 / 1.0 contours follow cell
- * borders. Redraws only when inputs or the size change (no animation loop).
+ * view. Cells without a valid value (missing or excluded) get a neutral grey hatch, never a
+ * colour (never drawn as 0); area outside the record's measured range stays flat background.
+ * Stepped 0.4 / 1.0 contours follow cell borders. Redraws only when inputs or the size change (no animation loop).
  */
 export function Thumbnail({ rec, clipLowGray, maxNits, colormap, colorMax, sliceGray, extent }: Props) {
   const t = useT();
@@ -67,6 +69,9 @@ export function Thumbnail({ rec, clipLowGray, maxNits, colormap, colorMax, slice
   const [width, setWidth] = useState(0);
   const [hover, setHover] = useState<{ x: number; text: string } | null>(null);
   const view = useMemo(() => gridView(rec, { clipLowGray, maxNits }), [rec, clipLowGray, maxNits]);
+  const noData = useMemo(() => hasNoDataCells(view), [view]);
+  /** Excluded raw points by gray + brightness percent -> reason (docs/adr/0012). */
+  const excludedAt = useMemo(() => new Map((rec.excluded ?? []).map((x) => [`${x.gray}|${x.brightnessPercent}`, x.reason])), [rec.excluded]);
 
   useEffect(() => {
     const el = wrapRef.current;
@@ -114,11 +119,16 @@ export function Thumbnail({ rec, clipLowGray, maxNits, colormap, colorMax, slice
     const r = ge.findIndex((e0, i) => i < view.grays.length && g >= e0 && g <= ge[i + 1]);
     if (c < 0 || r < 0) return setHover(null);
     const p = view.points[r][c];
-    const text = t('stats.thumb.hover', {
-      g: view.grays[r],
-      n: fmtNits(view.levelNits[c]),
-      v: p ? p.svm.toFixed(2) : t('stats.thumb.missing'),
-    });
+    let text: string;
+    if (p && Number.isFinite(p.svm)) {
+      text = t('stats.thumb.hover', { g: view.grays[r], n: fmtNits(view.levelNits[c]), v: p.svm.toFixed(2) });
+    } else {
+      const reason = excludedAt.get(`${view.grays[r]}|${view.percents[c]}`);
+      const what = reason
+        ? t('common.exclusion.excludedCell', { reason: ANOMALY_KINDS.includes(reason as AnomalyKind) ? t(`common.exclusion.reasons.${reason}`) : reason })
+        : t('common.exclusion.missingCell');
+      text = t('stats.thumb.hoverNoData', { g: view.grays[r], n: fmtNits(view.levelNits[c]), what });
+    }
     setHover({ x: e.clientX - rect.left, text });
   };
 
@@ -134,13 +144,21 @@ export function Thumbnail({ rec, clipLowGray, maxNits, colormap, colorMax, slice
   return (
     <div>
       <div className="mb-1.5 flex items-center justify-between gap-2 pl-9 text-2xs text-ink-3">
-        <span className="truncate">{t('stats.thumb.caption')}</span>
-        <span className="inline-flex shrink-0 items-center gap-2.5" title={t('stats.thumb.contours')}>
-          <span className="inline-flex items-center gap-1">
+        <span className="truncate" title={t('stats.thumb.caption')}>
+          {t('stats.thumb.caption')}
+        </span>
+        <span className="inline-flex shrink-0 items-center gap-2.5">
+          {noData && (
+            <span className="inline-flex items-center gap-1" title={t('stats.thumb.noDataHint')}>
+              <span className="h-2.5 w-3.5 rounded-[2px] ring-1 ring-inset ring-white/10" style={{ background: HATCH_CSS }} />
+              {t('common.noValidData')}
+            </span>
+          )}
+          <span className="inline-flex items-center gap-1" title={t('stats.thumb.contours')}>
             <span className="h-[2px] w-3.5 rounded bg-white shadow-[0_0_0_1px_rgba(0,0,0,0.6)]" />
             0.4
           </span>
-          <span className="inline-flex items-center gap-1">
+          <span className="inline-flex items-center gap-1" title={t('stats.thumb.contours')}>
             <span className="h-[3px] w-3.5 rounded bg-[#0b0e14] shadow-[0_0_0_1px_rgba(255,255,255,0.75)]" />
             1.0
           </span>
@@ -160,12 +178,7 @@ export function Thumbnail({ rec, clipLowGray, maxNits, colormap, colorMax, slice
         </div>
         <div className="min-w-0 flex-1">
           <div ref={wrapRef} className="relative overflow-hidden rounded-md ring-1 ring-inset ring-line" style={{ height: HEIGHT }}>
-            <canvas
-              ref={canvasRef}
-              className="block h-full w-full cursor-crosshair"
-              onMouseMove={onMove}
-              onMouseLeave={() => setHover(null)}
-            />
+            <canvas ref={canvasRef} className="block h-full w-full cursor-crosshair" onMouseMove={onMove} onMouseLeave={() => setHover(null)} />
             {hover && (
               <div
                 className="pointer-events-none absolute top-1.5 whitespace-nowrap rounded bg-black/80 px-1.5 py-0.5 text-2xs tabular-nums text-ink-1 ring-1 ring-white/10"
@@ -177,7 +190,11 @@ export function Thumbnail({ rec, clipLowGray, maxNits, colormap, colorMax, slice
           </div>
           <div className="relative mt-1 h-3.5 text-2xs tabular-nums text-ink-3">
             {ticks.map(({ v, px }) => (
-              <span key={v} className="absolute top-0" style={px < 8 ? { left: 0 } : px > width - 12 ? { right: 0 } : { left: px, transform: 'translateX(-50%)' }}>
+              <span
+                key={v}
+                className="absolute top-0"
+                style={px < 8 ? { left: 0 } : px > width - 12 ? { right: 0 } : { left: px, transform: 'translateX(-50%)' }}
+              >
                 {v}
               </span>
             ))}
@@ -198,20 +215,27 @@ interface DrawOpts {
   extent: ThumbExtent;
 }
 
+/** Flat background outside the record's measured cells (not measured at all). */
+const OUTSIDE = '#0b0e14';
+/** Neutral "no valid data" hatch: mid-grey diagonal lines, unlike any colormap end. */
+const HATCH_BASE = '#1b2029';
+const HATCH_LINE = 'rgba(255,255,255,0.24)';
+
 let hatch: { key: number; pattern: CanvasPattern | null } | null = null;
 
 function hatchPattern(ctx: CanvasRenderingContext2D, dpr: number): CanvasPattern | null {
   if (hatch && hatch.key === dpr) return hatch.pattern;
-  const s = Math.round(6 * dpr);
+  const s = Math.max(4, Math.round(5 * dpr));
   const c = document.createElement('canvas');
   c.width = s;
   c.height = s;
   const g = c.getContext('2d')!;
-  g.fillStyle = '#0b0e14';
+  g.fillStyle = HATCH_BASE;
   g.fillRect(0, 0, s, s);
-  g.strokeStyle = '#1e2430';
+  g.strokeStyle = HATCH_LINE;
   g.lineWidth = Math.max(1, dpr);
   g.beginPath();
+  // 45° lines, continuous across tiles.
   g.moveTo(0, s);
   g.lineTo(s, 0);
   g.moveTo(-s / 2, s / 2);
@@ -223,11 +247,19 @@ function hatchPattern(ctx: CanvasRenderingContext2D, dpr: number): CanvasPattern
   return hatch.pattern;
 }
 
+/** CSS twin of the canvas hatch, for the legend chip. */
+const HATCH_CSS = `repeating-linear-gradient(135deg, ${HATCH_LINE} 0 1px, ${HATCH_BASE} 1px 4px)`;
+
+/** True when the view has at least one cell without a valid value. */
+export function hasNoDataCells(view: GridView): boolean {
+  return view.points.some((row) => row.some((p) => !p || !Number.isFinite(p.svm)));
+}
+
 function drawHeatmap(ctx: CanvasRenderingContext2D, view: GridView, o: DrawOpts) {
   const { W, H, dpr, extent } = o;
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, W, H);
-  ctx.fillStyle = hatchPattern(ctx, dpr) ?? '#0b0e14';
+  ctx.fillStyle = OUTSIDE;
   ctx.fillRect(0, 0, W, H);
 
   const X = (x: number) => Math.round(((x - extent.x0) / (extent.x1 - extent.x0)) * W);
@@ -237,10 +269,16 @@ function drawHeatmap(ctx: CanvasRenderingContext2D, view: GridView, o: DrawOpts)
   const scale = 4 / Math.max(0.05, o.colorMax || 4);
   const col = new Color();
 
+  const noData = hatchPattern(ctx, dpr) ?? HATCH_BASE;
   for (let r = 0; r < view.grays.length; r++) {
     for (let c = 0; c < view.x.length; c++) {
       const p = view.points[r][c];
-      if (!p || !Number.isFinite(p.svm)) continue;
+      if (!p || !Number.isFinite(p.svm)) {
+        // Missing / excluded cell inside the measured grid: neutral hatch (never drawn as a value).
+        ctx.fillStyle = noData;
+        ctx.fillRect(xe[c], ge[r + 1], xe[c + 1] - xe[c], ge[r] - ge[r + 1]);
+        continue;
+      }
       getJsColor(p.svm * scale, o.colormap, col);
       ctx.fillStyle = `#${col.getHexString()}`;
       // Cell r spans gray edges [r, r+1] -> y from ge[r+1] (top) to ge[r] (bottom).

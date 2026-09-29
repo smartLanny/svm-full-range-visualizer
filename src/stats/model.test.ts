@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { SvmRecord } from '../types';
 import type { RecordStats } from '../data/stats';
-import { bestValues, defaultDir, isBest, sortRows, toTsv, type StatsRow } from './model';
+import { bestValues, defaultDir, isBest, markOf, median, rankRows, sortRows, toTsv, type StatsRow } from './model';
 import { translate } from '../i18n';
 
 const stats = (p: Partial<RecordStats>): RecordStats => ({
@@ -16,7 +16,10 @@ const stats = (p: Partial<RecordStats>): RecordStats => ({
   fullWhiteGray: 255,
   svmAt: [2, 10, 50, 100].map((nits) => ({ nits, svm: 0.5 })),
   sliceGray: 127,
-  coverage: { grayMin: 15, grayMax: 255, levelMin: 2, levelMax: 500 },
+  nominalCount: 10,
+  coverageShare: 1,
+  excludedInScope: 0,
+  validExtent: { grayMin: 15, grayMax: 255, levelMin: 2, levelMax: 500 },
   ...p,
 });
 const rec = (id: string, device: string, mode = '') => ({ id, device, mode }) as unknown as SvmRecord;
@@ -65,6 +68,40 @@ describe('bestValues', () => {
     expect(isBest(b, 'mean', 0.1101)).toBe(true);
     expect(isBest(b, 'mean', 0.1098)).toBe(true);
     expect(isBest(b, 'mean', 0.5)).toBe(false);
+  });
+});
+
+describe('rankRows / markOf (coverage caveat)', () => {
+  const mk = (id: string, coverageShare: number | null, p: Partial<RecordStats> = {}): StatsRow => ({
+    rec: rec(id, id),
+    order: 0,
+    stats: stats({ coverageShare, ...p }),
+  });
+  it('median', () => {
+    expect(median([])).toBeNull();
+    expect(median([3, 1, 2])).toBe(2);
+    expect(median([4, 1, 2, 3])).toBe(2.5);
+  });
+  it('rows below 90 % of the median coverage never win best; the best goes to the comparable rows', () => {
+    const r = [
+      mk('full1', 1, { criticalShare: 0.45, safeShare: 0.3 }),
+      mk('full2', 1, { criticalShare: 0.5, safeShare: 0.2 }),
+      mk('full3', 0.99, { criticalShare: 0.6, safeShare: 0.25 }),
+      mk('low', 0.854, { criticalShare: 0.36, safeShare: 0.26 }),
+    ];
+    const rank = rankRows(r);
+    expect([...rank.low]).toEqual(['low']);
+    expect(rank.medianCoverage).toBeCloseTo(0.995, 9);
+    expect(rank.best.critical).toBe(0.45);
+    expect(markOf(rank, 'critical', r[0], 0.45)).toBe('best');
+    expect(markOf(rank, 'critical', r[3], 0.36)).toBe('caveat'); // would beat the best
+    expect(markOf(rank, 'safe', r[3], 0.26)).toBeNull(); // not better than the best (0.3)
+    expect(markOf(rank, 'safe', r[0], 0.3)).toBe('best');
+    expect(markOf(rank, 'safe', r[3], null)).toBeNull();
+  });
+  it('exactly 90 % of the median is still comparable; null coverage is ignored', () => {
+    const r = [mk('a', 1), mk('b', 1), mk('c', 0.9), mk('d', null)];
+    expect(rankRows(r).low.size).toBe(0);
   });
 });
 

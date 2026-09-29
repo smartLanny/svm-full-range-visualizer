@@ -15,7 +15,7 @@ export interface StatsRow {
   stats: RecordStats;
 }
 
-export type MetricKey = 'safe' | 'mid' | 'critical' | 'fullWhite' | 'peak' | 'mean' | 'at0' | 'at1' | 'at2' | 'at3' | 'cells';
+export type MetricKey = 'safe' | 'mid' | 'critical' | 'fullWhite' | 'peak' | 'mean' | 'at0' | 'at1' | 'at2' | 'at3' | 'coverage';
 export type SortKey = 'order' | 'name' | MetricKey;
 export type SortDir = 'asc' | 'desc';
 
@@ -35,10 +35,8 @@ export const METRICS: MetricColumn[] = [
   { key: 'fullWhite', better: 'lower', step: 0, value: (s) => s.fullWhiteSafeNits },
   { key: 'peak', better: 'lower', step: 0.01, value: (s) => s.peak?.svm ?? null },
   { key: 'mean', better: 'lower', step: 0.01, value: (s) => s.meanSvm },
-  ...SVM_AT_NITS.map(
-    (_, i): MetricColumn => ({ key: `at${i}` as MetricKey, better: 'lower', step: 0.01, value: (s) => s.svmAt[i]?.svm ?? null }),
-  ),
-  { key: 'cells', better: null, step: 1, value: (s) => s.cellCount },
+  ...SVM_AT_NITS.map((_, i): MetricColumn => ({ key: `at${i}` as MetricKey, better: 'lower', step: 0.01, value: (s) => s.svmAt[i]?.svm ?? null })),
+  { key: 'coverage', better: null, step: 0.001, value: (s) => s.coverageShare },
 ];
 
 export const metricByKey = (k: MetricKey) => METRICS.find((m) => m.key === k)!;
@@ -91,6 +89,62 @@ export function bestValues(rows: StatsRow[]): Partial<Record<MetricKey, number>>
   return out;
 }
 
+/**
+ * Rows whose coverage (valid area ÷ nominal area of the scope) is below this fraction of the
+ * median coverage of the visible rows are not comparable: their shares / mean / peak describe a
+ * smaller (usually easier) area, so they never win a "best" highlight (docs/adr/0009, 0012).
+ */
+export const COVERAGE_MIN_RATIO = 0.9;
+
+export interface Ranking {
+  /** Best value per ranked column among the comparable rows. */
+  best: Partial<Record<MetricKey, number>>;
+  /** Ids of the rows excluded from ranking for low coverage. */
+  low: Set<string>;
+  /** Median coverage of the rows (null when no row has one). */
+  medianCoverage: number | null;
+}
+
+export function median(vals: number[]): number | null {
+  if (!vals.length) return null;
+  const v = vals.slice().sort((a, b) => a - b);
+  const m = v.length >> 1;
+  return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2;
+}
+
+/** Best values over the comparable rows, plus which rows are left out for low coverage. */
+export function rankRows(rows: StatsRow[]): Ranking {
+  const medianCoverage = median(rows.map((r) => r.stats.coverageShare).filter((v): v is number => v !== null));
+  const low = new Set<string>();
+  if (medianCoverage !== null) {
+    for (const r of rows) {
+      const c = r.stats.coverageShare;
+      if (c !== null && c < COVERAGE_MIN_RATIO * medianCoverage - 1e-12) low.add(r.rec.id);
+    }
+  }
+  return { best: bestValues(rows.filter((r) => !low.has(r.rec.id))), low, medianCoverage };
+}
+
+/** 'higher' / 'lower' comparison at display resolution: v is at least as good as b. */
+function atLeastAsGood(key: MetricKey, v: number, b: number): boolean {
+  const m = metricByKey(key);
+  const sv = snap(v, m.step);
+  const sb = snap(b, m.step);
+  return m.better === 'higher' ? sv >= sb : m.better === 'lower' ? sv <= sb : false;
+}
+
+/**
+ * Mark of one value: 'best' (highlight) for a comparable row holding the column's best value;
+ * 'caveat' for a low-coverage row whose value would otherwise match or beat that best (shown
+ * with a warning marker instead of the highlight); null otherwise.
+ */
+export function markOf(rank: Ranking, key: MetricKey, row: StatsRow, v: number | null): 'best' | 'caveat' | null {
+  if (v === null || !Number.isFinite(v)) return null;
+  if (!rank.low.has(row.rec.id)) return isBest(rank.best, key, v) ? 'best' : null;
+  const b = rank.best[key];
+  return b !== undefined && atLeastAsGood(key, v, b) ? 'caveat' : null;
+}
+
 /** Snap to a column's display resolution (so values that LOOK equal rank equal). */
 const snap = (v: number, step: number) => (step > 0 ? Math.round(v / step) : v);
 
@@ -134,6 +188,9 @@ export function toTsv(rows: StatsRow[], t: TFunction, lang: Lang): string {
     t('stats.col.mean'),
     ...SVM_AT_NITS.map((n) => t('stats.col.at', { n: `${n}nits` })),
     t('stats.col.cells'),
+    t('stats.col.nominalCells'),
+    `${t('stats.col.coverage')} (%)`,
+    t('stats.col.excluded'),
   ];
   const clean = (s: string) => s.replace(/[\t\r\n]+/g, ' ');
   const lines = rows.map(({ rec, stats: s }) =>
@@ -150,6 +207,9 @@ export function toTsv(rows: StatsRow[], t: TFunction, lang: Lang): string {
       num(s.meanSvm, 3),
       ...s.svmAt.map((a) => num(a.svm, 3)),
       String(s.cellCount),
+      String(s.nominalCount),
+      num(s.coverageShare === null ? null : s.coverageShare * 100, 1),
+      String(s.excludedInScope),
     ].join('\t'),
   );
   return [header.join('\t'), ...lines].join('\n');
