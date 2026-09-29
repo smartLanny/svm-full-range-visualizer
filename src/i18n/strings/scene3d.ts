@@ -56,6 +56,8 @@ const strings: StringsModule = {
       b: 'B',
       delta: 'Δ (A−B)',
       missing: '—',
+      raw: '原始读数',
+      beyondScale: '超出色标范围（颜色已饱和）',
     },
     empty: {
       noRecord: '还没有可显示的记录',
@@ -148,6 +150,8 @@ const strings: StringsModule = {
       b: 'B',
       delta: 'Δ (A−B)',
       missing: '—',
+      raw: 'Raw reading',
+      beyondScale: 'beyond the color scale (saturated)',
     },
     empty: {
       noRecord: 'No record to show yet',

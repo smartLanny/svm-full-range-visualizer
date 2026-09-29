@@ -91,6 +91,9 @@ export default function Scene3DView() {
   const tab = useAppStore((s) => s.tab);
   const ready = useAppStore((s) => s.ready);
   const presenting = useAppStore((s) => s.presenting);
+  const pureBlack = useAppStore((s) => s.presenting && s.presentBlack);
+  // No records at all: the shell's own empty state covers the stage — no second card behind it.
+  const noRecords = useAppStore((s) => s.records.length === 0);
   const view = useAppStore((s) => s.view);
   const layout = useAppStore((s) => s.layout);
   const visible = tab === 'scene3d';
@@ -328,7 +331,7 @@ export default function Scene3DView() {
   return (
     <div
       ref={containerRef}
-      className="relative h-full w-full select-none overflow-hidden bg-canvas"
+      className={cn('relative h-full w-full select-none overflow-hidden', pureBlack ? 'bg-black' : 'bg-canvas')}
       onPointerMove={onPointerMove}
       onPointerLeave={onPointerLeave}
       data-testid="scene3d"
@@ -345,7 +348,7 @@ export default function Scene3DView() {
         <EngineHost engine={engine} />
       </Canvas>
 
-      {ready && empty && (
+      {ready && empty && !(noRecords && !presenting) && (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center p-6">
           <div className="max-w-md rounded-xl bg-surface-2/90 px-5 py-4 text-center shadow-panel ring-1 ring-line">
             <Box size={22} className="mx-auto mb-2 text-ink-3" />

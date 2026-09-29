@@ -11,12 +11,14 @@ import { recordLabel } from '../../data/records';
 import { translate } from '../../i18n';
 import type { Timeline } from '../../timeline/timeline';
 import { applyPose, clonePose, copyPose, fitPose, lerpPose, PERSP_TAN, poseBasis, type CamPose, type Insets, type Viewport } from './camera';
-import { buildModel, cellAt, SY, type ModelResult, type PanelId, type SceneModel } from './model';
-import { makeFloorMaterial, makeTerrainMaterial, setTerrainColormap, type ColorSpec, type TerrainUniforms } from './materials';
+import { gridView, bracket } from '../../data/grid';
+import type { AnomalyKind } from '../../data/anomalies';
+import { buildModel, cellAt, setModelHeightCap, SY, type ModelResult, type PanelId, type PanelModel, type SceneModel } from './model';
+import { makeFloorMaterial, makeNoDataMaterial, makeTerrainMaterial, setTerrainColormap, type ColorSpec, type NoDataMaterial, type TerrainUniforms } from './materials';
 import { PanelContent } from './terrain';
 import { Axes, type AxisLabelSpec } from './axes';
-import { drawColorbarTexture, drawTitleTexture, Hud, type Rect } from './hud';
-import { TextCache, type TextTexture } from './text';
+import { drawColorbarTexture, drawTitleTexture, Hud, type ColorbarSpec, type Rect } from './hud';
+import { measureText, TextCache, type TextTexture } from './text';
 import { buildValuesTexture } from './values';
 import { easeInOutCubic, smoothstep, Tween } from './easing';
 import { makeFrameParams, type FrameParams } from './frame';
@@ -48,17 +50,29 @@ export interface HoverInfo {
   percent: number;
   levelNits: number;
   nits: number | null;
-  value: number;
+  /** SVM / ΔSVM; null for a cell without valid data (see `missing`). */
+  value: number | null;
   capped: boolean;
   kind: 'svm' | 'diff';
   a?: number | null;
   b?: number | null;
   /** svm: colorMax; diff: symmetric color range. */
   range: number;
+  /**
+   * Cell without valid data (docs/adr/0012): the exclusion rule when the raw point was excluded
+   * (looked up in record.excluded by gray + brightness %), else null = never measured / out of
+   * range. `who` names the record for a difference map.
+   */
+  missing?: { reason: AnomalyKind | null; who?: 'A' | 'B'; raw?: { nits: number; svm: number } };
   key: string;
 }
 
+/** Background colors that make the 3D view "pure black" (presentation, docs C3). */
+const isPureBlack = (css: string) => /^#0{3}(0{3})?$/i.test(css.trim());
+
 const CAM_DUR = 0.85;
+/** HUD margin to the frame edge (CSS px). */
+const HUD_MARGIN = 20;
 const FADE_DUR = 0.4;
 const SNAP_DUR = 0.45;
 
@@ -97,6 +111,7 @@ export class Engine {
     walls: THREE.ShaderMaterial & { uniforms: TerrainUniforms };
     bars: THREE.ShaderMaterial & { uniforms: TerrainUniforms };
     plate: THREE.MeshBasicMaterial;
+    noData: NoDataMaterial;
   };
   private colorKey = '';
   private readonly floor: THREE.Mesh;
@@ -165,8 +180,13 @@ export class Engine {
       walls: makeTerrainMaterial(spec, 0.82),
       bars: makeTerrainMaterial(spec),
       plate: new THREE.MeshBasicMaterial({ color: '#10151d', transparent: true, depthWrite: true }),
+      noData: makeNoDataMaterial(),
     };
     this.mats.walls.side = THREE.DoubleSide;
+    // The "no data" floor lies on the plate: pulled forward in depth so it never z-fights it.
+    this.mats.noData.polygonOffset = true;
+    this.mats.noData.polygonOffsetFactor = -1;
+    this.mats.noData.polygonOffsetUnits = -4;
     this.floorMat = makeFloorMaterial();
     const floorGeo = new THREE.PlaneGeometry(1, 1);
     floorGeo.rotateX(-Math.PI / 2);
@@ -243,6 +263,7 @@ export class Engine {
   /** Fonts finished loading: redraw all text textures. */
   refreshText() {
     this.text.clear();
+    this.captionFit.clear();
     this.titleTex?.tt.texture.dispose();
     this.titleTex = null;
     this.colorbarTex?.tt.texture.dispose();
@@ -280,7 +301,9 @@ export class Engine {
     const prev = this.settings;
     const t = now();
     const layout = this.layoutOverride ?? s.layout;
-    const modelKey = [layout, s.a?.id, s.b?.id, s.clipLowGray, s.maxNits, s.heightCap, s.colorMax, s.lang].join('|');
+    // Height cap and color max are not part of the key: they only change heights / uniforms /
+    // textures and are applied in place (a slider drag never rebuilds or cross-fades the scene).
+    const modelKey = [layout, s.a?.id, s.b?.id, s.clipLowGray, s.maxNits, s.lang].join('|');
     const recordsChanged = !prev || prev.a !== s.a || prev.b !== s.b;
     const needModel = modelKey !== this.modelKey || recordsChanged;
     const animate = !!prev && this.hasRendered && !this.introDriving && !this.exporting;
@@ -294,6 +317,9 @@ export class Engine {
     if (needModel) {
       this.modelKey = modelKey;
       this.rebuildModel();
+    } else if (this.model) {
+      if (this.model.kind === 'svm') this.model.colorMax = Math.max(0.1, s.colorMax);
+      if (prev && prev.heightCap !== s.heightCap) this.applyHeightCap(animate);
     }
     const colorKey = `${this.model?.kind ?? 'svm'}|${s.colormap}`;
     if (colorKey !== this.colorKey) {
@@ -395,6 +421,23 @@ export class Engine {
     this.onModel(res);
   }
 
+  /** Height cap changed: update heights in place, re-frame smoothly (no rebuild, no crossfade). */
+  private applyHeightCap(animate: boolean) {
+    const m = this.model!;
+    setModelHeightCap(m, this.settings!.heightCap);
+    for (const pc of this.panels) pc.setHeightCap(m.heightCap, null);
+    // The value axis ticks follow the plotted range.
+    if (this.axes) {
+      this.world.remove(this.axes.group);
+      this.axes.dispose();
+    }
+    this.axes = new Axes(m, this.axisTexts());
+    this.world.add(this.axes.group);
+    this.fits.clear();
+    if (this.intro) this.intro.planKey = '';
+    if (animate) this.camTransition = { from: clonePose(this.lastPose), t0: now(), dur: CAM_DUR * 0.6 };
+  }
+
   private axisTexts() {
     const s = this.settings!;
     const t = (k: string) => translate(s.lang, k);
@@ -432,7 +475,13 @@ export class Engine {
     const cb = ov?.colorbar ?? true;
     const captions = this.model?.layout === 'sideBySide';
     let top = (title ? 84 : 30) + (captions ? 26 : 0);
-    let right = cb && !portrait ? 96 : 30;
+    // Landscape: the plot keeps clear of the colorbar's visible width (wider for ΔSVM / the
+    // "no data" chip), so the colorbar never overlaps the heatmap.
+    let right = 30;
+    if (cb && !portrait) {
+      const tt = this.colorbarTexture();
+      right = Math.max(96, tt ? (HUD_MARGIN * S + tt.w - tt.inset) / S + 14 : 96);
+    }
     let bottom = 62 + (cb && portrait ? 64 : 0);
     let left = 70;
     if (preset === 'perspective') {
@@ -446,6 +495,7 @@ export class Engine {
   }
 
   private uiInset = 0;
+  private plateY = -0.012;
 
   /**
    * Reserve room (CSS px) at the bottom for DOM overlays so they never cover the plot or its axis
@@ -564,7 +614,7 @@ export class Engine {
 
   private ensurePlan(): IntroPlan | null {
     if (!this.intro || !this.model) return null;
-    const key = `${this.modelKey}|${this.vp.width}x${this.vp.height}|${JSON.stringify(this.settings?.overlays)}|${this.settings?.heightScale}`;
+    const key = `${this.modelKey}|${this.model.heightCap}|${this.vp.width}x${this.vp.height}|${JSON.stringify(this.settings?.overlays)}|${this.settings?.heightScale}`;
     if (this.intro.plan && this.intro.planKey === key) return this.intro.plan;
     this.intro.plan = this.makePlan();
     this.intro.planKey = key;
@@ -595,7 +645,8 @@ export class Engine {
       show(pc.valuesMesh);
       show(pc.contourGroup);
       show(pc.contourCut.line);
-      show(pc.contourFull.line);
+      show(pc.contourValues.line);
+      show(pc.noData);
       pc.labelSprites.forEach(show);
       const vm = pc.valuesMesh?.material as THREE.MeshBasicMaterial | undefined;
       if (vm?.map) gl.initTexture(vm.map);
@@ -742,8 +793,13 @@ export class Engine {
     if (key === this.valuesKey) return;
     this.valuesKey = key;
     for (const p of this.panels) {
-      const tex = buildValuesTexture(p.panel, { worldPerCssPx: wpc, pxScale: this.pxScale, colormap: s.colormap, colorMax: this.model!.colorMax, inset: 0.12 });
-      p.setValuesTexture(key, tex, () => new THREE.MeshBasicMaterial({ transparent: true, depthTest: false, depthWrite: false, toneMapped: false }));
+      const layer = buildValuesTexture(p.panel, { worldPerCssPx: wpc, pxScale: this.pxScale, colormap: s.colormap, colorMax: this.model!.colorMax, inset: 0.12 });
+      p.setValuesTexture(
+        key,
+        layer?.texture ?? null,
+        () => new THREE.MeshBasicMaterial({ transparent: true, depthTest: false, depthWrite: false, toneMapped: false }),
+        layer?.boxes ?? [],
+      );
     }
   }
 
@@ -793,6 +849,12 @@ export class Engine {
     this.mats.bars.depthTest = !(flatBoth && !surfTop);
     // Plate sits below the lowest (possibly negative) height.
     const plateY = Math.min(0, m.plotMin) * SY * sy - 0.012;
+    this.plateY = plateY;
+    // "No data" hatch: ~6 CSS px line spacing in the top-view fit (world space, so it moves with
+    // the plot), 1 CSS px lines.
+    const topFit = this.fitFor('top');
+    this.mats.noData.uniforms.uSpacing.value = 6 * (topFit.h / this.vp.height) * this.pxScale;
+    this.mats.noData.uniforms.uPx.value = this.pxScale;
 
     this.ensureContourLayout();
     if (fp.valuesOpacity > 0.002) this.ensureValues();
@@ -807,6 +869,7 @@ export class Engine {
       pc.bars.visible = barsOn;
       if (barsOn) pc.setGrowth(i === 0 ? fp.growth : null);
       pc.plate.position.y = plateY;
+      if (pc.noData) pc.noData.position.y = plateY + 0.002;
       // contours
       // Contours follow the surface; over 3D bars they would float inside the bars, so they only
       // show there once the bars are (nearly) flat.
@@ -815,10 +878,11 @@ export class Engine {
       pc.contourGroup.visible = cOp > 0.002;
       pc.contourGroup.scale.set(1, sy, 1);
       pc.contourGroup.position.y = 0.012 + (1 - fp.heightK) * 0.004;
-      // Gapped lines while labels show; continuous lines while the value table hides the labels.
+      // Lines gapped under their labels; while the value table shows (labels hidden), lines gapped
+      // around every printed value instead — a line never runs through a number.
       const labelsShown = 1 - fp.valuesOpacity;
       pc.contourCut.setStyle(cOp * 0.92 * labelsShown, 1.7 * this.pxScale);
-      pc.contourFull.setStyle(cOp * 0.92 * (1 - labelsShown), 1.7 * this.pxScale);
+      pc.contourValues.setStyle(cOp * 0.92 * (1 - labelsShown), 1.7 * this.pxScale);
       if (pc.contourGroup.visible) pc.setContourReveal(fp.contourReveal);
       // contour labels: world billboards following the surface, pulled toward the camera so the
       // surface they sit on never clips them.
@@ -852,6 +916,14 @@ export class Engine {
         const clampPx = THREE.MathUtils.clamp(projPx, nominalPx * 0.75, nominalPx * 1.45);
         sp.scale.copy(base).multiplyScalar(sc * (clampPx / Math.max(1e-6, projPx)));
         sp.position.copy(anchor);
+        // The pull toward the camera must not show a label through terrain standing in front of
+        // its line (e.g. behind a ridge): fade by how much of it the terrain hides.
+        if (sp.visible && fp.heightK > 0.01) {
+          const vis = this.spriteSightline(new THREE.Vector3(lb.x, lb.y * sy + 0.012, lb.z), sp.scale.x * 0.5, fp);
+          const a2 = a * vis;
+          sp.visible = a2 > 0.003;
+          (sp.material as THREE.SpriteMaterial).opacity = a2;
+        }
       }
       // values
       if (pc.valuesMesh) {
@@ -861,9 +933,9 @@ export class Engine {
       }
     });
 
-    // floor + plate
+    // floor + plate (no floor glow on a pure black presentation background: keyable / black-level exact)
     this.floorMat.uniforms.uOpacity.value = fp.ground;
-    this.floor.visible = fp.ground > 0.01;
+    this.floor.visible = fp.ground > 0.01 && !isPureBlack(s.background);
     this.floor.position.y = plateY - 0.02;
 
     // axes
@@ -972,13 +1044,11 @@ export class Engine {
 
   private layoutHud(fp: FrameParams) {
     const s = this.settings!;
-    const m = this.model!;
     const hud = this.hud;
     const S = this.pxScale;
     const W = this.vp.width;
     const H = this.vp.height;
-    const margin = 20 * S;
-    const t = (k: string) => translate(s.lang, k);
+    const margin = HUD_MARGIN * S;
     hud.begin();
     const occupied: Rect[] = [];
 
@@ -998,25 +1068,9 @@ export class Engine {
 
     // colorbar
     const portrait = W / H < 0.85;
-    if (fp.hud.colorbar > 0.003) {
-      const len = portrait ? Math.min(420, (W / S) * 0.6) : Math.max(120, Math.min(300, (H / S) * 0.42));
-      const diff = m.kind === 'diff';
-      const spec = {
-        kind: m.kind,
-        colormap: s.colormap,
-        max: m.colorMax,
-        title: diff ? t('scene3d.colorbar.delta') : 'SVM',
-        marks: s.overlays.contours ? m.contourLevels.filter((v) => (diff ? v !== 0 || true : true)) : [],
-        ends: diff ? ([t('scene3d.colorbar.aBetter'), t('scene3d.colorbar.aWorse')] as [string, string]) : undefined,
-        orientation: portrait ? ('horizontal' as const) : ('vertical' as const),
-        length: Math.round(len),
-      };
-      const key = `${JSON.stringify(spec)}|${S}|${s.background}`;
-      if (this.colorbarTex?.key !== key) {
-        this.colorbarTex?.tt.texture.dispose();
-        this.colorbarTex = { key, tt: drawColorbarTexture(spec, S, s.background) };
-      }
-      const tt = this.colorbarTex.tt;
+    const cbTex = fp.hud.colorbar > 0.003 ? this.colorbarTexture() : null;
+    if (cbTex) {
+      const tt = cbTex;
       const ins = this.insets(this.preset);
       let x: number;
       let yTop: number;
@@ -1037,6 +1091,45 @@ export class Engine {
     // axis labels
     if (this.axes) this.layoutAxisLabels(fp, occupied);
     hud.end();
+  }
+
+  /** Colorbar spec for the current model / settings (null without a model). */
+  private colorbarSpec(): ColorbarSpec | null {
+    const s = this.settings;
+    const m = this.model;
+    if (!s || !m) return null;
+    const t = (k: string) => translate(s.lang, k);
+    const portrait = this.vp.width / this.vp.height < 0.85;
+    const S = this.pxScale;
+    const len = portrait ? Math.min(420, (this.vp.width / S) * 0.6) : Math.max(120, Math.min(300, (this.vp.height / S) * 0.42));
+    const diff = m.kind === 'diff';
+    const hasNull = m.panels.some((p) => p.count < p.values.length * (p.values[0]?.length ?? 0));
+    return {
+      kind: m.kind,
+      colormap: s.colormap,
+      max: m.colorMax,
+      title: diff ? t('scene3d.colorbar.delta') : 'SVM',
+      marks: s.overlays.contours ? m.contourLevels : [],
+      ends: diff ? ([t('scene3d.colorbar.aBetter'), t('scene3d.colorbar.aWorse')] as [string, string]) : undefined,
+      // Diff: the scale saturates; ends that clip real values read "≤ −R" / "≥ +R".
+      over: diff ? [m.panels.some((p) => p.minValue < -m.colorMax - 1e-9), m.panels.some((p) => p.maxValue > m.colorMax + 1e-9)] : undefined,
+      noData: hasNull ? t('common.noValidData') : undefined,
+      orientation: portrait ? 'horizontal' : 'vertical',
+      length: Math.round(len),
+    };
+  }
+
+  /** Cached colorbar texture (also sizes the right inset of the fit). */
+  private colorbarTexture(): (TextTexture & { inset: number }) | null {
+    const spec = this.colorbarSpec();
+    if (!spec) return null;
+    const bg = this.settings!.background;
+    const key = `${JSON.stringify(spec)}|${this.pxScale}|${bg}`;
+    if (this.colorbarTex?.key !== key) {
+      this.colorbarTex?.tt.texture.dispose();
+      this.colorbarTex = { key, tt: drawColorbarTexture(spec, this.pxScale, bg) };
+    }
+    return this.colorbarTex.tt;
   }
 
   private readonly scratchPersp = new THREE.PerspectiveCamera();
@@ -1142,7 +1235,14 @@ export class Engine {
     const topGray = m.grayTicks.length ? m.grayTicks[m.grayTicks.length - 1] : 255;
     const anchorOf = (spec: AxisLabelSpec) => {
       if (spec.axis === 'value') return corner.clone().setY(spec.coord * SY * sy);
-      return ax.anchor(spec, new THREE.Vector3());
+      const a = ax.anchor(spec, new THREE.Vector3());
+      // Panel captions sit on the back edge at the top of that panel's terrain box, so the
+      // terrain never rises in front of them (docs: panel labels always readable).
+      if (spec.axis === 'caption') {
+        const pm = m.panels[spec.panel];
+        a.y = Math.max(0, Math.min(m.heightCap, pm.maxValue)) * SY * sy;
+      }
+      return a;
     };
     // Soft collision culling: a label fades out continuously as it approaches a higher-priority
     // one (instead of popping), so moving cameras / the intro never flicker labels on and off.
@@ -1169,9 +1269,12 @@ export class Engine {
         let alpha = alphaOf(spec);
         if (spec.axis === 'gray' && spec.kind === 'title' && fp.grayTickAlpha) alpha *= fp.grayTickAlpha(topGray);
         if (alpha <= 0.003) continue;
-        const tt = this.text.get(spec.text, spec.style, S);
-        const d = dirFor(spec);
         const anchorW = anchorOf(spec);
+        // Panel captions never run past their panel (and into the other caption / the colorbar):
+        // long record names are shortened with an ellipsis instead of being culled.
+        const text = spec.axis === 'caption' ? this.fitCaption(spec, anchorW) : spec.text;
+        const tt = this.text.get(text, spec.style, S);
+        const d = dirFor(spec);
         const a = this.project(anchorW);
         if (!a.ok) continue;
         const key = `${spec.axis}${spec.panel}`;
@@ -1198,8 +1301,8 @@ export class Engine {
         const rect: Rect = { x0: cx - w / 2, y0: cy - h / 2, x1: cx + w / 2, y1: cy + h / 2 };
         if (rect.x0 < 2 || rect.y0 < 2 || rect.x1 > this.vp.width - 2 || rect.y1 > this.vp.height - 2) continue;
         // Labels sit on the plate: terrain in front of them (e.g. perspective bars leaning over an
-        // axis) fades them out instead of drawing text over the terrain.
-        alpha *= this.labelVisibility(anchorW, rect, fp);
+        // axis) fades them out instead of drawing text over the terrain. Captions float above it.
+        if (spec.axis !== 'caption') alpha *= this.labelVisibility(anchorW, rect, fp);
         if (alpha <= 0.003) continue;
         alpha *= clearance(rect);
         if (alpha <= 0.003) continue;
@@ -1207,6 +1310,35 @@ export class Engine {
       }
     }
     for (const p of placed) hud.quad(p.tt.texture, p.rect.x0, p.rect.y1, p.tt.w, p.tt.h, p.alpha, p.rot);
+  }
+
+  private readonly captionFit = new Map<string, string>();
+
+  /** Caption text shortened (ellipsis) to the projected width of its panel's back edge. */
+  private fitCaption(spec: AxisLabelSpec, anchor: THREE.Vector3): string {
+    const r = this.model!.panels[spec.panel].rect;
+    const a = this.project(new THREE.Vector3(r.x0, anchor.y, r.z0));
+    const b = this.project(new THREE.Vector3(r.x1, anchor.y, r.z0));
+    const S = this.pxScale;
+    const maxW = Math.max(60 * S, Math.hypot(b.x - a.x, b.y - a.y));
+    const key = `${spec.text}|${Math.round(maxW / (6 * S))}|${S}`;
+    const hit = this.captionFit.get(key);
+    if (hit !== undefined) return hit;
+    let out = spec.text;
+    if (measureText(out, spec.style, S) > maxW) {
+      const chars = [...spec.text];
+      let lo = 1;
+      let hi = chars.length - 1;
+      while (lo < hi) {
+        const mid = (lo + hi + 1) >> 1;
+        if (measureText(`${chars.slice(0, mid).join('').trimEnd()}…`, spec.style, S) <= maxW) lo = mid;
+        else hi = mid - 1;
+      }
+      out = `${chars.slice(0, lo).join('').trimEnd()}…`;
+    }
+    if (this.captionFit.size > 64) this.captionFit.clear();
+    this.captionFit.set(key, out);
+    return out;
   }
 
   private readonly occRay = new THREE.Raycaster();
@@ -1283,6 +1415,73 @@ export class Engine {
     return visible / pts.length;
   }
 
+  /**
+   * Fraction (0..1) of a contour label's sight lines not blocked by terrain: rays from the camera
+   * to five points across the label (at its anchor on the surface), ignoring the last stretch
+   * right in front of the anchor (the surface the label sits on).
+   */
+  private spriteSightline(anchor: THREE.Vector3, halfWidth: number, fp: FrameParams): number {
+    const m = this.model;
+    if (!m) return 1;
+    const s = this.settings!;
+    const sy = fp.heightK * s.heightScale;
+    const b = m.bounds;
+    const yMax = Math.max(0.01, m.plotMax * SY * sy);
+    const cam = this.activeCam;
+    const right = new THREE.Vector3(1, 0, 0).applyQuaternion(cam.quaternion);
+    const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(cam.quaternion);
+    const ortho = !(cam instanceof THREE.PerspectiveCamera);
+    const useBars = fp.barsOpacity > 0.5 || fp.surfaceOpacity < 0.5;
+    const clearance = 0.3 + 0.25 * fp.heightK;
+    const target = new THREE.Vector3();
+    const origin = new THREE.Vector3();
+    const dir = new THREE.Vector3();
+    const pos = new THREE.Vector3();
+    let clear = 0;
+    const offs = [0, -0.4, 0.4, -0.8, 0.8];
+    for (const o of offs) {
+      target.copy(anchor).addScaledVector(right, o * halfWidth);
+      if (ortho) origin.copy(target).addScaledVector(fwd, -1000);
+      else origin.copy(cam.position);
+      dir.copy(target).sub(origin);
+      const len = dir.length();
+      dir.divideScalar(Math.max(1e-9, len));
+      let t0 = 0;
+      let t1 = len - clearance;
+      const clipAxis = (oo: number, d: number, lo: number, hi: number) => {
+        if (Math.abs(d) < 1e-9) {
+          if (oo < lo || oo > hi) t1 = -1;
+          return;
+        }
+        let a = (lo - oo) / d;
+        let c = (hi - oo) / d;
+        if (a > c) [a, c] = [c, a];
+        t0 = Math.max(t0, a);
+        t1 = Math.min(t1, c);
+      };
+      clipAxis(origin.x, dir.x, b.x0, b.x1);
+      clipAxis(origin.y, dir.y, Math.min(0, m.plotMin * SY * sy), yMax);
+      clipAxis(origin.z, dir.z, b.z0, b.z1);
+      let hit = false;
+      if (t1 > t0) {
+        const steps = Math.min(96, Math.max(8, Math.ceil((t1 - t0) / 0.06)));
+        for (let k = 0; k <= steps && !hit; k++) {
+          pos.copy(origin).addScaledVector(dir, t0 + ((t1 - t0) * k) / steps);
+          for (let pi = 0; pi < this.panels.length && !hit; pi++) {
+            const pc = this.panels[pi];
+            const unit = useBars ? pc.barHeight(pos.x, pos.z, pi === 0 ? fp.growth : null) : pc.surfaceHeight(pos.x, pos.z);
+            if (unit === null) continue;
+            const h = unit * sy;
+            // Inside the terrain body (between the zero plane and the surface).
+            if ((h > 0 && pos.y < h - 1e-3 && pos.y > -1e-3) || (h < 0 && pos.y > h + 1e-3 && pos.y < 1e-3)) hit = true;
+          }
+        }
+      }
+      if (!hit) clear++;
+    }
+    return clear / offs.length;
+  }
+
   // ------------------------------------------------------------------ hover / picking
 
   private raycaster = new THREE.Raycaster();
@@ -1304,8 +1503,13 @@ export class Engine {
         if (h.object === pc.bars && h.instanceId !== undefined) {
           const b = pc.barInfo[h.instanceId];
           cell = { r: b.r, c: b.c };
+        } else if (h.object === pc.walls && h.face) {
+          // A wall lies on a cell edge and faces away from its cell: step back into that cell.
+          cell = cellAt(pc.panel, h.point.x - h.face.normal.x * 1e-4, h.point.z - h.face.normal.z * 1e-4);
         } else cell = cellAt(pc.panel, h.point.x, h.point.z);
-        if (cell && pc.panel.values[cell.r]?.[cell.c] !== null && pc.panel.values[cell.r]?.[cell.c] !== undefined) {
+        if (!cell || pc.panel.values[cell.r]?.[cell.c] === undefined) continue;
+        // A valid cell, or the (hatched) floor of a cell without valid data.
+        if (pc.panel.values[cell.r][cell.c] !== null || h.object === pc.plate) {
           if (!best || h.distance < best.dist) best = { dist: h.distance, panel: i, r: cell.r, c: cell.c };
           break;
         }
@@ -1316,7 +1520,7 @@ export class Engine {
     this.setHover({ panel, r, c });
     const pm = this.model.panels[panel];
     const v = pm.view;
-    const value = pm.values[r][c] as number;
+    const value = pm.values[r][c];
     const p = v.points[r][c];
     const info: HoverInfo = {
       panel: pm.id,
@@ -1326,7 +1530,7 @@ export class Engine {
       levelNits: v.levelNits[c],
       nits: p ? p.nits : null,
       value,
-      capped: Math.abs(value) > this.model.heightCap,
+      capped: value !== null && Math.abs(value) > this.model.heightCap,
       kind: pm.kind,
       range: this.model.colorMax,
       key: `${panel}:${r}:${c}`,
@@ -1335,6 +1539,7 @@ export class Engine {
       info.a = p ? p.svm : null;
       info.b = pm.otherValues?.[r]?.[c] ?? null;
     }
+    if (value === null) info.missing = missingReason(pm, r, c);
     return info;
   }
 
@@ -1358,21 +1563,27 @@ export class Engine {
     const pc = this.panels[cell.panel];
     if (hv.parent !== pc.heightGroup) pc.heightGroup.add(hv);
     const bar = pc.barInfo.find((b) => b.r === cell.r && b.c === cell.c);
-    if (!bar) {
-      hv.visible = false;
-      return;
-    }
     const pm = pc.panel;
     const x0 = pm.xe[cell.c];
     const x1 = pm.xe[cell.c + 1];
     const z0 = pm.ze[cell.r];
     const z1 = pm.ze[cell.r + 1];
-    // Outline the bar top, or the cell on the flat heatmap (a 3D surface has no flat cell to outline).
-    if (this.settings!.representation !== 'bars' && this.frame.heightK > 0.05) {
-      hv.visible = false;
-      return;
+    let y: number;
+    if (!bar) {
+      // A cell without valid data: outline its hatched floor (flat in every view).
+      if (pm.values[cell.r]?.[cell.c] !== null) {
+        hv.visible = false;
+        return;
+      }
+      y = (this.plateY + 0.004) / Math.max(1e-6, pc.heightGroup.scale.y);
+    } else {
+      // Outline the bar top, or the cell on the flat heatmap (a 3D surface has no flat cell to outline).
+      if (this.settings!.representation !== 'bars' && this.frame.heightK > 0.05) {
+        hv.visible = false;
+        return;
+      }
+      y = this.settings!.representation === 'bars' ? Math.max(0, bar.h) + 0.002 : 0.002;
     }
-    const y = this.settings!.representation === 'bars' ? Math.max(0, bar.h) + 0.002 : 0.002;
     const arr = (hv.geometry.attributes.position as THREE.BufferAttribute).array as Float32Array;
     arr.set([x0, y, z0, x1, y, z0, x1, y, z1, x0, y, z1, x0, y, z0]);
     hv.geometry.attributes.position.needsUpdate = true;
@@ -1455,4 +1666,34 @@ export class Engine {
   get basis() {
     return poseBasis(this.lastPose.theta, this.lastPose.phi);
   }
+}
+
+/**
+ * Why a cell has no valid data (docs/adr/0012): the rule that excluded its raw point, looked up in
+ * the record's `excluded` list by gray + brightness %. For a difference map, A's own cell first,
+ * then the B cells the resampling needs at that spot.
+ */
+export function missingReason(pm: PanelModel, r: number, c: number): NonNullable<HoverInfo['missing']> {
+  const find = (rec: SvmRecord | undefined, gray: number, percent: number) =>
+    rec?.excluded?.find((x) => x.gray === gray && Math.abs(x.brightnessPercent - percent) < 1e-9) ?? null;
+  const v = pm.view;
+  const diff = pm.kind === 'diff';
+  if (!v.points[r][c]) {
+    const x = find(pm.record, v.grays[r], v.percents[c]);
+    return { reason: (x?.reason as AnomalyKind) ?? null, who: diff ? 'A' : undefined, raw: x ? { nits: x.nits, svm: x.svm } : undefined };
+  }
+  if (!diff || !pm.other) return { reason: null };
+  // B is bilinearly resampled at A's (level luminance, gray): report an excluded bracketing cell.
+  const bv = gridView(pm.other);
+  const ci = bracket(bv.x, v.x[c]);
+  const ri = bracket(bv.grays, v.grays[r]);
+  if (ci >= 0 && ri >= 0) {
+    for (const rr of [ri, Math.min(ri + 1, bv.grays.length - 1)])
+      for (const cc of [ci, Math.min(ci + 1, bv.x.length - 1)]) {
+        if (bv.points[rr][cc]) continue;
+        const x = find(pm.other, bv.grays[rr], bv.percents[cc]);
+        if (x) return { reason: x.reason as AnomalyKind, who: 'B' };
+      }
+  }
+  return { reason: null, who: 'B' };
 }

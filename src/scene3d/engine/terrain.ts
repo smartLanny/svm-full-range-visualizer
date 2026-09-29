@@ -7,16 +7,18 @@ import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
 import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js';
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 import { BAR_GAP, BAR_GAP_MAX, plotValue, SY, type PanelModel, type SceneModel } from './model';
-import { buildSurfaceGrid, type SurfaceGrid } from './surfaceGrid';
+import { boundaryEdges, buildSurfaceGrid, sampleSurface, type SurfaceGrid } from './surfaceGrid';
 import {
   cutUnderLabels,
   pieceSegmentCount,
   placeLabels,
+  pointAt,
   revealSegments,
   traceContours,
   type ContourLabel,
   type ContourLine,
   type ContourPiece,
+  type LabelBox,
 } from './contours';
 import { measureText, TextCache, type TextStyle } from './text';
 
@@ -115,12 +117,18 @@ export class PanelContent {
   readonly bars: THREE.InstancedMesh;
   readonly barInfo: BarInfo[];
   readonly plate: THREE.Mesh;
-  readonly lines: ContourLine[];
+  /** Hatched "no data" floor under the missing cells (null when the panel has none). */
+  readonly noData: THREE.Mesh | null;
+  lines: ContourLine[];
   readonly contourGroup = new THREE.Group();
-  /** Lines cut under their labels, and the same lines uncut (used while labels are hidden). */
+  /**
+   * Lines cut under their labels, and the same lines cut around the printed cell values (used
+   * while the value table replaces the labels): a line never crosses a label or a number.
+   */
   readonly contourCut = new ContourLineSet(5);
-  readonly contourFull = new ContourLineSet(5);
+  readonly contourValues = new ContourLineSet(5);
   labels: ContourLabel[] = [];
+  private valueBoxes: LabelBox[] = [];
   readonly labelSprites: THREE.Sprite[] = [];
   valuesMesh: THREE.Mesh | null = null;
   private valuesKey = '';
@@ -131,7 +139,7 @@ export class PanelContent {
   constructor(
     readonly panel: PanelModel,
     readonly model: SceneModel,
-    mats: { surface: THREE.Material; walls: THREE.Material; bars: THREE.Material; plate: THREE.Material },
+    mats: { surface: THREE.Material; walls: THREE.Material; bars: THREE.Material; plate: THREE.Material; noData: THREE.Material },
   ) {
     const cap = model.heightCap;
     const unitH = (v: number) => plotValue(v, cap) * SY;
@@ -194,10 +202,54 @@ export class PanelContent {
     this.plate.renderOrder = 0;
     this.group.add(this.plate);
 
+    // --- "no data" floor: exactly the missing cells (same rectangles as the bars / heatmap) ---
+    const noDataGeo = buildNoDataGeometry(panel);
+    this.noData = noDataGeo ? new THREE.Mesh(noDataGeo, mats.noData) : null;
+    if (this.noData) {
+      this.noData.renderOrder = 0;
+      this.noData.frustumCulled = false;
+      this.group.add(this.noData);
+    }
+
     // --- contours ---
     this.lines = traceContours(this.grid, model.contourLevels, unitH);
-    this.contourGroup.add(this.contourCut.line, this.contourFull.line);
+    this.contourGroup.add(this.contourCut.line, this.contourValues.line);
     this.group.add(this.contourGroup);
+  }
+
+  /**
+   * New height cap (value units) without rebuilding anything: surface / wall / bar heights, capped
+   * flags and contour heights are updated in place. Cells, colors and label spots do not change.
+   */
+  setHeightCap(cap: number, growth: Float32Array | null) {
+    const unitH = (v: number) => plotValue(v, cap) * SY;
+    const lift = (geo: THREE.BufferGeometry, isTop: (i: number) => boolean) => {
+      const pos = geo.attributes.position as THREE.BufferAttribute;
+      const val = geo.attributes.aValue as THREE.BufferAttribute;
+      for (let i = 0; i < pos.count; i++) if (isTop(i)) pos.setY(i, unitH(val.getX(i)));
+      pos.needsUpdate = true;
+    };
+    lift(this.surface.geometry, () => true);
+    this.surface.geometry.computeVertexNormals();
+    // Wall quads are [a bottom, b bottom, b top, a top].
+    lift(this.walls.geometry, (i) => i % 4 >= 2);
+    const aCapped = this.bars.geometry.attributes.aCapped as THREE.InstancedBufferAttribute;
+    this.barInfo.forEach((b, i) => {
+      const v = this.panel.values[b.r][b.c] as number;
+      b.h = unitH(v);
+      b.capped = Math.abs(v) > cap;
+      aCapped.setX(i, b.capped ? 1 : 0);
+    });
+    aCapped.needsUpdate = true;
+    this.setGrowth(growth, true);
+    // Contours: same xz (they only depend on values and levels), new heights.
+    this.lines = traceContours(this.grid, this.model.contourLevels, unitH);
+    for (const lb of this.labels) {
+      const line = this.lines[lb.lineIndex];
+      if (line) lb.y = pointAt(line, lb.u * line.length).p.y;
+    }
+    this.contourCut.setPieces(cutUnderLabels(this.lines, this.labels, 1.12));
+    this.contourValues.setPieces(cutUnderLabels(this.lines, this.valueBoxes, 1));
   }
 
   /** Instance index per cell (r * nCols + c), -1 = no bar. */
@@ -211,30 +263,10 @@ export class PanelContent {
   }
   private _barIndex: Int32Array | null = null;
 
-  /** Unit surface height at world (x, z) (bilinear, same function as the rendered surface); null outside. */
+  /** Unit surface height at world (x, z) (same interpolant as the rendered surface); null outside / over a hole. */
   surfaceHeight(x: number, z: number): number | null {
-    const p = this.panel;
-    const { x0, x1, z0, z1 } = p.rect;
-    if (x < x0 || x > x1 || z < z0 || z > z1) return null;
-    const nC = p.xs.length;
-    const nR = p.zs.length;
-    // Base grid: [edge, centers..., edge]; z descending with row index.
-    const gx = (i: number) => (i === 0 ? p.xe[0] : i === nC + 1 ? p.xe[nC] : p.xs[i - 1]);
-    const gz = (j: number) => (j === 0 ? p.ze[0] : j === nR + 1 ? p.ze[nR] : p.zs[j - 1]);
-    let i = 0;
-    while (i < nC && x > gx(i + 1)) i++;
-    let j = 0;
-    while (j < nR && z < gz(j + 1)) j++;
-    const u = (x - gx(i)) / Math.max(1e-9, gx(i + 1) - gx(i));
-    const v = (z - gz(j)) / Math.min(-1e-9, gz(j + 1) - gz(j));
-    const val = (ii: number, jj: number) => p.values[Math.min(nR - 1, Math.max(0, jj - 1))][Math.min(nC - 1, Math.max(0, ii - 1))];
-    const c00 = val(i, j);
-    const c10 = val(i + 1, j);
-    const c01 = val(i, j + 1);
-    const c11 = val(i + 1, j + 1);
-    if (c00 === null || c10 === null || c01 === null || c11 === null) return null;
-    const vv = c00 * (1 - u) * (1 - v) + c10 * u * (1 - v) + c01 * (1 - u) * v + c11 * u * v;
-    return plotValue(vv, this.model.heightCap) * SY;
+    const v = sampleSurface(this.panel, x, z);
+    return v === null ? null : plotValue(v, this.model.heightCap) * SY;
   }
 
   /** Unit bar height at world (x, z) including growth (0 in gaps / outside). */
@@ -254,8 +286,8 @@ export class PanelContent {
   }
 
   /** Update bar instance matrices for per-bar growth (null = full). */
-  setGrowth(growth: Float32Array | null) {
-    if (growth === this.growthKey && growth === null) return;
+  setGrowth(growth: Float32Array | null, force = false) {
+    if (!force && growth === this.growthKey && growth === null) return;
     const d = this.dummy;
     for (let i = 0; i < this.barInfo.length; i++) {
       const b = this.barInfo[i];
@@ -290,7 +322,7 @@ export class PanelContent {
       avoidZAbove: lowGrayZ,
     });
     this.contourCut.setPieces(cutUnderLabels(this.lines, this.labels, 1.12));
-    this.contourFull.setPieces(cutUnderLabels(this.lines, [], 1));
+    this.contourValues.setPieces(cutUnderLabels(this.lines, this.valueBoxes, 1));
     // Label sprites (world-sized billboards, depth-tested so hills hide them in 3D).
     for (const s of this.labelSprites) {
       this.contourGroup.parent?.remove(s);
@@ -315,13 +347,15 @@ export class PanelContent {
   /** Draw-on progress per level (null = all) for both line sets. */
   setContourReveal(reveal: number[] | null) {
     this.contourCut.setReveal(reveal);
-    this.contourFull.setReveal(reveal);
+    this.contourValues.setReveal(reveal);
   }
 
-  /** Canvas texture with the cell values (one texture for the whole panel). */
-  setValuesTexture(key: string, texture: THREE.Texture | null, mat: () => THREE.Material) {
+  /** Canvas texture with the cell values (one texture for the whole panel) + the printed boxes. */
+  setValuesTexture(key: string, texture: THREE.Texture | null, mat: () => THREE.Material, boxes: LabelBox[] = []) {
     if (key === this.valuesKey) return;
     this.valuesKey = key;
+    this.valueBoxes = boxes;
+    this.contourValues.setPieces(cutUnderLabels(this.lines, boxes, 1));
     if (this.valuesMesh) {
       this.group.remove(this.valuesMesh);
       this.valuesMesh.geometry.dispose();
@@ -350,8 +384,9 @@ export class PanelContent {
     this.bars.geometry.dispose();
     this.bars.dispose();
     this.plate.geometry.dispose();
+    this.noData?.geometry.dispose();
     this.contourCut.dispose();
-    this.contourFull.dispose();
+    this.contourValues.dispose();
     for (const s of this.labelSprites) (s.material as THREE.SpriteMaterial).dispose();
     this.labelCache.clear();
     this.setValuesTexture('', null, () => new THREE.MeshBasicMaterial());
@@ -379,43 +414,59 @@ function buildSurfaceGeometry(grid: SurfaceGrid, unitH: (v: number) => number): 
   return geo;
 }
 
-/** Vertical walls around the surface border, from y = 0 to the surface. */
+/**
+ * Vertical walls along every border of the drawn surface — the panel border and the rims of the
+ * holes left by missing cells — from y = 0 to the surface, so holes read as clean cut-outs instead
+ * of paper-thin edges floating in the air.
+ */
 function buildWallGeometry(grid: SurfaceGrid, unitH: (v: number) => number): THREE.BufferGeometry {
-  const { nx, nz, gx, gz, v } = grid;
+  const { nx, gx, gz, v } = grid;
   const pos: number[] = [];
   const nrm: number[] = [];
   const val: number[] = [];
   const idx: number[] = [];
-  // Border walk as (vertexIndex, outward normal) runs: front (j=0), right (i=nx-1), back (j=nz-1), left (i=0).
-  const runs: { ids: number[]; n: [number, number, number] }[] = [
-    { ids: Array.from({ length: nx }, (_, i) => i), n: [0, 0, 1] },
-    { ids: Array.from({ length: nz }, (_, j) => j * nx + nx - 1), n: [1, 0, 0] },
-    { ids: Array.from({ length: nx }, (_, i) => (nz - 1) * nx + (nx - 1 - i)), n: [0, 0, -1] },
-    { ids: Array.from({ length: nz }, (_, j) => (nz - 1 - j) * nx), n: [-1, 0, 0] },
-  ];
-  for (const run of runs) {
-    for (let s = 0; s < run.ids.length - 1; s++) {
-      const a = run.ids[s];
-      const b = run.ids[s + 1];
-      const va = v[a];
-      const vb = v[b];
-      if (va === null || vb === null) continue;
-      const base = pos.length / 3;
-      const ax = gx[a % nx];
-      const az = gz[Math.floor(a / nx)];
-      const bx = gx[b % nx];
-      const bz = gz[Math.floor(b / nx)];
-      pos.push(ax, 0, az, bx, 0, bz, bx, unitH(vb), bz, ax, unitH(va), az);
-      for (let k = 0; k < 4; k++) nrm.push(...run.n);
-      val.push(va, vb, vb, va);
-      // Outward-facing (counter-clockwise seen from outside).
-      idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
-    }
+  for (const { a, b, n } of boundaryEdges(grid)) {
+    const va = v[a];
+    const vb = v[b];
+    if (va === null || vb === null) continue;
+    const base = pos.length / 3;
+    const ax = gx[a % nx];
+    const az = gz[Math.floor(a / nx)];
+    const bx = gx[b % nx];
+    const bz = gz[Math.floor(b / nx)];
+    pos.push(ax, 0, az, bx, 0, bz, bx, unitH(vb), bz, ax, unitH(va), az);
+    for (let k = 0; k < 4; k++) nrm.push(...n);
+    val.push(va, vb, vb, va);
+    // Outward-facing (counter-clockwise seen from outside).
+    idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
   }
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   geo.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3));
   geo.setAttribute('aValue', new THREE.Float32BufferAttribute(val, 1));
+  geo.setIndex(idx);
+  return geo;
+}
+
+/** One flat quad per missing cell (y = 0), or null when every cell has a value. */
+function buildNoDataGeometry(panel: PanelModel): THREE.BufferGeometry | null {
+  const pos: number[] = [];
+  const idx: number[] = [];
+  panel.values.forEach((row, r) =>
+    row.forEach((v, c) => {
+      if (v !== null && Number.isFinite(v)) return;
+      const x0 = panel.xe[c];
+      const x1 = panel.xe[c + 1];
+      const zf = Math.max(panel.ze[r], panel.ze[r + 1]); // front
+      const zb = Math.min(panel.ze[r], panel.ze[r + 1]); // back
+      const base = pos.length / 3;
+      pos.push(x0, 0, zf, x1, 0, zf, x1, 0, zb, x0, 0, zb);
+      idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
+    }),
+  );
+  if (!idx.length) return null;
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   geo.setIndex(idx);
   return geo;
 }
