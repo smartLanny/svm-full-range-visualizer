@@ -105,6 +105,12 @@ export interface AppState extends Settings, RecordPrefs {
 
   /** Presentation mode (fullscreen, panels hidden). Not persisted. */
   presenting: boolean;
+  /**
+   * While presenting: CSS px from the stage's left edge that in-canvas titles must keep clear
+   * because the presentation exit button (fixed top-left of the window) sits over the stage there.
+   * 0 when not presenting or when the stage is letterboxed away from the button. Set by the shell.
+   */
+  presentSafeLeft: number;
 
   /** Views watch these nonces: increment = "start / stop your animation". */
   playNonce: Record<AnimTab, number>;
@@ -152,6 +158,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
   records: [],
   ready: false,
   presenting: false,
+  presentSafeLeft: 0,
   playNonce: { scene3d: 0, chart2d: 0 },
   stopNonce: { scene3d: 0, chart2d: 0 },
   animating: { scene3d: false, chart2d: false },

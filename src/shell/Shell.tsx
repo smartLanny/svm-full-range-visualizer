@@ -1,4 +1,4 @@
-import React, { useEffect, useSyncExternalStore } from 'react';
+import React, { useEffect, useRef, useSyncExternalStore } from 'react';
 import { ArchiveRestore, FolderOpen, Plus, SlidersHorizontal } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
 import { translate, useT } from '../i18n';
@@ -13,7 +13,7 @@ import { InspectorBody, InspectorHeader, InspectorRail } from './Inspector';
 import { Importer } from './Importer';
 import { AboutDialog, ClearDataDialog, ShortcutsDialog } from './ShellDialogs';
 import { DropOverlay } from './DropOverlay';
-import { PresentationChrome } from './PresentationChrome';
+import { PRESENT_EXIT_BOTTOM, PRESENT_EXIT_RIGHT, PresentationChrome } from './PresentationChrome';
 import { usePresentationLifecycle } from './presentation';
 import { useGlobalShortcuts } from './useGlobalShortcuts';
 import { openJsonFiles } from './fileImport';
@@ -153,6 +153,32 @@ function MainArea({ docked }: { docked: boolean }) {
       }
     : { position: 'absolute', inset: 0 };
 
+  // Tell the views how far their in-canvas title must move right to clear the exit button.
+  const stageRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = stageRef.current;
+    const setSafe = (v: number) => {
+      if (useAppStore.getState().presentSafeLeft !== v) useAppStore.setState({ presentSafeLeft: v });
+    };
+    if (!presenting || !el) {
+      setSafe(0);
+      return;
+    }
+    const update = () => {
+      const r = el.getBoundingClientRect();
+      setSafe(r.top < PRESENT_EXIT_BOTTOM ? Math.max(0, Math.round(PRESENT_EXIT_RIGHT - r.left)) : 0);
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    window.addEventListener('resize', update);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', update);
+      setSafe(0);
+    };
+  }, [presenting, aspect]);
+
   return (
     <main className="relative min-w-0 flex-1 overflow-hidden" data-testid="main">
       {/* Stage: fills the area, or a centred fixed-aspect box with black bars in presentation. */}
@@ -165,7 +191,7 @@ function MainArea({ docked }: { docked: boolean }) {
         }}
         data-testid="stage-outer"
       >
-        <div style={stageStyle} className={cn('overflow-hidden', boxed && (presentBlack ? 'bg-black' : 'bg-canvas'))} data-testid="stage">
+        <div ref={stageRef} style={stageStyle} className={cn('overflow-hidden', boxed && (presentBlack ? 'bg-black' : 'bg-canvas'))} data-testid="stage">
           {VIEWS.map(({ id, Component }) => {
             const active = tab === id;
             return (

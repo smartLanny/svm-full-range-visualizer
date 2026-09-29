@@ -7,6 +7,10 @@ import { exitPresentation } from './presentation';
 
 const IDLE_MS = 2500;
 
+/** The exit button's window rect (left-4 top-4, 32 px) plus an 8 px gap: titles keep right of / below this. */
+export const PRESENT_EXIT_RIGHT = 16 + 32 + 8;
+export const PRESENT_EXIT_BOTTOM = 16 + 32 + 4;
+
 /**
  * Presentation overlay chrome (contract C1): a key hint that fades after ~2.5 s, bottom-centre
  * just above the 96 px bottom safe zone the timelines use, and an exit button top-left that
