@@ -28,11 +28,23 @@ const TABS: MainTab[] = ['scene3d', 'chart2d', 'stats'];
 
 let savedLabels: { title: boolean; colorbar: boolean } | null = null;
 
-/** H: hide / restore the in-picture title and color bar (clean frames for recording). */
+/**
+ * H: hide / restore the in-picture title and color bar (clean frames for recording).
+ * The stats page has no in-picture title or color bar; in presentation its header follows the
+ * title flag (so H visibly hides / restores it there), while in the workbench its header holds the
+ * controls and stays: H does nothing there except say so, and never flips the 3D / 2D flags
+ * behind the user's back.
+ */
 export function toggleLabels() {
   const s = useAppStore.getState();
   const t = getT();
-  if (s.overlays.title || s.overlays.colorbar) {
+  if (s.tab === 'stats' && !s.presenting) {
+    toast(t('shell.toast.labelsStatsOnly'));
+    return;
+  }
+  // On stats only the title flag is visible (the header); decide on what the user can see.
+  const anyShown = s.tab === 'stats' ? s.overlays.title : s.overlays.title || s.overlays.colorbar;
+  if (anyShown) {
     savedLabels = { title: s.overlays.title, colorbar: s.overlays.colorbar };
     s.patch({ overlays: { ...s.overlays, title: false, colorbar: false } });
     toast(t('shell.toast.labelsHidden'));

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { pngFileName } from './png';
-import type { ExportAnimation, ExportKindHint, ExportTarget } from './registry';
+import { safeFileName, type ExportAnimation, type ExportKindHint, type ExportTarget } from './registry';
 import { videoFileName } from './video';
 
 function target(name: (kind?: ExportKindHint) => string, anim: ExportAnimation | null): ExportTarget {
@@ -28,7 +28,7 @@ describe('export file names', () => {
     const t = target(() => 'SVM_2D_G127', { duration: 10, label: 'sweep', fileName: 'SVM_2D_sweep_G255-G50' });
     expect(videoFileName(t, size, 60, 'mp4')).toBe('SVM_2D_sweep_G255-G50_1920x1080_60fps.mp4');
     const sbs = target(() => 'A_vs_B', { duration: 13, label: 'intro', fileName: '小米 18 Pro Max · 自适应刷新 Pro 关' });
-    expect(videoFileName(sbs, size, 30, 'webm')).toBe('小米_18_Pro_Max_·_自适应刷新_Pro_关_1920x1080_30fps.webm');
+    expect(videoFileName(sbs, size, 30, 'webm')).toBe('小米_18_Pro_Max_自适应刷新_Pro_关_1920x1080_30fps.webm');
   });
 
   it('tells fileName() what is being exported when the animation has no name of its own', () => {
@@ -40,5 +40,13 @@ describe('export file names', () => {
   it('falls back to the view name for an empty or unsafe animation name', () => {
     const t = target(() => 'SVM_2D_G127', { duration: 10, label: 'sweep', fileName: '  ' });
     expect(videoFileName(t, size, 60, 'mp4')).toBe('SVM_2D_G127_1920x1080_60fps.mp4');
+  });
+
+  it('collapses the label middle dot and its spaces into one underscore (no "_·_")', () => {
+    expect(safeFileName('Xiaomi 18 Pro Max · Adaptive refresh Pro on Surface 3D')).toBe('Xiaomi_18_Pro_Max_Adaptive_refresh_Pro_on_Surface_3D');
+    expect(safeFileName('小米 18 Pro Max · 自适应刷新 Pro 开 · 开场动画')).toBe('小米_18_Pro_Max_自适应刷新_Pro_开_开场动画');
+    expect(safeFileName('A·B • C ・ D')).toBe('A_B_C_D');
+    expect(safeFileName(' · ')).toBe('svm');
+    expect(safeFileName('a/b:c*?"<>|d')).toBe('a_b_c_d');
   });
 });
