@@ -3,6 +3,7 @@ import type { StringsModule } from '../index';
 // Strings owned by the scene3d module. Keys are addressed as 'scene3d.<path>'.
 const strings: StringsModule = {
   zh: {
+    aria: '3D SVM 地形视图',
     title: {
       sideBySide: '并排对比',
       diff: '差值图 ΔSVM = A − B',
@@ -94,6 +95,7 @@ const strings: StringsModule = {
     },
   },
   en: {
+    aria: '3D SVM terrain view',
     title: {
       sideBySide: 'Side by side',
       diff: 'Difference ΔSVM = A − B',

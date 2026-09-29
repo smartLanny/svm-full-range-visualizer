@@ -15,6 +15,9 @@ import type { ModelResult } from './engine/model';
 import { SceneTooltip } from './SceneTooltip';
 
 const BG = '#07090d';
+/** Bottom room (CSS px) reserved for the timeline bar / viewport controls in the workbench. */
+const UI_INSET_TIMELINE = 60;
+const UI_INSET_CONTROLS = 34;
 
 function readSettings(st: AppState): EngineSettings {
   return {
@@ -102,8 +105,14 @@ export default function Scene3DView() {
   introOpenRef.current = introOpen;
 
   // --- store -> engine ------------------------------------------------------------------
+  const hoverKey = useRef<string | null>(null);
   useEffect(() => {
-    engine.onModel = (res) => setModel(res);
+    engine.onModel = (res) => {
+      setModel(res);
+      // The scene changed under the cursor: drop the stale tooltip.
+      hoverKey.current = null;
+      setHover(null);
+    };
     engine.sync(readSettings(getAppState()));
     const unsub = useAppStore.subscribe((st, prev) => {
       if (RELEVANT.some((k) => st[k] !== prev[k])) engine.sync(readSettings(st));
@@ -162,6 +171,7 @@ export default function Scene3DView() {
     if (!selectActiveRecord(st)) return;
     if (st.layout !== 'single') st.set('layout', 'single');
     if (st.tab !== 'scene3d') st.set('tab', 'scene3d');
+    engine.setUiInset(st.presenting ? 0 : UI_INSET_TIMELINE);
     engine.startIntro(tl);
     setIntroOpen(true);
     tl.restart();
@@ -202,6 +212,11 @@ export default function Scene3DView() {
     getAppState().setAnimating('scene3d', animating);
   }, [animating]);
   useEffect(() => () => getAppState().setAnimating('scene3d', false), []);
+
+  // Keep the plot clear of the DOM overlays at the bottom (timeline bar / viewport controls).
+  useEffect(() => {
+    engine.setUiInset(presenting ? 0 : introOpen ? UI_INSET_TIMELINE : UI_INSET_CONTROLS);
+  }, [engine, presenting, introOpen]);
 
   const chapters = useMemo(() => INTRO_CHAPTERS.map((c) => ({ t: c.t, label: t(`scene3d.intro.chapters.${c.key}`) })), [t]);
 
@@ -259,7 +274,6 @@ export default function Scene3DView() {
   // --- hover ----------------------------------------------------------------------------
   const pending = useRef<{ x: number; y: number } | null>(null);
   const raf = useRef(0);
-  const hoverKey = useRef<string | null>(null);
   const onPointerMove = (e: React.PointerEvent) => {
     const el = containerRef.current;
     if (!el) return;
@@ -318,6 +332,8 @@ export default function Scene3DView() {
       onPointerMove={onPointerMove}
       onPointerLeave={onPointerLeave}
       data-testid="scene3d"
+      role="application"
+      aria-label={t('scene3d.aria')}
     >
       <Canvas
         frameloop={visible ? 'demand' : 'never'}

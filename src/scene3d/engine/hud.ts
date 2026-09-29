@@ -90,6 +90,46 @@ export class Hud {
   }
 }
 
+// --- Backdrop ------------------------------------------------------------------------------
+
+const rgba = (hex: string, a: number) => {
+  const n = parseInt(hex.replace('#', '').slice(0, 6), 16);
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+};
+
+/**
+ * Put a soft rounded backdrop in the page background color behind a HUD block: invisible on the
+ * empty background, but keeps the text legible when the user zooms / pans terrain under it.
+ */
+function withBackdrop(src: HTMLCanvasElement, bg: string, pad: number): HTMLCanvasElement {
+  const c = document.createElement('canvas');
+  c.width = src.width + pad * 2;
+  c.height = src.height + pad * 2;
+  const ctx = c.getContext('2d')!;
+  ctx.fillStyle = rgba(bg, 0.78);
+  const r = pad * 1.2;
+  const w = c.width;
+  const h = c.height;
+  ctx.beginPath();
+  ctx.moveTo(r, 0);
+  ctx.arcTo(w, 0, w, h, r);
+  ctx.arcTo(w, h, 0, h, r);
+  ctx.arcTo(0, h, 0, 0, r);
+  ctx.arcTo(0, 0, w, 0, r);
+  ctx.closePath();
+  ctx.fill();
+  ctx.drawImage(src, pad, pad);
+  return c;
+}
+
+function toTexture(canvas: HTMLCanvasElement, inset: number): TextTexture & { inset: number } {
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.minFilter = THREE.LinearFilter;
+  texture.generateMipmaps = false;
+  return { texture, w: canvas.width, h: canvas.height, baseline: 0, inset };
+}
+
 // --- Title block ---------------------------------------------------------------------------
 
 export interface TitleSpec {
@@ -97,7 +137,7 @@ export interface TitleSpec {
   subtitle: string;
 }
 
-export function drawTitleTexture(spec: TitleSpec, scale: number, maxWidthCss: number): TextTexture {
+export function drawTitleTexture(spec: TitleSpec, scale: number, maxWidthCss: number, bg: string): TextTexture & { inset: number } {
   const titleStyle = { size: 19, weight: 600, color: '#f3f5f8' };
   const subStyle = { size: 12, weight: 500, color: '#8b95a5' };
   const canvas = document.createElement('canvas');
@@ -130,11 +170,8 @@ export function drawTitleTexture(spec: TitleSpec, scale: number, maxWidthCss: nu
     ctx.fillStyle = subStyle.color;
     ctx.fillText(sub, pad, pad + titleH + subStyle.size * 1.05 * scale);
   }
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  texture.minFilter = THREE.LinearFilter;
-  texture.generateMipmaps = false;
-  return { texture, w: canvas.width, h: canvas.height, baseline: 0 };
+  const inset = Math.round(8 * scale);
+  return toTexture(withBackdrop(canvas, bg, inset), inset);
 }
 
 // --- Colorbar ------------------------------------------------------------------------------
@@ -175,7 +212,7 @@ export function colorbarTicks(spec: Pick<ColorbarSpec, 'kind' | 'max'>): number[
   return out;
 }
 
-export function drawColorbarTexture(spec: ColorbarSpec, scale: number): TextTexture {
+export function drawColorbarTexture(spec: ColorbarSpec, scale: number, bg: string): TextTexture & { inset: number } {
   const S = scale;
   const barT = 12; // thickness (CSS px)
   const L = spec.length;
@@ -318,9 +355,6 @@ export function drawColorbarTexture(spec: ColorbarSpec, scale: number): TextText
       ctx.fillText(spec.ends[1], bx + bw, by - 3 * S);
     }
   }
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  texture.minFilter = THREE.LinearFilter;
-  texture.generateMipmaps = false;
-  return { texture, w: canvas.width, h: canvas.height, baseline: 0 };
+  const inset = Math.round(8 * S);
+  return toTexture(withBackdrop(canvas, bg, inset), inset);
 }

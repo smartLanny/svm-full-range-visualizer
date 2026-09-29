@@ -167,7 +167,11 @@ export class ViewControls {
 
   private onDown = (e: PointerEvent) => {
     if (!this.host.canInteract()) return;
-    this.el?.setPointerCapture?.(e.pointerId);
+    try {
+      this.el?.setPointerCapture?.(e.pointerId);
+    } catch {
+      // Synthetic / already-released pointers cannot be captured; dragging still works.
+    }
     this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     this.vTheta = this.vPhi = 0;
     this.vPan.set(0, 0, 0);

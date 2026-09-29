@@ -180,7 +180,8 @@ export class IntroPlan {
     const intro = smoothstep(0.1, 0.9, t);
     out.axes.lum = ov.axes ? intro : 0;
     out.axes.gray = ov.axes ? 1 : 0;
-    out.axes.value = ov.axes ? intro * out.heightK : 0;
+    // The vertical SVM axis belongs to the low front shot; it leaves as the crane rises.
+    out.axes.value = ov.axes ? intro * out.heightK * (1 - smoothstep(I.camStart, I.camStart + 1.6, t)) : 0;
     out.axes.captions = 0;
     out.grayTickAlpha = (gray: number) => {
       const s = this.grayAppearTime(gray);

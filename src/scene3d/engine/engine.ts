@@ -111,8 +111,8 @@ export class Engine {
   private fits = new Map<string, CamPose>();
   private contourKey = '';
   private valuesKey = '';
-  private titleTex: { key: string; tt: TextTexture } | null = null;
-  private colorbarTex: { key: string; tt: TextTexture } | null = null;
+  private titleTex: { key: string; tt: TextTexture & { inset: number } } | null = null;
+  private colorbarTex: { key: string; tt: TextTexture & { inset: number } } | null = null;
 
   // static state
   preset: ViewPreset = 'perspective';
@@ -278,7 +278,6 @@ export class Engine {
 
   sync(s: EngineSettings) {
     const prev = this.settings;
-    this.settings = s;
     const t = now();
     const layout = this.layoutOverride ?? s.layout;
     const modelKey = [layout, s.a?.id, s.b?.id, s.clipLowGray, s.maxNits, s.heightCap, s.colorMax, s.lang].join('|');
@@ -288,7 +287,9 @@ export class Engine {
     const visualChange =
       !!prev &&
       (needModel || prev.representation !== s.representation || prev.colormap !== s.colormap || prev.lighting !== s.lighting || prev.lang !== s.lang);
+    // Freeze the current image with the OLD settings; it cross-fades out over the new one.
     if (visualChange && animate) this.captureSnapshot();
+    this.settings = s;
 
     if (needModel) {
       this.modelKey = modelKey;
@@ -435,7 +436,26 @@ export class Engine {
       bottom += 4;
     }
     if (preset === 'side' || preset === 'front') left += 6;
+    // DOM controls floating over the canvas (timeline bar / viewport buttons) — not in exports.
+    if (!this.exporting) bottom += this.uiInset;
     return { top: top * S, right: right * S, bottom: bottom * S, left: left * S };
+  }
+
+  private uiInset = 0;
+
+  /**
+   * Reserve room (CSS px) at the bottom for DOM overlays so they never cover the plot or its axis
+   * labels. Changes re-frame smoothly.
+   */
+  setUiInset(bottomCss: number) {
+    if (bottomCss === this.uiInset) return;
+    this.uiInset = bottomCss;
+    this.fits.clear();
+    if (this.intro) this.intro.planKey = '';
+    if (this.hasRendered && !this.introDriving && !this.exporting && this.model) {
+      this.camTransition = { from: clonePose(this.lastPose), t0: now(), dur: CAM_DUR * 0.7 };
+    }
+    this.invalidate();
   }
 
   private boxPoints(flat: boolean, heightOnlyRow?: number): THREE.Vector3[] {
@@ -544,7 +564,49 @@ export class Engine {
     if (this.intro.plan && this.intro.planKey === key) return this.intro.plan;
     this.intro.plan = this.makePlan();
     this.intro.planKey = key;
+    this.prewarm();
     return this.intro.plan;
+  }
+
+  /**
+   * Build and upload everything the intro will show later (value table texture, label textures)
+   * and compile every material now, so no shader compile / texture upload lands mid-animation.
+   */
+  private prewarm() {
+    const gl = this.gl;
+    if (!gl || !this.model) return;
+    this.ensureContourLayout();
+    this.ensureValues();
+    const toggled: THREE.Object3D[] = [];
+    const show = (o: THREE.Object3D | null | undefined) => {
+      if (o && !o.visible) {
+        o.visible = true;
+        toggled.push(o);
+      }
+    };
+    for (const pc of this.panels) {
+      show(pc.surface);
+      show(pc.walls);
+      show(pc.bars);
+      show(pc.valuesMesh);
+      show(pc.contourGroup);
+      show(pc.contourCut.line);
+      show(pc.contourFull.line);
+      pc.labelSprites.forEach(show);
+      const vm = pc.valuesMesh?.material as THREE.MeshBasicMaterial | undefined;
+      if (vm?.map) gl.initTexture(vm.map);
+      for (const sp of pc.labelSprites) {
+        const map = (sp.material as THREE.SpriteMaterial).map;
+        if (map) gl.initTexture(map);
+      }
+    }
+    try {
+      gl.compile(this.scene, this.activeCam);
+      gl.compile(this.hud.scene, this.hud.camera);
+    } catch {
+      // Compilation is only an optimisation.
+    }
+    for (const o of toggled) o.visible = false;
   }
 
   private makePlan(): IntroPlan {
@@ -674,7 +736,7 @@ export class Engine {
     const s = this.settings!;
     const top = this.fitFor('top');
     const wpc = (top.h / this.vp.height) * this.pxScale;
-    const key = `${this.modelKey}|${wpc.toFixed(4)}|${this.pxScale}|${s.colormap}|${this.model!.colorMax}|${s.representation}`;
+    const key = `${this.modelKey}|${wpc.toFixed(4)}|${this.pxScale}|${s.colormap}|${this.model!.colorMax}`;
     if (key === this.valuesKey) return;
     this.valuesKey = key;
     for (const p of this.panels) {
@@ -690,9 +752,11 @@ export class Engine {
     this.activeCam = applyPose(fp.pose, this.vp, this.perspCam, this.orthoCam, this.sceneRadius());
     copyPose(fp.pose, this.lastPose);
     const camPos = this.activeCam.position;
+    const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(this.activeCam.quaternion);
 
     // terrain heights
-    const k = Math.max(1e-4, fp.heightK);
+    // Flat = heights scaled to ~0 (not exactly: the normal transform needs an invertible scale).
+    const k = Math.max(1e-6, fp.heightK);
     const sy = k * s.heightScale;
     const colorScale = m.kind === 'diff' ? 1 / Math.max(1e-6, m.colorMax) : 4 / Math.max(1e-6, m.colorMax);
     for (const mat of [this.mats.surface, this.mats.walls, this.mats.bars]) {
@@ -700,7 +764,7 @@ export class Engine {
       u.uColorScale.value = colorScale;
       u.uLighting.value = s.lighting === 'studio' ? 1 : 0;
       u.uSpec.value = smoothstep(0.05, 0.6, fp.heightK);
-      u.uInvScaleY.value = 1 / Math.max(1e-4, sy);
+      u.uInvScaleY.value = 1 / Math.max(1e-6, sy);
       u.uCap.value = m.heightCap;
       u.uHatch.value = smoothstep(0.1, 0.7, fp.heightK);
       u.uCamPos.value.copy(camPos);
@@ -719,6 +783,12 @@ export class Engine {
     this.mats.bars.polygonOffset = !surfTop && surfaceOn;
     this.mats.bars.polygonOffsetFactor = -1;
     this.mats.bars.polygonOffsetUnits = -2;
+    // Flat crossfade (intro heatmap reveal): the incoming layer lies in the same plane as the
+    // outgoing one — draw it without depth test so it cleanly covers it (no z-fighting).
+    const flatBoth = fp.heightK < 1e-3 && surfaceOn && barsOn;
+    this.mats.surface.depthTest = !(flatBoth && surfTop);
+    this.mats.walls.depthTest = true;
+    this.mats.bars.depthTest = !(flatBoth && !surfTop);
     // Plate sits below the lowest (possibly negative) height.
     const plateY = Math.min(0, m.plotMin) * SY * sy - 0.012;
 
@@ -758,15 +828,27 @@ export class Engine {
         sp.visible = a > 0.003;
         (sp.material as THREE.SpriteMaterial).opacity = a;
         const anchor = new THREE.Vector3(lb.x, lb.y * sy + 0.012, lb.z);
-        if (this.activeCam instanceof THREE.PerspectiveCamera) {
+        sp.userData.baseScale ??= sp.scale.clone();
+        const base = sp.userData.baseScale as THREE.Vector3;
+        const nominalPx = (sp.userData.nominalPx as number) ?? 16;
+        let sc = 1;
+        let projPx: number;
+        const cam = this.activeCam;
+        if (cam instanceof THREE.PerspectiveCamera) {
           const dir = anchor.clone().sub(camPos);
           const dist = dir.length();
           const pull = Math.min(dist * 0.5, 1.2 * fp.heightK + 0.05);
           anchor.addScaledVector(dir.normalize(), -pull);
-          const sc = (dist - pull) / dist;
-          sp.userData.baseScale ??= sp.scale.clone();
-          sp.scale.copy(sp.userData.baseScale as THREE.Vector3).multiplyScalar(sc);
-        } else if (sp.userData.baseScale) sp.scale.copy(sp.userData.baseScale as THREE.Vector3);
+          sc = (dist - pull) / dist;
+          const depth = Math.max(1e-3, anchor.clone().sub(camPos).dot(fwd));
+          projPx = ((base.y * sc) / (2 * depth * Math.tan(THREE.MathUtils.degToRad(cam.fov / 2)))) * this.vp.height;
+        } else {
+          const oc = cam as THREE.OrthographicCamera;
+          projPx = (base.y / Math.max(1e-6, oc.top - oc.bottom)) * this.vp.height;
+        }
+        // World-sized labels (they belong to the plot), but kept within a legible size range.
+        const clampPx = THREE.MathUtils.clamp(projPx, nominalPx * 0.75, nominalPx * 1.45);
+        sp.scale.copy(base).multiplyScalar(sc * (clampPx / Math.max(1e-6, projPx)));
         sp.position.copy(anchor);
       }
       // values
@@ -787,7 +869,7 @@ export class Engine {
       const ax = this.axes;
       ax.chooseEdges(camPos, new THREE.Vector3(0, 0, -1).applyQuaternion(this.activeCam.quaternion));
       const lines = Math.max(fp.axes.lum, fp.axes.gray) * 0.95;
-      ax.setStyle(this.pxScale, { lines, grid: fp.ground * Math.max(fp.axes.lum, fp.axes.gray) * 0.9, value: fp.axes.value * smoothstep(0.55, 0.95, fp.pose.phi) });
+      ax.setStyle(this.pxScale, { lines, grid: fp.ground * Math.max(fp.axes.lum, fp.axes.gray) * 0.9, value: fp.axes.value * smoothstep(0.2, 0.45, fp.pose.phi) });
       ax.valueGroup.scale.set(1, sy, 1);
       const corner = this.valueAxisCorner();
       ax.valueGroup.position.set(corner.x, 0, corner.z);
@@ -902,14 +984,14 @@ export class Engine {
     if (fp.hud.title > 0.003) {
       const spec = this.titleSpec();
       const maxW = Math.max(160, this.vp.width / S - 200);
-      const key = `${spec.title}|${spec.subtitle}|${S}|${maxW}`;
+      const key = `${spec.title}|${spec.subtitle}|${S}|${maxW}|${s.background}`;
       if (this.titleTex?.key !== key) {
         this.titleTex?.tt.texture.dispose();
-        this.titleTex = { key, tt: drawTitleTexture(spec, S, maxW) };
+        this.titleTex = { key, tt: drawTitleTexture(spec, S, maxW, s.background) };
       }
       const tt = this.titleTex.tt;
-      hud.quad(tt.texture, margin, H - margin, tt.w, tt.h, fp.hud.title);
-      occupied.push({ x0: margin, y0: H - margin - tt.h, x1: margin + tt.w, y1: H - margin });
+      hud.quad(tt.texture, margin - tt.inset, H - margin + tt.inset, tt.w, tt.h, fp.hud.title);
+      occupied.push({ x0: margin, y0: H - margin - tt.h + 2 * tt.inset, x1: margin + tt.w - 2 * tt.inset, y1: H - margin });
     }
 
     // colorbar
@@ -927,10 +1009,10 @@ export class Engine {
         orientation: portrait ? ('horizontal' as const) : ('vertical' as const),
         length: Math.round(len),
       };
-      const key = `${JSON.stringify(spec)}|${S}`;
+      const key = `${JSON.stringify(spec)}|${S}|${s.background}`;
       if (this.colorbarTex?.key !== key) {
         this.colorbarTex?.tt.texture.dispose();
-        this.colorbarTex = { key, tt: drawColorbarTexture(spec, S) };
+        this.colorbarTex = { key, tt: drawColorbarTexture(spec, S, s.background) };
       }
       const tt = this.colorbarTex.tt;
       const ins = this.insets(this.preset);
@@ -947,7 +1029,7 @@ export class Engine {
         yTop = Math.min(H - margin - 4 * S, mid + tt.h / 2);
       }
       hud.quad(tt.texture, x, yTop, tt.w, tt.h, fp.hud.colorbar);
-      occupied.push({ x0: x, y0: yTop - tt.h, x1: x + tt.w, y1: yTop });
+      occupied.push({ x0: x + tt.inset, y0: yTop - tt.h + tt.inset, x1: x + tt.w - tt.inset, y1: yTop - tt.inset });
       void colorbarTicks;
     }
 
@@ -1053,7 +1135,7 @@ export class Engine {
         const g = spec.gray !== undefined && fp.grayTickAlpha ? fp.grayTickAlpha(spec.gray) : 1;
         return fp.axes.gray * grayVis * g;
       }
-      if (spec.axis === 'value') return fp.axes.value * valueVis * smoothstep(0.55, 0.95, fp.pose.phi);
+      if (spec.axis === 'value') return fp.axes.value * valueVis * smoothstep(0.2, 0.45, fp.pose.phi);
       return fp.axes.captions;
     };
     const topGray = m.grayTicks.length ? m.grayTicks[m.grayTicks.length - 1] : 255;
@@ -1164,7 +1246,7 @@ export class Engine {
       clipAxis(origin.z, direction.z, b.z0, b.z1);
       let hit = false;
       if (t1 > t0) {
-        const steps = Math.min(240, Math.max(8, Math.ceil((t1 - t0) / 0.06)));
+        const steps = Math.min(160, Math.max(8, Math.ceil((t1 - t0) / 0.08)));
         for (let k = 0; k <= steps && !hit; k++) {
           const t = t0 + ((t1 - t0) * k) / steps;
           pos.copy(origin).addScaledVector(direction, t);
@@ -1343,7 +1425,8 @@ export class Engine {
     const m = this.model;
     if (!s || !m) return 'svm-3d';
     const base = m.layout === 'diff' ? `diff_${recordLabel(m.panels[0].record, s.lang)}_vs_${recordLabel(m.panels[0].other!, s.lang)}` : m.layout === 'sideBySide' ? `${recordLabel(m.panels[0].record, s.lang)}_vs_${recordLabel(m.panels[1].record, s.lang)}` : recordLabel(m.panels[0].record, s.lang);
-    return `${base}_${s.representation}_${s.view}`;
+    const t = (k: string) => translate(s.lang, k);
+    return `${base}_${t(`scene3d.representation.${s.representation}`)}_${t(`scene3d.views.${s.view}`)}`;
   }
 
   /** Camera orientation (for a view gizmo). */

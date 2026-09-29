@@ -306,6 +306,7 @@ export class PanelContent {
       sp.scale.set(tt.w * k, tt.h * k, 1);
       sp.renderOrder = 6;
       sp.userData.label = lb;
+      sp.userData.nominalPx = tt.h / 2;
       this.labelSprites.push(sp);
       this.group.add(sp);
     }
