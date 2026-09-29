@@ -1,7 +1,14 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <rect width="64" height="64" rx="14" fill="#0b0e14"/>
-  <rect x="10" y="38" width="8" height="16" rx="2" fill="#4c8dff"/>
-  <rect x="22" y="28" width="8" height="26" rx="2" fill="#6aa1ff"/>
-  <rect x="34" y="18" width="8" height="36" rx="2" fill="#f5b041"/>
-  <rect x="46" y="10" width="8" height="44" rx="2" fill="#ef5a5a"/>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#18202d"/>
+      <stop offset="1" stop-color="#0a0d13"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="url(#bg)"/>
+  <rect x="0.75" y="0.75" width="62.5" height="62.5" rx="13.25" fill="none" stroke="#fff" stroke-opacity="0.08" stroke-width="1.5"/>
+  <rect x="9.5" y="38" width="9" height="16" rx="2.5" fill="#4c8dff"/>
+  <rect x="21.5" y="29" width="9" height="25" rx="2.5" fill="#46c2d8"/>
+  <rect x="33.5" y="19" width="9" height="35" rx="2.5" fill="#f5b041"/>
+  <rect x="45.5" y="10" width="9" height="44" rx="2.5" fill="#ef5a5a"/>
 </svg>

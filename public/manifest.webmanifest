@@ -1,0 +1,16 @@
+{
+  "name": "SVM 全范围可视化",
+  "short_name": "SVM 可视化",
+  "description": "显示频闪 SVM 全亮度 × 全灰阶测量矩阵的 3D 地形、热力图与 2D 截面可视化工具",
+  "lang": "zh-CN",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#07090d",
+  "theme_color": "#07090d",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
