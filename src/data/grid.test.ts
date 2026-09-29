@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { cellEdges, diffRecords, fmtNits, fmtSvm, gridView, levelRange, logTicks, sampleView, sliceAtGray, sliceAtLevel } from './grid';
 import type { Dataset } from '../types';
+import { restoreExcluded } from './anomalies';
 
 const load = (f: string) => JSON.parse(fs.readFileSync(path.resolve(__dirname, '../../public/datasets', f), 'utf8')) as Dataset;
 const iphone = load('iPhone17ProMax.json');
@@ -184,8 +185,14 @@ describe('fmt helpers', () => {
   });
 });
 
-describe('duplicate level columns (xiaomi18promax_adaptive_pro_on: 60% and 50% share 162.51 nits)', () => {
-  const x18 = load('xiaomi18promax_adaptive_pro_on.json');
+describe('duplicate level columns (raw xiaomi18promax_adaptive_pro_on: 60% and 50% share 162.51 nits)', () => {
+  // The bundled file is cleaned (docs/adr/0012); restore the raw grid to exercise the tie.
+  const x18 = restoreExcluded(load('xiaomi18promax_adaptive_pro_on.json'));
+  it('the cleaned record drops the all-empty duplicate column from the grid view', () => {
+    const clean = gridView(load('xiaomi18promax_adaptive_pro_on.json'));
+    expect(clean.levelNits.filter((n) => n === 162.51).length).toBe(1);
+    expect(clean.percents).not.toContain(50);
+  });
   const v = gridView(x18);
   const dup = 162.51;
   it('keeps both columns, ascending with a tie', () => {

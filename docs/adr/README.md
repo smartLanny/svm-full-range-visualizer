@@ -15,3 +15,4 @@
 | [0009](0009-summary-stats.md) | 统计摘要指标定义 |
 | [0010](0010-export.md) | 导出：逐帧离线渲染优先，实时录制兜底 |
 | [0011](0011-dark-instrument-style.md) | 深色专业仪器风格 |
+| [0012](0012-anomaly-exclusion.md) | 明显异常值的检测与剔除 |

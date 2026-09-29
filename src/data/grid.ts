@@ -68,6 +68,13 @@ export function gridView(ds: Pick<Dataset, 'matrix'>, opts: GridOptions = {}): G
     .sort((a, b) => a.n - b.n)
     .map(({ i }) => i);
 
+  // Rows / columns without a single valid cell carry no information and would open holes in
+  // interpolation (e.g. a column removed as a duplicate by the anomaly rules): drop them.
+  const keepRows = rowIndex.filter((r) => colIndex.some((c) => m.grid[r]?.[c]));
+  const keepCols = colIndex.filter((c) => keepRows.some((r) => m.grid[r]?.[c]));
+  rowIndex.splice(0, rowIndex.length, ...keepRows);
+  colIndex.splice(0, colIndex.length, ...keepCols);
+
   const view: GridView = {
     grays: rowIndex.map((i) => m.rows[i]),
     levelNits: colIndex.map((i) => m.headerNits[i]),

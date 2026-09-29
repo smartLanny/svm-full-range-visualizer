@@ -8,6 +8,14 @@ export interface DataPoint {
   svm: number;
 }
 
+/** A raw measurement removed as an obvious anomaly (docs/adr/0012), kept for auditing. */
+export interface ExcludedPoint extends DataPoint {
+  /** Rule that removed it: belowNoise | duplicateColumn | duplicateRow | nitsShift | svmSpike. */
+  reason: string;
+  /** Human-readable explanation. */
+  detail?: string;
+}
+
 /**
  * The on-disk / import-export JSON format ("dataset"). Kept backward compatible
  * with files exported by v1 of the app.
@@ -26,6 +34,8 @@ export interface Dataset {
   // Optional metadata written by v2 exports.
   device?: string;
   mode?: string;
+  /** Raw points removed as obvious anomalies (their grid cells are null). */
+  excluded?: ExcludedPoint[];
 }
 
 export type RecordSource = 'bundled' | 'user';
