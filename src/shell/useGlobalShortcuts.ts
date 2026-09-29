@@ -92,6 +92,12 @@ export function useGlobalShortcuts() {
         tl.seek(tl.time + step);
         return;
       }
+      if (key === '[' || key === ']') {
+        if (!tl?.chapterTimes.length) return;
+        e.preventDefault();
+        tl.stepChapter(key === '[' ? -1 : 1);
+        return;
+      }
       if (key === '?' || (e.shiftKey && e.code === 'Slash')) {
         e.preventDefault();
         shellUi.toggleShortcuts();

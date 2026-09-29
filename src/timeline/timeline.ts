@@ -88,6 +88,21 @@ export class Timeline {
     this.emit();
   }
 
+  /** Chapter start times (seconds, ascending), set by the view that shows chapter ticks. */
+  chapterTimes: number[] = [];
+
+  /** Seek to the previous / next chapter start (a small tolerance so repeated presses step on). False if none. */
+  stepChapter(dir: -1 | 1): boolean {
+    const now = this.time;
+    const ts = this.chapterTimes;
+    let to: number | undefined;
+    if (dir > 0) to = ts.find((x) => x > now + 0.05);
+    else for (let i = ts.length - 1; i >= 0 && to === undefined; i--) if (ts[i] < now - 0.05) to = ts[i];
+    if (to === undefined) return false;
+    this.seek(to);
+    return true;
+  }
+
   restart() {
     this.seek(0);
     this._ended = false;

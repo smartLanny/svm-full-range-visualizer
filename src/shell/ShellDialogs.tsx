@@ -101,6 +101,7 @@ export function ShortcutsDialog() {
           <Row keys={[t('shell.shortcuts.spaceKey')]} label={t('shell.shortcuts.space')} />
           <Row keys={['←', '→']} label={t('shell.shortcuts.seek')} />
           <Row keys={['Shift', '←/→']} label={t('shell.shortcuts.seekFast')} />
+          <Row keys={['[', ']']} label={t('shell.shortcuts.chapter')} />
           <Row keys={['R']} label={t('shell.shortcuts.restart')} />
         </Group>
         <Group title={t('shell.shortcuts.views')}>

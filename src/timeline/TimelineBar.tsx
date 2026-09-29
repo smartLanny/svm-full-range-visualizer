@@ -31,6 +31,16 @@ export function TimelineBar({ timeline, chapters = [], onClose, title, className
   const [hoverChapter, setHoverChapter] = useState<TimelineChapter | null>(null);
   const scrub = useRef<{ wasPlaying: boolean } | null>(null);
 
+  // Chapter times live on the timeline so the global [ / ] shortcuts can step them too.
+  const chapterKey = chapters.map((c) => c.t).join(',');
+  useEffect(() => {
+    timeline.chapterTimes = chapters.map((c) => c.t).sort((a, b) => a - b);
+    return () => {
+      timeline.chapterTimes = [];
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timeline, chapterKey]);
+
   useEffect(() => {
     let raf = 0;
     let lastText = '';
@@ -71,15 +81,6 @@ export function TimelineBar({ timeline, chapters = [], onClose, title, className
     scrub.current = null;
   };
 
-  /** Previous / next chapter start relative to the current time (a small tolerance so repeated presses step on). */
-  const chapterStep = (dir: -1 | 1): number | null => {
-    const now = timeline.time;
-    const ts = chapters.map((c) => c.t).sort((a, b) => a - b);
-    if (dir > 0) return ts.find((x) => x > now + 0.05) ?? null;
-    for (let i = ts.length - 1; i >= 0; i--) if (ts[i] < now - 0.05) return ts[i];
-    return null;
-  };
-
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
       e.preventDefault();
@@ -87,8 +88,7 @@ export function TimelineBar({ timeline, chapters = [], onClose, title, className
     } else if ((e.key === '[' || e.key === ']') && chapters.length) {
       e.preventDefault();
       e.stopPropagation();
-      const to = chapterStep(e.key === '[' ? -1 : 1);
-      if (to !== null) timeline.seek(to);
+      timeline.stepChapter(e.key === '[' ? -1 : 1);
     }
   };
 
