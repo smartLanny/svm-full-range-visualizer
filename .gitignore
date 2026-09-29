@@ -29,3 +29,6 @@ desktop.ini
 *.njsproj
 *.sln
 *.sw?
+
+# Visual smoke-test output
+snap-out/

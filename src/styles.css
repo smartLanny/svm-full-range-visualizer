@@ -1,0 +1,102 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    @apply bg-canvas font-sans text-ink-1 antialiased;
+    margin: 0;
+    overflow: hidden;
+    font-feature-settings: 'cv11', 'ss01';
+  }
+  ::selection {
+    background: rgba(76, 141, 255, 0.35);
+  }
+  /* Thin dark scrollbars */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #2f3847 transparent;
+  }
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #2f3847;
+    border-radius: 4px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: #3b4658;
+  }
+  input[type='number']::-webkit-inner-spin-button {
+    opacity: 0.4;
+  }
+}
+
+@layer components {
+  /* Range slider used by ui/Slider and the timeline. --pos = filled fraction (0-100%). */
+  .svm-range {
+    -webkit-appearance: none;
+    appearance: none;
+    height: 16px;
+    background: transparent;
+    cursor: pointer;
+  }
+  .svm-range:focus {
+    outline: none;
+  }
+  .svm-range::-webkit-slider-runnable-track {
+    height: 4px;
+    border-radius: 2px;
+    background: linear-gradient(to right, #4c8dff 0 var(--pos, 0%), #2a3140 var(--pos, 0%) 100%);
+  }
+  .svm-range::-moz-range-track {
+    height: 4px;
+    border-radius: 2px;
+    background: #2a3140;
+  }
+  .svm-range::-moz-range-progress {
+    height: 4px;
+    border-radius: 2px;
+    background: #4c8dff;
+  }
+  .svm-range::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px;
+    height: 14px;
+    margin-top: -5px;
+    border-radius: 50%;
+    background: #f3f5f8;
+    border: 2px solid #4c8dff;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+    transition: transform 0.1s;
+  }
+  .svm-range::-moz-range-thumb {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #f3f5f8;
+    border: 2px solid #4c8dff;
+  }
+  .svm-range:hover::-webkit-slider-thumb,
+  .svm-range:focus-visible::-webkit-slider-thumb {
+    transform: scale(1.15);
+  }
+  .svm-range:disabled {
+    cursor: default;
+    opacity: 0.4;
+  }
+}

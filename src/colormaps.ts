@@ -1,6 +1,6 @@
 
 import * as THREE from 'three';
-import { ColormapType } from '../types';
+import { ColormapType } from './types';
 
 export const getGlslColorFunction = (type: ColormapType) => {
     switch (type) {
