@@ -37,6 +37,12 @@ export interface ExportTarget {
   /** Render one frame. t = seconds into the animation; null = current static state. */
   renderFrame(t: number | null): Promise<HTMLCanvasElement>;
   end(): void;
+  /**
+   * Optional (backward-compatible addition): the view's current on-screen drawing-buffer size in
+   * device pixels, used for the "current window" export preset. When absent the exporter uses
+   * the browser window size × devicePixelRatio.
+   */
+  viewSize?(): ExportSize;
 }
 
 const targets = new Map<MainTab, ExportTarget>();
