@@ -4,7 +4,7 @@ import path from 'path';
 import type { SvmRecord } from '../types';
 import { parseRawData, splitTables } from './parse';
 import { EXAMPLE_TSV } from './exampleTsv';
-import { deviceLabel, guessDeviceMode, modeLabel, recordLabel, toDatasetJson, toRecord, validateDataset } from './records';
+import { deviceLabel, englishAliases, guessDeviceMode, modeLabel, recordLabel, toDatasetJson, toRecord, validateDataset } from './records';
 import { DEVICE_PALETTE, MODE_DASHES, recordStyles } from './colors';
 import { gridView } from './grid';
 
@@ -60,6 +60,13 @@ describe('parseRawData(EXAMPLE_TSV)', () => {
     const d = parseRawData(t, 'tail');
     expect(d.matrix.grid[1]).toEqual([{ gray: 128, brightnessPercent: 100, nits: 100, svm: 0.3 }, null, null]);
   });
+  it('rejects a table with the same gray level twice (unsplit stacked tables)', () => {
+    const body = EXAMPLE_TSV.split('\n').slice(3).join('\n');
+    expect(() => parseRawData(`${EXAMPLE_TSV}\n${body}`, 'x')).toThrow('DUPLICATE_GRAY');
+  });
+  it('rejects a table without a single numeric cell', () => {
+    expect(() => parseRawData('100\t90\t80\n255\ta\tb\tc', 'x')).toThrow('NO_VALID_CELLS');
+  });
   it('rejects garbage', () => {
     expect(() => parseRawData('hello', 'x')).toThrow('TOO_FEW_LINES');
     expect(() => parseRawData('a\tb\nc\td', 'x')).toThrow('NO_HEADER');
@@ -86,7 +93,7 @@ describe('validateDataset', () => {
     expect(ds.matrix.headerNits.length).toBe(expected.length);
   });
   it('names untitled datasets', () => {
-    expect(validateDataset({ name: '  ', matrix: { rows: [255], cols: [100], headerNits: [1], grid: [[null]] } }).name).toBe('Untitled');
+    expect(validateDataset({ name: '  ', matrix: { rows: [255], cols: [100], headerNits: [1], grid: [[{ nits: 1, svm: 0.1 }]] } }).name).toBe('Untitled');
   });
   it('rejects malformed input', () => {
     expect(() => validateDataset(null)).toThrow('INVALID_JSON');
@@ -96,6 +103,36 @@ describe('validateDataset', () => {
     expect(() => validateDataset({ matrix: { rows: [1, 2], cols: [1], grid: [[null]] } })).toThrow('INVALID_MATRIX');
     expect(() => validateDataset({ matrix: { rows: [1], cols: [1, 2], grid: [[null]] } })).toThrow('INVALID_MATRIX');
     expect(() => validateDataset({ matrix: { rows: [1], cols: [1], grid: ['x'] } })).toThrow('INVALID_MATRIX');
+    expect(() => validateDataset({ matrix: { rows: ['a'], cols: [1], grid: [[null]] } })).toThrow('INVALID_MATRIX');
+  });
+  it('converts numeric strings (Excel / CSV → JSON converters)', () => {
+    const ds = validateDataset({
+      name: 'S',
+      matrix: { rows: ['255', '128'], cols: ['100', '50%'], headerNits: ['500', '250'], grid: [[{ nits: '500', svm: '0.2' }, { nits: 250, svm: 0.3, gray: 255, brightnessPercent: 50 }], [{ nits: ' 40 ', svm: '1.5' }, null]] },
+    });
+    expect(ds.matrix.rows).toEqual([255, 128]);
+    expect(ds.matrix.cols).toEqual([100, 50]);
+    expect(ds.matrix.headerNits).toEqual([500, 250]);
+    expect(ds.matrix.grid[0][0]).toEqual({ gray: 255, brightnessPercent: 100, nits: 500, svm: 0.2 });
+    expect(ds.matrix.grid[1][0]).toEqual({ gray: 128, brightnessPercent: 100, nits: 40, svm: 1.5 });
+    expect(ds.data.length).toBe(3);
+  });
+  it('rejects data sets without a single usable cell (NO_VALID_CELLS), drops unusable cells', () => {
+    expect(() => validateDataset({ matrix: { rows: [], cols: [], grid: [] } })).toThrow('NO_VALID_CELLS');
+    expect(() => validateDataset({ matrix: { rows: [255], cols: [100, 50], grid: [[null, null]] } })).toThrow('NO_VALID_CELLS');
+    expect(() => validateDataset({ matrix: { rows: [255], cols: [100, 50], grid: [[1, true]] } })).toThrow('NO_VALID_CELLS');
+    expect(() => validateDataset({ matrix: { rows: [255], cols: [100], grid: [[{ nits: 'x', svm: '0.1' }]] } })).toThrow('NO_VALID_CELLS');
+    const ds = validateDataset({ matrix: { rows: [255], cols: [100, 50], grid: [[{ nits: 5, svm: 0.1 }, { nits: 'n/a', svm: 1 }]] } });
+    expect(ds.matrix.grid[0][1]).toBeNull();
+    expect(ds.data.length).toBe(1);
+  });
+  it('keeps well-formed excluded points only', () => {
+    const ds = validateDataset({
+      matrix: { rows: [255], cols: [100], grid: [[{ nits: 5, svm: 0.1 }]] },
+      excluded: [{ gray: 255, brightnessPercent: 50, nits: '-0.1', svm: 3, reason: 'belowNoise' }, { gray: 'x' }, null],
+    });
+    expect(ds.excluded).toEqual([{ gray: 255, brightnessPercent: 50, nits: -0.1, svm: 3, reason: 'belowNoise' }]);
+    expect(validateDataset({ matrix: { rows: [255], cols: [100], grid: [[{ nits: 5, svm: 0.1 }]] } }).excluded).toBeUndefined();
   });
 });
 
@@ -127,7 +164,10 @@ describe('guessDeviceMode / labels', () => {
     expect(rec.mode).toBe('60Hz');
     const json = toDatasetJson({ ...rec, deviceEn: 'H' });
     expect('source' in json).toBe(false);
-    expect('deviceEn' in json).toBe(false);
+    // English aliases are kept so a re-imported bundled record keeps its English label.
+    expect(json.deviceEn).toBe('H');
+    expect('modeEn' in json).toBe(false);
+    expect(englishAliases(json)).toEqual({ deviceEn: 'H' });
     expect(json.device).toBe('华为Mate70Air');
     expect(gridView(json).grays.length).toBe(24);
   });

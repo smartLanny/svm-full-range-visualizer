@@ -8,8 +8,9 @@ import { exitPresentation } from './presentation';
 const IDLE_MS = 2500;
 
 /**
- * Presentation overlay chrome: a key hint that fades after ~2.5 s and an exit button that
- * appears while the pointer moves. The cursor hides when idle so recordings stay clean.
+ * Presentation overlay chrome (contract C1): a key hint that fades after ~2.5 s, bottom-centre
+ * just above the 96 px bottom safe zone the timelines use, and an exit button top-left that
+ * appears while the pointer moves, so the views' own top-right toolbars are never covered. The cursor hides when idle so recordings stay clean.
  * Visibility is toggled through DOM classes (no React state per mouse move).
  */
 export function PresentationChrome() {
@@ -52,7 +53,7 @@ export function PresentationChrome() {
         aria-live="polite"
         data-testid="present-hint"
         className={cn(
-          'pointer-events-none fixed left-1/2 top-4 z-40 -translate-x-1/2 rounded-full bg-black/70 px-4 py-1.5 text-xs text-white/85 ring-1 ring-white/10 backdrop-blur transition-opacity duration-700',
+          'pointer-events-none fixed bottom-[108px] left-1/2 z-40 -translate-x-1/2 rounded-full bg-black/70 px-4 py-1.5 text-xs text-white/85 ring-1 ring-white/10 backdrop-blur transition-opacity duration-700',
           hintVisible ? 'opacity-100' : 'opacity-0',
         )}
       >
@@ -65,7 +66,7 @@ export function PresentationChrome() {
         aria-label={t('shell.present.exit')}
         data-testid="present-exit"
         onClick={exitPresentation}
-        className="shell-present-exit fixed right-4 top-4 z-40 inline-flex h-8 w-8 items-center justify-center rounded-lg bg-black/60 text-white/80 ring-1 ring-white/10 backdrop-blur hover:bg-black/80 hover:text-white focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-ring"
+        className="shell-present-exit fixed left-4 top-4 z-40 inline-flex h-8 w-8 items-center justify-center rounded-lg bg-black/60 text-white/80 ring-1 ring-white/10 backdrop-blur hover:bg-black/80 hover:text-white focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-ring"
       >
         <Minimize2 size={15} />
       </button>

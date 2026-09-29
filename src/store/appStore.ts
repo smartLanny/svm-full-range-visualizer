@@ -120,6 +120,8 @@ export interface AppState extends Settings, RecordPrefs {
 
   setRecords: (records: SvmRecord[]) => void;
   addRecords: (records: SvmRecord[]) => void;
+  /** Put a record back at `index` (undo of a delete), restoring its hidden state and A / B role. */
+  insertRecord: (record: SvmRecord, index: number, roles?: { a?: boolean; b?: boolean; hidden?: boolean }) => void;
   removeRecord: (id: string) => void;
   updateRecord: (id: string, patch: Partial<Pick<SvmRecord, 'name' | 'device' | 'mode'>>) => void;
   toggleHidden: (id: string) => void;
@@ -133,6 +135,13 @@ export interface AppState extends Settings, RecordPrefs {
   requestStop: (tab: AnimTab) => void;
   setAnimating: (tab: AnimTab, on: boolean) => void;
 }
+
+/** First record other than `id` (B's default). */
+const firstOther = (records: SvmRecord[], id: string | null) => records.find((r) => r.id !== id)?.id ?? null;
+
+/** Side-by-side and diff need two records: with fewer, the layout falls back to single. */
+const layoutFor = (records: SvmRecord[], layout: SceneLayout): { layout?: SceneLayout } =>
+  records.length < 2 && layout !== 'single' ? { layout: 'single' } : {};
 
 export const useAppStore = create<AppState>()((set, get) => ({
   ...DEFAULT_SETTINGS,
@@ -155,10 +164,12 @@ export const useAppStore = create<AppState>()((set, get) => ({
   setRecords: (records) => {
     const { activeId, compareId } = get();
     const ids = new Set(records.map((r) => r.id));
+    const a = activeId && ids.has(activeId) ? activeId : (records[0]?.id ?? null);
     set({
       records,
-      activeId: activeId && ids.has(activeId) ? activeId : (records[0]?.id ?? null),
-      compareId: compareId && ids.has(compareId) ? compareId : (records.find((r) => r.id !== (activeId ?? records[0]?.id))?.id ?? null),
+      activeId: a,
+      compareId: compareId && ids.has(compareId) && compareId !== a ? compareId : firstOther(records, a),
+      ...layoutFor(records, get().layout),
     });
   },
   addRecords: (recs) => {
@@ -166,16 +177,32 @@ export const useAppStore = create<AppState>()((set, get) => ({
     const ids = new Set(existing.map((r) => r.id));
     const fresh = recs.filter((r) => !ids.has(r.id));
     const records = [...existing, ...fresh];
-    set({ records, activeId: get().activeId ?? fresh[0]?.id ?? null });
+    const activeId = get().activeId ?? fresh[0]?.id ?? null;
+    // B gets the next record when it is empty, so side-by-side / diff work right after an import.
+    const compareId = get().compareId ?? firstOther(records, activeId);
+    set({ records, activeId, compareId });
+  },
+  insertRecord: (rec, index, roles) => {
+    const existing = get().records.filter((r) => r.id !== rec.id);
+    const records = [...existing.slice(0, index), rec, ...existing.slice(index)];
+    const next: Partial<AppState> = { records };
+    if (roles?.hidden) next.hiddenIds = [...get().hiddenIds.filter((h) => h !== rec.id), rec.id];
+    set(next);
+    if (roles?.a) get().setActive(rec.id);
+    else if (roles?.b) get().setCompare(rec.id);
+    else if (get().compareId === null) set({ compareId: firstOther(get().records, get().activeId) });
   },
   removeRecord: (id) => {
     const records = get().records.filter((r) => r.id !== id);
     const { activeId, compareId } = get();
+    const a = activeId === id ? (records.find((r) => r.id !== compareId)?.id ?? records[0]?.id ?? null) : activeId;
+    const b = compareId === id || compareId === a ? firstOther(records, a) : compareId;
     set({
       records,
       hiddenIds: get().hiddenIds.filter((h) => h !== id),
-      activeId: activeId === id ? (records[0]?.id ?? null) : activeId,
-      compareId: compareId === id ? (records.find((r) => r.id !== (activeId === id ? records[0]?.id : activeId))?.id ?? null) : compareId,
+      activeId: a,
+      compareId: b,
+      ...layoutFor(records, get().layout),
     });
   },
   updateRecord: (id, patch) =>

@@ -7,5 +7,5 @@ export { Switch } from './Switch';
 export { Section, Field } from './Section';
 export { Dialog } from './Dialog';
 export { Popover, MenuItem } from './Popover';
-export { Toaster, toast } from './Toast';
-export { Kbd, ColorSwatch, NumberInput, Badge } from './misc';
+export { Toaster, toast, type ToastAction } from './Toast';
+export { Kbd, ColorSwatch, NumberInput, Checkbox, Badge } from './misc';

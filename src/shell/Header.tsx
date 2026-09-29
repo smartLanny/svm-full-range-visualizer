@@ -1,5 +1,5 @@
 import React from 'react';
-import { ChartColumn, ChartLine, Keyboard, Mountain, Play, Presentation, Settings2, Square } from 'lucide-react';
+import { ChartColumn, ChartLine, Download, Keyboard, Mountain, Play, Presentation, Settings, Square } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
 import { useT } from '../i18n';
 import { Button, Popover, Segmented, cn } from '../ui';
@@ -26,6 +26,9 @@ export function Header() {
   const animating = useAppStore((s) => (tab === 'stats' ? false : s.animating[tab]));
   const requestPlay = useAppStore((s) => s.requestPlay);
   const requestStop = useAppStore((s) => s.requestStop);
+  // Nothing to play, present or export without records (the empty state covers the view).
+  const empty = useAppStore((s) => s.ready && s.records.length === 0);
+  const noRecords = empty ? t('shell.header.noRecords') : undefined;
 
   return (
     <header className="shell-header relative z-30 grid h-12 shrink-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-4 border-b border-line bg-surface-1 px-3">
@@ -81,28 +84,43 @@ export function Header() {
               <span className="hidden min-[1200px]:inline">{t('shell.header.stop')}</span>
             </Button>
           ) : (
-            <Button
-              size="sm"
-              variant="subtle"
-              icon={<Play size={13} fill="currentColor" />}
-              title={t('shell.header.playHint')}
-              onClick={() => requestPlay(tab)}
-              data-testid="header-play"
-            >
-              <span className="hidden min-[1200px]:inline">{t('shell.header.play')}</span>
-            </Button>
+            <span title={noRecords ?? t(`shell.header.playHint.${tab}`)} className="inline-flex">
+              <Button
+                size="sm"
+                variant="subtle"
+                icon={<Play size={13} fill="currentColor" />}
+                aria-label={t(`shell.header.play.${tab}`)}
+                disabled={empty}
+                onClick={() => requestPlay(tab)}
+                data-testid="header-play"
+              >
+                <span className="hidden min-[1200px]:inline">{t(`shell.header.play.${tab}`)}</span>
+              </Button>
+            </span>
           ))}
-        <Button
-          size="sm"
-          variant="secondary"
-          icon={<Presentation size={14} />}
-          title={t('shell.header.presentHint')}
-          onClick={enterPresentation}
-          data-testid="header-present"
-        >
-          <span className="hidden min-[1200px]:inline">{t('shell.header.present')}</span>
-        </Button>
-        <ExportButton />
+        <span title={noRecords ?? t('shell.header.presentHint')} className="inline-flex">
+          <Button
+            size="sm"
+            variant="secondary"
+            icon={<Presentation size={14} />}
+            aria-label={t('shell.header.present')}
+            disabled={empty}
+            onClick={enterPresentation}
+            data-testid="header-present"
+          >
+            <span className="hidden min-[1200px]:inline">{t('shell.header.present')}</span>
+          </Button>
+        </span>
+        {empty ? (
+          // Same look as the export button, disabled: there is nothing to export.
+          <span title={noRecords} className="inline-flex">
+            <Button size="sm" variant="secondary" icon={<Download size={14} />} disabled data-testid="export-button">
+              {t('export.button')}
+            </Button>
+          </span>
+        ) : (
+          <ExportButton />
+        )}
         <div className="mx-1 h-5 w-px shrink-0 bg-line" aria-hidden="true" />
         <Segmented<Lang>
           aria-label={t('shell.header.lang')}
@@ -120,7 +138,7 @@ export function Header() {
             <IconButton
               size="sm"
               label={t('shell.header.settings')}
-              icon={<Settings2 size={15} />}
+              icon={<Settings size={15} />}
               active={open}
               onClick={toggle}
               data-testid="header-settings"

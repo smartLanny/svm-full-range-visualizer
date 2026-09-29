@@ -1,16 +1,17 @@
 import React, { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertCircle, CheckCircle2, ClipboardPaste, FileJson, FileUp, Sparkles, Trash2, Upload, X } from 'lucide-react';
-import { useT, type TFunction } from '../i18n';
+import { AlertCircle, AlertTriangle, CheckCircle2, ClipboardPaste, FileJson, FileUp, RotateCcw, ShieldCheck, Sparkles, Trash2, Upload, X } from 'lucide-react';
+import { useLang, useT, type TFunction } from '../i18n';
 import { parseRawData, splitTables } from '../data/parse';
-import { guessDeviceMode, toRecord } from '../data/records';
+import { guessDeviceMode, recordLabel, toRecord } from '../data/records';
 import { EXAMPLE_TSV } from '../data/exampleTsv';
 import type { Dataset } from '../types';
 import { useAppStore } from '../store/appStore';
 import * as THREE from 'three';
 import { getJsColor } from '../colormaps';
-import { Button, Dialog, NumberInput, Segmented, cn, toast } from '../ui';
+import { Button, Checkbox, Dialog, NumberInput, Segmented, cn, toast } from '../ui';
 import { FormRow, TextInput, useFieldId } from './controls';
-import { JSON_ACCEPT, addResults, errorText, pickFiles, readRecordFiles, type FileResult } from './fileImport';
+import { JSON_ACCEPT, addResults, errorText, pickFiles, readRecordFiles, resultFileLabel, type FileResult } from './fileImport';
+import { applyScreening, mergeByReason, reasonsText, screenDataset, type Screening } from './screening';
 import { shellUi, useShellUi, type ImporterTab } from './uiStore';
 
 interface ParseOk {
@@ -22,13 +23,16 @@ interface ParseOk {
   level: [number, number];
   svm: [number, number];
   missing: number;
+  /** Anomaly screening of the parsed table (C7). */
+  screening: Screening | null;
 }
 type ParseResult = ParseOk | { ok: false; error: string } | null;
 
 function analyse(text: string, factor: number): ParseResult {
   if (!text.trim()) return null;
   try {
-    const ds = parseRawData(text, 'preview', Number.isFinite(factor) && factor > 0 ? factor : 1);
+    // The name is set at import time (title line, form fields or a default); never from here.
+    const ds = parseRawData(text, '-', Number.isFinite(factor) && factor > 0 ? factor : 1);
     const m = ds.matrix;
     const svms = ds.data.map((p) => p.svm);
     const levels = m.headerNits.filter((n) => Number.isFinite(n));
@@ -41,6 +45,7 @@ function analyse(text: string, factor: number): ParseResult {
       level: levels.length ? [Math.min(...levels), Math.max(...levels)] : [0, 0],
       svm: svms.length ? [Math.min(...svms), Math.max(...svms)] : [0, 0],
       missing: m.rows.length * m.cols.length - ds.data.length,
+      screening: screenDataset(ds),
     };
   } catch (e) {
     return { ok: false, error: (e as Error).message };
@@ -58,6 +63,17 @@ function analyseAll(text: string, factor: number): TableResult[] {
   return splitTables(text).map((tb) => ({ title: tb.title, res: analyse(tb.text, factor) }));
 }
 
+/** `count` default record names ("导入的记录 3", …) not used by any existing record. */
+function defaultNames(t: TFunction, count: number): string[] {
+  const used = new Set(useAppStore.getState().records.flatMap((r) => [r.name, r.device]));
+  const out: string[] = [];
+  for (let n = 1; out.length < count; n++) {
+    const name = t('shell.importer.defaultName', { n });
+    if (!used.has(name)) out.push(name);
+  }
+  return out;
+}
+
 const fmtNum = (v: number) => (Math.abs(v) >= 100 ? v.toFixed(0) : Math.abs(v) >= 10 ? v.toFixed(1) : v.toFixed(2));
 
 export function Importer() {
@@ -66,13 +82,37 @@ export function Importer() {
   const [jsonResults, setJsonResults] = useState<FileResult[]>([]);
   const paste = usePasteState();
 
+  const seed = useShellUi((s) => s.importer.seed);
+  const [excludeFiles, setExcludeFiles] = useState(true);
+
   useEffect(() => {
     if (!open) {
       setJsonResults([]);
+      setExcludeFiles(true);
       paste.reset();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
+
+  // Content handed over by a window drop / file picker.
+  useEffect(() => {
+    if (!open || !seed) return;
+    if (seed.text !== undefined) paste.loadText(seed.text, seed.name ?? '');
+    if (seed.files) setJsonResults((prev) => [...prev, ...seed.files!]);
+    shellUi.consumeImporterSeed();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, seed]);
+
+  // Paste while focus is not in a text field (e.g. right after opening): the text goes to the data box.
+  const onPaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
+    const target = e.target as HTMLElement;
+    if (target.closest('input, textarea, [contenteditable="true"]')) return;
+    const text = e.clipboardData.getData('text/plain');
+    if (!text.trim()) return;
+    e.preventDefault();
+    if (tab !== 'paste') shellUi.setImporterTab('paste');
+    paste.setText(text);
+  };
 
   const addJsonFiles = async (files: File[]) => {
     if (!files.length) return;
@@ -130,6 +170,7 @@ export function Importer() {
             addResults(
               jsonResults.filter((r) => r.ok),
               t,
+              excludeFiles,
             );
             shellUi.closeImporter();
           }}
@@ -148,6 +189,7 @@ export function Importer() {
       widthClass="max-w-[920px]"
       closeLabel={t('common.close')}
       footer={footer}
+      onPaste={onPaste}
     >
       <div
         onDragOver={(e) => e.dataTransfer.types.includes('Files') && (e.preventDefault(), e.stopPropagation())}
@@ -173,7 +215,11 @@ export function Importer() {
           ]}
         />
         <div className="mt-4">
-          {tab === 'paste' ? <PasteTab state={paste} /> : <JsonTab results={jsonResults} setResults={setJsonResults} addFiles={addJsonFiles} />}
+          {tab === 'paste' ? (
+            <PasteTab state={paste} />
+          ) : (
+            <JsonTab results={jsonResults} setResults={setJsonResults} addFiles={addJsonFiles} exclude={excludeFiles} setExclude={setExcludeFiles} />
+          )}
         </div>
       </div>
     </Dialog>
@@ -189,6 +235,7 @@ function usePasteState() {
   const [metaTouched, setMetaTouched] = useState(false);
   const [factor, setFactor] = useState(1);
   const [text, setText] = useState('');
+  const [exclude, setExclude] = useState(true);
   const deferred = useDeferredValue(text);
   const deferredFactor = useDeferredValue(factor);
   const tables = useMemo(() => analyseAll(deferred, deferredFactor), [deferred, deferredFactor]);
@@ -213,6 +260,8 @@ function usePasteState() {
     result,
     multi,
     metaTouched,
+    exclude,
+    setExclude,
     setName: onName,
     setDevice: (v: string) => {
       setDevice(v);
@@ -242,32 +291,43 @@ function usePasteState() {
       setMetaTouched(false);
       setFactor(1);
       setText('');
+      setExclude(true);
     },
     submit: (t: TFunction) => {
       const all = analyseAll(text, factor);
+      const lang = useAppStore.getState().lang;
+      let excluded = 0;
+      const clean = (res: ParseOk) => {
+        if (exclude && res.screening) excluded += res.screening.anomalies.length;
+        return applyScreening(res.ds, res.screening, exclude);
+      };
       if (all.length > 1) {
+        const untitled = all.filter((tb) => !tb.title && tb.res?.ok).length;
+        const fallback = name.trim() ? [] : defaultNames(t, untitled);
         const recs = all.flatMap((tb, i) => {
           if (!tb.res?.ok) return [];
-          const title = tb.title || `${name.trim() || t('shell.importer.untitled', { i: i + 1 })} #${i + 1}`;
+          const title = tb.title || (name.trim() ? `${name.trim()} #${i + 1}` : fallback.shift()!);
           const g = guessDeviceMode(title);
           const d = (metaTouched && device.trim()) || g.device || title;
           const m = g.mode;
-          return [toRecord({ ...tb.res.ds, name: title }, 'user', { device: d, mode: m, name: m ? `${d} ${m}` : d })];
+          return [toRecord({ ...clean(tb.res), name: title }, 'user', { device: d, mode: m, name: m ? `${d} ${m}` : d })];
         });
         if (!recs.length) return;
         const store = useAppStore.getState();
         store.addRecords(recs);
         store.setActive(recs[0].id);
-        toast(t('shell.importer.importedN', { n: recs.length }), 'success');
+        const msg = t('shell.importer.importedN', { n: recs.length });
+        toast(excluded ? `${msg}${t('shell.importer.importedExcluded', { n: excluded })}` : msg, 'success', excluded ? 5000 : 3200);
         shellUi.closeImporter();
         return;
       }
       const res = analyse(text, factor);
       if (!res || !res.ok) return;
-      const d = device.trim() || guessDeviceMode(name).device || res.ds.name;
+      // Never the internal parse name: the form, the title line, or "导入的记录 N".
+      const d = device.trim() || guessDeviceMode(name).device || defaultNames(t, 1)[0];
       const m = mode.trim();
       const finalName = name.trim() || (m ? `${d} ${m}` : d);
-      const rec = toRecord({ ...res.ds, name: finalName }, 'user', {
+      const rec = toRecord({ ...clean(res), name: finalName }, 'user', {
         device: d,
         mode: m,
         name: finalName,
@@ -275,7 +335,8 @@ function usePasteState() {
       const store = useAppStore.getState();
       store.addRecords([rec]);
       store.setActive(rec.id);
-      toast(t('shell.importer.imported', { name: finalName }), 'success');
+      const msg = t('shell.importer.imported', { name: recordLabel(rec, lang) });
+      toast(excluded ? `${msg}${t('shell.importer.importedExcluded', { n: excluded })}` : msg, 'success', excluded ? 5000 : 3200);
       shellUi.closeImporter();
     },
   };
@@ -292,9 +353,14 @@ function PasteTab({ state }: { state: PasteState }) {
     data: useFieldId('imp-data'),
   };
   const r = state.result;
+  // What will be imported: the parsed table with the accepted exclusions applied.
+  const shown = useMemo(() => (r && r.ok ? applyScreening(r.ds, r.screening, state.exclude) : null), [r, state.exclude]);
+  const screenings = state.multi ? state.multi.map((m) => (m.res?.ok ? m.res.screening : null)) : r && r.ok ? [r.screening] : [];
+  const anyOk = state.multi ? state.multi.some((m) => m.res?.ok) : !!(r && r.ok);
+  const devicePlaceholder = useMemo(() => defaultNames(t, 1)[0], [t]);
   return (
     <div className="flex flex-col gap-4">
-      <div className="grid grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,1fr)_120px] gap-3">
+      <div className="grid grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,1fr)_128px] items-start gap-3">
         <FormRow label={t('shell.importer.name')} htmlFor={ids.name}>
           <TextInput
             id={ids.name}
@@ -303,11 +369,16 @@ function PasteTab({ state }: { state: PasteState }) {
             placeholder={t('shell.importer.namePlaceholder')}
             onChange={(e) => state.setName(e.target.value)}
             disabled={!!state.multi}
-            autoFocus
           />
         </FormRow>
         <FormRow label={t('shell.importer.device')} htmlFor={ids.device}>
-          <TextInput id={ids.device} data-testid="importer-device" value={state.device} onChange={(e) => state.setDevice(e.target.value)} />
+          <TextInput
+            id={ids.device}
+            data-testid="importer-device"
+            value={state.device}
+            placeholder={state.multi ? t('shell.importer.devicePlaceholderMulti') : devicePlaceholder}
+            onChange={(e) => state.setDevice(e.target.value)}
+          />
         </FormRow>
         <FormRow label={t('shell.importer.mode')} htmlFor={ids.mode}>
           <TextInput
@@ -319,8 +390,26 @@ function PasteTab({ state }: { state: PasteState }) {
             disabled={!!state.multi}
           />
         </FormRow>
-        <FormRow label={t('shell.importer.factor')} htmlFor={ids.factor}>
+        <div className="flex min-w-0 flex-col gap-1.5">
+          <div className="flex items-center justify-between gap-1">
+            <label htmlFor={ids.factor} className="truncate text-xs font-medium text-ink-2" title={t('shell.importer.factor')}>
+              {t('shell.importer.factor')}
+            </label>
+            {state.factor !== 1 && (
+              <button
+                type="button"
+                title={t('shell.importer.factorReset')}
+                aria-label={t('shell.importer.factorReset')}
+                data-testid="importer-factor-reset"
+                onClick={() => state.setFactor(1)}
+                className="inline-flex shrink-0 items-center gap-0.5 rounded px-1 font-mono text-2xs text-accent-hover hover:bg-surface-3"
+              >
+                <RotateCcw size={10} />1×
+              </button>
+            )}
+          </div>
           <NumberInput
+            id={ids.factor}
             aria-label={t('shell.importer.factor')}
             className="h-8"
             value={state.factor}
@@ -328,9 +417,10 @@ function PasteTab({ state }: { state: PasteState }) {
             max={100}
             step={0.01}
             suffix="×"
+            errorText={t('shell.importer.factorError')}
             onChange={state.setFactor}
           />
-        </FormRow>
+        </div>
       </div>
       <p className="-mt-2 text-2xs text-ink-3">
         {state.multi ? t('shell.importer.multiHint') : t('shell.importer.autoFilled')} · {t('shell.importer.factorHint')}
@@ -370,6 +460,7 @@ function PasteTab({ state }: { state: PasteState }) {
             placeholder={t('shell.importer.placeholder')}
             spellCheck={false}
             wrap="off"
+            autoFocus
             className="h-[280px] w-full resize-none rounded-md bg-surface-1 p-2.5 font-mono text-[11px] leading-[1.55] text-ink-2 ring-1 ring-inset ring-line placeholder:text-ink-4 hover:ring-line-strong focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-ring"
             style={{ tabSize: 8 }}
           />
@@ -398,13 +489,13 @@ function PasteTab({ state }: { state: PasteState }) {
                 <span>{errorText(t, r.error)}</span>
               </div>
             )}
-            {!state.multi && r && r.ok && (
+            {!state.multi && r && r.ok && shown && (
               <>
                 <div className="flex items-center gap-2 text-xs font-medium text-ink-1">
                   <CheckCircle2 size={15} className="shrink-0 text-green-400" />
                   {t('shell.importer.size', { rows: r.rows, cols: r.cols })}
                 </div>
-                <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 text-2xs">
+                <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-2xs">
                   <dt className="text-ink-3">{t('shell.importer.grayRange')}</dt>
                   <dd className="text-right font-mono tabular-nums text-ink-1">
                     G{r.gray[0]} – G{r.gray[1]}
@@ -418,18 +509,73 @@ function PasteTab({ state }: { state: PasteState }) {
                     {r.svm[0].toFixed(3)} – {r.svm[1].toFixed(3)}
                   </dd>
                   <dt className="text-ink-3">{t('shell.importer.points')}</dt>
-                  <dd className="text-right font-mono tabular-nums text-ink-1">{r.ds.data.length}</dd>
+                  <dd className="text-right font-mono tabular-nums text-ink-1">
+                    {shown.data.length} / {r.rows * r.cols}
+                  </dd>
                   <dt className="text-ink-3">{t('shell.importer.missing')}</dt>
                   <dd className={cn('text-right font-mono tabular-nums', r.missing ? 'text-amber-300' : 'text-ink-1')}>
                     {r.missing || t('shell.importer.missingNone')}
                   </dd>
+                  <dt className="text-ink-3">{t('shell.importer.screen.label')}</dt>
+                  <dd
+                    className={cn('text-right font-mono tabular-nums', r.screening?.anomalies.length ? 'text-amber-300' : 'text-ink-1')}
+                    data-testid="importer-anomalies"
+                  >
+                    {r.screening?.anomalies.length || t('shell.importer.missingNone')}
+                  </dd>
                 </dl>
-                <MiniMatrix ds={r.ds} />
+                <MiniMatrix ds={shown} />
               </>
             )}
           </div>
         </div>
       </div>
+      {anyOk && <ScreeningBar screenings={screenings} exclude={state.exclude} setExclude={state.setExclude} />}
+    </div>
+  );
+}
+
+/**
+ * Anomaly screening summary (C7): counts by reason and the "exclude obvious anomalies" checkbox
+ * (default on). Shown under the paste box and the file list.
+ */
+function ScreeningBar({
+  screenings,
+  exclude,
+  setExclude,
+}: {
+  screenings: (Screening | null | undefined)[];
+  exclude: boolean;
+  setExclude: (v: boolean) => void;
+}) {
+  const t = useT();
+  const { total, byReason } = mergeByReason(screenings.map((s) => s?.byReason));
+  const screened = screenings.some((s) => s);
+  if (!screened) return null;
+  if (!total)
+    return (
+      <p className="-mt-1 flex items-center gap-1.5 text-2xs text-ink-3" data-testid="importer-screening">
+        <ShieldCheck size={13} className="shrink-0 text-green-400/80" />
+        {t('shell.importer.screen.none')}
+      </p>
+    );
+  return (
+    <div className="-mt-1 flex flex-wrap items-start gap-x-6 gap-y-2 rounded-md bg-amber-400/[0.06] px-3 py-2.5 ring-1 ring-inset ring-amber-300/20" data-testid="importer-screening">
+      <div className="flex min-w-0 flex-1 items-start gap-2">
+        <AlertTriangle size={14} className="mt-px shrink-0 text-amber-300" />
+        <div className="min-w-0">
+          <div className="text-xs text-ink-1">{t('shell.importer.screen.found', { n: total })}</div>
+          <div className="mt-0.5 text-2xs leading-snug text-ink-3">{reasonsText(t, byReason)}</div>
+        </div>
+      </div>
+      <Checkbox
+        checked={exclude}
+        onChange={setExclude}
+        data-testid="importer-exclude"
+        label={t('shell.importer.screen.exclude')}
+        description={t('shell.importer.screen.excludeHint')}
+        className="max-w-[360px]"
+      />
     </div>
   );
 }
@@ -457,13 +603,18 @@ function MultiPreview({ tables, deviceOverride }: { tables: TableResult[]; devic
                   {tb.title || t('shell.importer.untitled', { i: i + 1 })}
                 </span>
               </div>
-              <div className="mt-1 truncate text-2xs text-ink-3">
+              <div className="mt-1 truncate text-2xs text-ink-3" title={`${device}${g.mode ? ` · ${g.mode}` : ''}`}>
                 {device}
                 {g.mode ? ` · ${g.mode}` : ''}
               </div>
               <div className={cn('mt-0.5 font-mono text-2xs tabular-nums', ok ? 'text-ink-2' : 'text-red-300')}>
                 {tb.res?.ok ? t('shell.importer.size', { rows: tb.res.rows, cols: tb.res.cols }) : tb.res ? errorText(t, tb.res.error) : ''}
               </div>
+              {tb.res?.ok && !!tb.res.screening?.anomalies.length && (
+                <div className="mt-0.5 truncate text-2xs text-amber-300" title={reasonsText(t, tb.res.screening.byReason, '\n')}>
+                  {t('shell.importer.screen.perTable', { n: tb.res.screening.anomalies.length })}
+                </div>
+              )}
             </li>
           );
         })}
@@ -510,12 +661,17 @@ function JsonTab({
   results,
   setResults,
   addFiles,
+  exclude,
+  setExclude,
 }: {
   results: FileResult[];
   setResults: React.Dispatch<React.SetStateAction<FileResult[]>>;
   addFiles: (files: File[]) => Promise<void>;
+  exclude: boolean;
+  setExclude: (v: boolean) => void;
 }) {
   const t = useT();
+  const lang = useLang();
   const [over, setOver] = useState(false);
   return (
     <div className="flex flex-col gap-3">
@@ -539,30 +695,43 @@ function JsonTab({
       </div>
       {results.length > 0 && (
         <ul className="max-h-[260px] divide-y divide-line overflow-y-auto rounded-lg ring-1 ring-inset ring-line" data-testid="importer-results">
-          {results.map((r, i) => (
-            <li key={`${r.fileName}-${i}`} className="flex items-center gap-3 px-3 py-2">
-              {r.ok ? <CheckCircle2 size={15} className="shrink-0 text-green-400" /> : <AlertCircle size={15} className="shrink-0 text-red-400" />}
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-xs text-ink-1" title={r.fileName}>
-                  {r.ok && r.record ? r.record.name : r.fileName}
+          {results.map((r, i) => {
+            const fileLabel = resultFileLabel(t, r);
+            const n = r.ok ? (r.screening?.anomalies.length ?? 0) : 0;
+            const already = r.ok && r.record?.excluded?.length ? r.record.excluded.length : 0;
+            return (
+              <li key={`${fileLabel}-${i}`} className="flex items-center gap-3 px-3 py-2">
+                {r.ok ? <CheckCircle2 size={15} className="shrink-0 text-green-400" /> : <AlertCircle size={15} className="shrink-0 text-red-400" />}
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-xs text-ink-1" title={r.ok && r.record ? recordLabel(r.record, lang) : fileLabel}>
+                    {r.ok && r.record ? recordLabel(r.record, lang) : fileLabel}
+                  </div>
+                  <div className={cn('truncate text-2xs', r.ok ? 'text-ink-3' : 'text-red-300')} title={fileLabel}>
+                    {r.ok && r.record ? `${fileLabel} · ${t('shell.importer.fileOk', { points: r.record.data.length })}` : `${fileLabel} · ${errorText(t, r.error)}`}
+                    {n > 0 && (
+                      <span className="text-amber-300" title={reasonsText(t, r.screening!.byReason, '\n')}>
+                        {' · '}
+                        {t('shell.importer.screen.perTable', { n })}
+                      </span>
+                    )}
+                    {already > 0 && <span className="text-ink-3">{` · ${t('common.exclusion.badge', { n: already })}`}</span>}
+                  </div>
                 </div>
-                <div className={cn('truncate text-2xs', r.ok ? 'text-ink-3' : 'text-red-300')}>
-                  {r.ok && r.record ? `${r.fileName} · ${t('shell.importer.fileOk', { points: r.record.data.length })}` : errorText(t, r.error)}
-                </div>
-              </div>
-              <button
-                type="button"
-                title={t('shell.importer.remove')}
-                aria-label={t('shell.importer.remove')}
-                onClick={() => setResults((prev) => prev.filter((_, j) => j !== i))}
-                className="rounded p-1 text-ink-3 hover:bg-surface-4 hover:text-ink-1"
-              >
-                <X size={13} />
-              </button>
-            </li>
-          ))}
+                <button
+                  type="button"
+                  title={t('shell.importer.remove')}
+                  aria-label={t('shell.importer.remove')}
+                  onClick={() => setResults((prev) => prev.filter((_, j) => j !== i))}
+                  className="rounded p-1 text-ink-3 hover:bg-surface-4 hover:text-ink-1"
+                >
+                  <X size={13} />
+                </button>
+              </li>
+            );
+          })}
         </ul>
       )}
+      {results.some((r) => r.ok) && <ScreeningBar screenings={results.filter((r) => r.ok).map((r) => r.screening)} exclude={exclude} setExclude={setExclude} />}
     </div>
   );
 }

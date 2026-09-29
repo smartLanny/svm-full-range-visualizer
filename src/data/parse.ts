@@ -78,6 +78,8 @@ export function parseRawData(raw: string, name: string, correctionFactor = 1.0):
     grid.push(rowPoints);
   }
   if (grid.length === 0) throw new Error('NO_ROWS');
+  // The same gray level twice means two tables were pasted as one (no labelled header rows to split on).
+  if (new Set(grayRows).size !== grayRows.length) throw new Error('DUPLICATE_GRAY');
 
   // Level luminance = nits at the max gray row.
   let maxGrayIdx = 0;
@@ -88,6 +90,7 @@ export function parseRawData(raw: string, name: string, correctionFactor = 1.0):
 
   const data: DataPoint[] = [];
   for (const row of grid) for (const p of row) if (p) data.push(p);
+  if (!data.length) throw new Error('NO_VALID_CELLS');
 
   return {
     id: generateId(),

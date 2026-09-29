@@ -7,14 +7,22 @@ import type { MainTab } from '../types';
 import { exitPresentation, togglePresentation } from './presentation';
 import { shellUi } from './uiStore';
 
-/** True while the user is typing somewhere (shortcuts must not fire). */
-function isTypingTarget(el: EventTarget | null): boolean {
-  if (!(el instanceof HTMLElement)) return false;
-  const tag = el.tagName;
+/** Input types that take typed text: shortcuts must not fire while one has focus. */
+const TEXT_INPUT_TYPES = new Set(['text', 'search', 'number', 'email', 'url', 'password', 'tel', 'date', 'datetime-local', 'month', 'time', 'week']);
+
+/** True while the user is typing somewhere (shortcuts must not fire). Sliders, swatches, checkboxes are not typing. */
+export function isTypingTarget(el: EventTarget | null): boolean {
+  if (!el || typeof (el as HTMLElement).tagName !== 'string') return false;
+  const h = el as HTMLElement;
+  const tag = h.tagName;
   if (tag === 'TEXTAREA' || tag === 'SELECT') return true;
-  if (tag === 'INPUT') return true;
-  return el.isContentEditable;
+  if (tag === 'INPUT') return TEXT_INPUT_TYPES.has(((h as HTMLInputElement).type || 'text').toLowerCase());
+  return h.isContentEditable;
 }
+
+/** Keys a focused slider handles itself (moving the thumb). */
+const SLIDER_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'PageUp', 'PageDown']);
+const isSlider = (el: EventTarget | null) => !!el && (el as HTMLElement).tagName === 'INPUT' && (el as HTMLInputElement).type === 'range';
 
 const TABS: MainTab[] = ['scene3d', 'chart2d', 'stats'];
 
@@ -56,10 +64,14 @@ export function useGlobalShortcuts() {
     const onKey = (e: KeyboardEvent) => {
       if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey) return;
       if (isTypingTarget(e.target)) return;
+      // A focused slider keeps its own arrow keys; Space / letters / digits still work.
+      if (isSlider(e.target) && SLIDER_KEYS.has(e.key)) return;
       if (document.querySelector('[role="dialog"][aria-modal="true"]')) return;
       const s = useAppStore.getState();
       const tl = getActiveTimeline();
       const key = e.key;
+      // Nothing to play or present without records.
+      const empty = s.ready && s.records.length === 0;
 
       if (key === 'Escape') {
         if (s.presenting) {
@@ -70,7 +82,7 @@ export function useGlobalShortcuts() {
       }
       if (e.code === 'Space' || key === ' ') {
         e.preventDefault();
-        playPause();
+        if (!empty) playPause();
         return;
       }
       if (key === 'ArrowLeft' || key === 'ArrowRight') {
@@ -90,11 +102,11 @@ export function useGlobalShortcuts() {
         case 'r':
           e.preventDefault();
           if (tl) tl.restart();
-          else if (s.tab !== 'stats') s.requestPlay(s.tab);
+          else if (s.tab !== 'stats' && !empty) s.requestPlay(s.tab);
           return;
         case 'f':
           e.preventDefault();
-          togglePresentation();
+          if (!empty || s.presenting) togglePresentation();
           return;
         case '1':
         case '2':

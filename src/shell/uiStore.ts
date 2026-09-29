@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import type { FileResult } from './fileImport';
 
 /**
  * Shell-local UI state (panels, dialogs). Not part of the app store: none of it affects
@@ -7,6 +8,15 @@ import { create } from 'zustand';
  */
 export type ImporterTab = 'paste' | 'json';
 
+/** Content handed to the importer when it opens (window drop / file picker). */
+export interface ImporterSeed {
+  /** Table text for the paste tab, with a fallback record name (the file's base name). */
+  text?: string;
+  name?: string;
+  /** Already-read files for the file tab. */
+  files?: FileResult[];
+}
+
 interface ShellUi {
   sidebarOpen: boolean;
   /** Docked inspector (wide windows). */
@@ -14,7 +24,7 @@ interface ShellUi {
   /** Overlay inspector (narrow windows, < INSPECTOR_DOCK_MIN). Starts closed. */
   inspectorOverlayOpen: boolean;
   collapsedDevices: string[];
-  importer: { open: boolean; tab: ImporterTab };
+  importer: { open: boolean; tab: ImporterTab; seed?: ImporterSeed | null };
   shortcutsOpen: boolean;
   aboutOpen: boolean;
   clearOpen: boolean;
@@ -67,7 +77,9 @@ useShellUi.subscribe((s, prev) => {
 });
 
 export const shellUi = {
-  openImporter: (tab: ImporterTab = 'paste') => useShellUi.setState({ importer: { open: true, tab } }),
+  openImporter: (tab: ImporterTab = 'paste', seed: ImporterSeed | null = null) => useShellUi.setState({ importer: { open: true, tab, seed } }),
+  /** The importer took the seed over into its own state. */
+  consumeImporterSeed: () => useShellUi.setState((s) => ({ importer: { ...s.importer, seed: null } })),
   closeImporter: () => useShellUi.setState((s) => ({ importer: { ...s.importer, open: false } })),
   setImporterTab: (tab: ImporterTab) => useShellUi.setState((s) => ({ importer: { ...s.importer, tab } })),
   toggleSidebar: () => useShellUi.setState((s) => ({ sidebarOpen: !s.sidebarOpen })),
