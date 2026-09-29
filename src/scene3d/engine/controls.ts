@@ -33,6 +33,11 @@ export interface ControlsHost {
   onChange(): void;
   onDoubleClick(): void;
   onUserStart(): void;
+  /**
+   * Pointer NDC (whole canvas) → NDC in the view under it (side-by-side cells), so a zoom keeps
+   * the point under the cursor fixed in that view. Identity when omitted.
+   */
+  localNdc?(ndc: { x: number; y: number }): { x: number; y: number };
 }
 
 export class ViewControls {
@@ -154,13 +159,18 @@ export class ViewControls {
     return { x: ((e.clientX - r.left) / Math.max(1, r.width)) * 2 - 1, y: -(((e.clientY - r.top) / Math.max(1, r.height)) * 2 - 1) };
   }
 
+  private anchorNdc(e: { clientX: number; clientY: number }) {
+    const n = this.ndc(e);
+    return this.host.localNdc ? this.host.localNdc(n) : n;
+  }
+
   private onWheel = (e: WheelEvent) => {
     if (!this.host.canInteract()) return;
     e.preventDefault();
     this.host.onUserStart();
     const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1;
     const dy = THREE.MathUtils.clamp(e.deltaY * unit, -300, 300);
-    this.zoomAnchor = this.ndc(e);
+    this.zoomAnchor = this.anchorNdc(e);
     this.zoomTarget = THREE.MathUtils.clamp(this.zoomTarget - dy * 0.0016, ZOOM_MIN, ZOOM_MAX);
     this.host.onChange();
   };
@@ -203,7 +213,7 @@ export class ViewControls {
       const cx = (a.x + b.x) / 2;
       const cy = (a.y + b.y) / 2;
       if (this.pinch.dist > 0 && dist > 0) {
-        this.zoomAnchor = this.ndc({ clientX: cx, clientY: cy });
+        this.zoomAnchor = this.anchorNdc({ clientX: cx, clientY: cy });
         const step = Math.log(dist / this.pinch.dist);
         this.zoomTarget = THREE.MathUtils.clamp(this.zoomTarget + step, ZOOM_MIN, ZOOM_MAX);
       }

@@ -160,11 +160,22 @@ function toTexture(canvas: HTMLCanvasElement, inset: number): TextTexture & { in
 export interface TitleSpec {
   title: string;
   subtitle: string;
+  /** Title already fitted to the width (one or two lines, see fitText.titleLines); else one line. */
+  lines?: string[];
+  /** Subtitle already wrapped (see fitText.wrapParts); else one line. */
+  subLines?: string[];
 }
 
+export const HUD_TITLE_STYLE = { size: 19, weight: 600, color: '#f3f5f8' };
+/** Title line height (CSS px). */
+export const TITLE_LINE = HUD_TITLE_STYLE.size * 1.3;
+export const HUD_SUBTITLE_STYLE = { size: 12, weight: 500, color: '#8b95a5' };
+/** Subtitle line height (CSS px). */
+export const SUBTITLE_LINE = HUD_SUBTITLE_STYLE.size * 1.45;
+
 export function drawTitleTexture(spec: TitleSpec, scale: number, maxWidthCss: number, bg: string): TextTexture & { inset: number } {
-  const titleStyle = { size: 19, weight: 600, color: '#f3f5f8' };
-  const subStyle = { size: 12, weight: 500, color: '#8b95a5' };
+  const titleStyle = HUD_TITLE_STYLE;
+  const subStyle = HUD_SUBTITLE_STYLE;
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d')!;
   const fit = (text: string, style: { size: number; weight: number }, maxW: number) => {
@@ -175,27 +186,54 @@ export function drawTitleTexture(spec: TitleSpec, scale: number, maxWidthCss: nu
     return `${t}…`;
   };
   const maxW = maxWidthCss * scale;
-  const title = fit(spec.title, titleStyle, maxW);
-  const sub = spec.subtitle ? fit(spec.subtitle, subStyle, maxW) : '';
+  const lines = spec.lines?.length ? spec.lines : [fit(spec.title, titleStyle, maxW)];
+  const subs = (spec.subLines?.length ? spec.subLines : spec.subtitle ? [spec.subtitle] : []).map((l) => fit(l, subStyle, maxW));
   ctx.font = fontString(titleStyle as never, scale);
-  const tw = ctx.measureText(title).width;
+  const tw = Math.max(...lines.map((l) => ctx.measureText(l).width));
   ctx.font = fontString(subStyle as never, scale);
-  const sw = sub ? ctx.measureText(sub).width : 0;
+  const sw = subs.length ? Math.max(...subs.map((l) => ctx.measureText(l).width)) : 0;
   const pad = Math.ceil(2 * scale);
-  const titleH = Math.ceil(titleStyle.size * 1.3 * scale);
-  const subH = sub ? Math.ceil(subStyle.size * 1.45 * scale) : 0;
+  const lineH = Math.ceil(TITLE_LINE * scale);
+  const titleH = lineH * lines.length;
+  const subLineH = Math.ceil(SUBTITLE_LINE * scale);
+  const subH = subLineH * subs.length;
   canvas.width = Math.max(4, Math.ceil(Math.max(tw, sw) + pad * 2));
   canvas.height = Math.max(4, titleH + subH + pad * 2);
   ctx.textBaseline = 'alphabetic';
   ctx.font = fontString(titleStyle as never, scale);
   ctx.fillStyle = titleStyle.color;
-  ctx.fillText(title, pad, pad + titleStyle.size * 1.0 * scale);
-  if (sub) {
-    ctx.font = fontString(subStyle as never, scale);
-    ctx.fillStyle = subStyle.color;
-    ctx.fillText(sub, pad, pad + titleH + subStyle.size * 1.05 * scale);
-  }
+  lines.forEach((l, i) => ctx.fillText(l, pad, pad + i * lineH + titleStyle.size * 1.0 * scale));
+  ctx.font = fontString(subStyle as never, scale);
+  ctx.fillStyle = subStyle.color;
+  subs.forEach((l, i) => ctx.fillText(l, pad, pad + titleH + i * subLineH + subStyle.size * 1.05 * scale));
   const inset = Math.round(8 * scale);
+  return toTexture(withGlow(canvas, bg, inset), inset);
+}
+
+// --- Panel captions ------------------------------------------------------------------------
+
+/** Caption line height (CSS px) for a caption style size. */
+export const captionLineHeight = (size: number) => Math.round(size * 1.38);
+
+/**
+ * Side-by-side panel caption: one or two centered lines (already fitted, see fitText.captionLines)
+ * with the same soft background glow as the title, so it stays legible over terrain.
+ */
+export function drawCaptionTexture(lines: string[], style: { size: number; weight: number; color: string }, scale: number, bg: string): TextTexture & { inset: number } {
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d')!;
+  ctx.font = fontString(style as never, scale);
+  const widths = lines.map((l) => ctx.measureText(l).width);
+  const pad = Math.ceil(2 * scale);
+  const lineH = Math.ceil(captionLineHeight(style.size) * scale);
+  canvas.width = Math.max(4, Math.ceil(Math.max(...widths) + pad * 2));
+  canvas.height = Math.max(4, lineH * lines.length + Math.ceil(style.size * 0.3 * scale) + pad * 2);
+  ctx.font = fontString(style as never, scale);
+  ctx.fillStyle = style.color;
+  ctx.textBaseline = 'alphabetic';
+  ctx.textAlign = 'center';
+  lines.forEach((l, i) => ctx.fillText(l, canvas.width / 2, pad + i * lineH + style.size * 0.98 * scale));
+  const inset = Math.round(6 * scale);
   return toTexture(withGlow(canvas, bg, inset), inset);
 }
 
