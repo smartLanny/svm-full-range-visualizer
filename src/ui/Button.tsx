@@ -60,7 +60,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(functio
   { label, icon, size = 'md', variant = 'ghost', className, ...rest },
   ref,
 ) {
-  const box = size === 'xs' ? 'w-6 px-0' : size === 'sm' ? 'w-7 px-0' : 'w-8 px-0';
+  const box = size === 'xs' ? 'w-6 !px-0' : size === 'sm' ? 'w-7 !px-0' : 'w-8 !px-0';
   return (
     <Button ref={ref} aria-label={label} title={label} size={size} variant={variant} className={cn(box, className)} {...rest}>
       {icon}
