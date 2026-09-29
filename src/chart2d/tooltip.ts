@@ -83,7 +83,7 @@ export class ChartTooltip {
       r.line.setAttribute('stroke', se.style.color);
       r.line.setAttribute('stroke-dasharray', se.style.dash.length ? se.style.dash.map((d) => d * 0.6).join(' ') : 'none');
       r.value.textContent = fmtSvm(v.svm);
-      r.label.textContent = se.label;
+      r.label.textContent = se.exclusion ? `${se.label} *` : se.label;
       if (r.root.parentNode !== this.list || this.list.children[i] !== r.root) this.list.insertBefore(r.root, this.list.children[i] ?? null);
     });
     while (this.list.children.length > vals.length) this.list.lastElementChild!.remove();

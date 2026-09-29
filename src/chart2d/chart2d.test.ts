@@ -6,7 +6,7 @@ import { gridView, sliceAtGray, sliceAtLevel } from '../data/grid';
 import { buildSpline, evalSpline, monotoneSlopes } from './spline';
 import { smoothSliceAtGray, smoothSliceAtLevel, sweepExtent, sweepParam, SWEEP_DURATION } from './slices';
 import { buildAxes, logAxisTicks } from './scales';
-import { buildScene, type ChartInputs } from './scene';
+import { buildScene, graySliceSvmAt, type ChartInputs } from './scene';
 import { recordStyles } from '../data/colors';
 import { buildTable, tableToTsv } from './table';
 
@@ -51,9 +51,11 @@ describe('monotone spline', () => {
 
 describe('smooth slices', () => {
   it('match the grid slices exactly at measured rows / columns', () => {
+    // (points fading in / out next to a missing cell are extra, with opacity < 1)
+    const opaque = <T extends { a: number }>(pts: T[]) => pts.filter((p) => p.a >= 1 - 1e-9);
     for (const g of gridView(mate).grays) {
       const a = sliceAtGray(mate, g);
-      const b = smoothSliceAtGray(mate, g);
+      const b = opaque(smoothSliceAtGray(mate, g));
       expect(b.length).toBe(a.length);
       b.forEach((p, i) => {
         expect(p.svm).toBeCloseTo(a[i].svm, 9);
@@ -62,7 +64,7 @@ describe('smooth slices', () => {
     }
     for (const n of gridView(iphone).levelNits) {
       const a = sliceAtLevel(iphone, n, { clipLowGray: true });
-      const b = smoothSliceAtLevel(iphone, n, { clipLowGray: true });
+      const b = opaque(smoothSliceAtLevel(iphone, n, { clipLowGray: true }));
       expect(b.length).toBe(a.length);
       b.forEach((p, i) => expect(p.svm).toBeCloseTo(a[i].svm, 6));
     }
@@ -164,5 +166,200 @@ describe('scene + table', () => {
     expect(tb.xs.length).toBeGreaterThan(3);
     const tsv = tableToTsv(tb, { record: 'Record', unit: 'nits' });
     expect(tsv.split('\n').length).toBe(3);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// v2 fix round: fading curves, gaps, title slot, legend placement, overlays, exclusions.
+
+import { buildCurve, evalCurve, segmentBezier, bezierAt } from './spline';
+import { fmtLevel } from './slices';
+import { renderChart, computeLayout } from './render';
+
+/** Minimal CanvasRenderingContext2D stand-in: records fillText, measures 10 px per digit. */
+function mockCtx() {
+  const texts: { text: string; x: number; y: number }[] = [];
+  const target: Record<string, unknown> = {
+    texts,
+    measureText: (s: string) => ({ width: [...s].reduce((a, ch) => a + (ch >= '0' && ch <= '9' ? 10 : ch === '.' ? 4 : 12), 0) }),
+    fillText: (text: string, x: number, y: number) => texts.push({ text, x, y }),
+  };
+  return new Proxy(target, {
+    get: (t, k) => (k in t ? t[k as string] : () => undefined),
+    set: (t, k, v) => {
+      t[k as string] = v;
+      return true;
+    },
+  }) as unknown as CanvasRenderingContext2D & { texts: typeof texts };
+}
+
+describe('fmtLevel', () => {
+  it('prints levels without a trailing .0', () => {
+    expect([2, 7.5, 35, 500, 9.97, 3.14].map(fmtLevel)).toEqual(['2', '7.5', '35', '500', '10', '3.1']);
+  });
+});
+
+describe('curves with opacity', () => {
+  const pts = [0, 1, 2, 3, 4, 5].map((i) => ({ x: i, y: [0, 1, 1.5, 3, 3.2, 5][i], a: 1, key: i }));
+  it('equal the monotone spline when every point is opaque and there is no gap', () => {
+    const c = buildCurve(pts)!;
+    const s = buildSpline(pts)!;
+    for (let x = 0; x <= 5; x += 0.05) expect(evalCurve(c, x)!).toBeCloseTo(evalSpline(s, x)!, 3);
+    expect(c.bridges).toEqual([]);
+  });
+  it('break at a missing key and mark the gap with a (dotted) bridge', () => {
+    const c = buildCurve(pts.filter((p) => p.key !== 2))!;
+    expect(c.seg[1]).toBe(0);
+    expect(c.bridges.map((b) => [b.i0, b.i1, b.alpha])).toEqual([[1, 2, 1]]);
+    expect(evalCurve(c, 2)).toBeNull();
+  });
+  it('cross-fade continuously while a point in the middle fades out', () => {
+    const at = (a: number) => buildCurve(pts.map((p) => (p.key === 2 ? { ...p, a } : p)))!;
+    const half = at(0.5);
+    expect(half.bridges.find((b) => b.i0 === 1 && b.i1 === 3)!.alpha).toBeCloseTo(0.5);
+    // the solid segment 0 -> 1 keeps its shape as the neighbour disappears
+    const gone = buildCurve(pts.filter((p) => p.key !== 2))!;
+    const almost = at(1e-7);
+    const a = segmentBezier(almost, 0);
+    const b = segmentBezier(gone, 0);
+    a.forEach((v, i) => expect(v).toBeCloseTo(b[i], 5));
+  });
+  it('stay continuous when two readings share an x or swap order', () => {
+    const tie = buildCurve([
+      { x: 0, y: 0, a: 1, key: 0 },
+      { x: 1, y: 2, a: 1, key: 1 },
+      { x: 1, y: 3, a: 1, key: 2 },
+      { x: 2, y: 4, a: 1, key: 3 },
+    ])!;
+    const near = buildCurve([
+      { x: 0, y: 0, a: 1, key: 0 },
+      { x: 1, y: 2, a: 1, key: 1 },
+      { x: 1 + 1e-6, y: 3, a: 1, key: 2 },
+      { x: 2, y: 4, a: 1, key: 3 },
+    ])!;
+    for (let i = 0; i < 3; i++) {
+      for (let u = 0; u <= 1; u += 0.25) {
+        const p = bezierAt(segmentBezier(tie, i), u);
+        const q = bezierAt(segmentBezier(near, i), u);
+        expect(p[0]).toBeCloseTo(q[0], 4);
+        expect(p[1]).toBeCloseTo(q[1], 4);
+      }
+    }
+  });
+});
+
+describe('scene: overlays, exclusions, title slot, sweep glide', () => {
+  const pro = records0('xiaomi18promax_adaptive_pro_off.json', 'x', 'Xiaomi 18 Pro Max', 'Pro off');
+  const recs = [iphone, mate, pro];
+  const base: ChartInputs = {
+    records: recs,
+    hiddenIds: [],
+    styles: recordStyles(recs),
+    lang: 'zh',
+    sliceMode: 'gray',
+    sliceGray: 127,
+    sliceNits: 100,
+    axisMode: 'standard',
+    clipLowGray: true,
+    presenting: false,
+    presentBlack: false,
+  };
+  it('marks records with excluded points in the legend and series', () => {
+    const sc = buildScene(base, { t: null, interactive: true });
+    const rows = sc.legend.flatMap((g) => g.rows);
+    expect(rows.find((r) => r.id === 'x')!.excluded).toBe(true);
+    expect(rows.find((r) => r.id === 'a')!.excluded).toBe(false);
+    expect(sc.series.find((s) => s.id === 'x')!.exclusion!.total).toBeGreaterThan(100);
+  });
+  it('honours overlays.title / overlays.colorbar (H)', () => {
+    const sc = buildScene({ ...base, showTitle: false, showLegend: false }, { t: null, interactive: false });
+    const ctx = mockCtx();
+    const res = renderChart(ctx, 1600, 900, 1, sc);
+    expect(res.title).toBeNull();
+    expect(res.legend).toBeNull();
+    expect(ctx.texts.some((t) => t.text.includes('SVM 测试'))).toBe(false);
+    const on = renderChart(mockCtx(), 1600, 900, 1, buildScene(base, { t: null, interactive: false }));
+    expect(on.title).not.toBeNull();
+    expect(on.legend).not.toBeNull();
+  });
+  it('keeps the sweep title still while the value changes width (G100 -> G99, 500 -> 7.5 nits)', () => {
+    for (const mode of ['gray', 'brightness'] as const) {
+      const pos = new Set<string>();
+      const ts = mode === 'gray' ? [6.6, 6.7, 6.8, 9.9] : [0, 5, 8.3, 10];
+      for (const t of ts) {
+        const ctx = mockCtx();
+        renderChart(ctx, 1600, 900, 1, buildScene({ ...base, sliceMode: mode }, { t, interactive: false }));
+        const sc = buildScene({ ...base, sliceMode: mode }, { t, interactive: false });
+        const pre = ctx.texts.find((x) => x.text === sc.title[0])!;
+        const post = ctx.texts.find((x) => x.text === sc.title[2])!;
+        pos.add(`${pre.x.toFixed(2)}|${post.x.toFixed(2)}`);
+      }
+      expect([...pos].length).toBe(1);
+    }
+  });
+  it('glides into a sweep: blend p=0 is the static frame, p→1 the sweep start', () => {
+    const inp = { ...base, axisMode: 'free' as const };
+    const st = buildScene(inp, { t: null, interactive: false });
+    const b0 = buildScene(inp, { t: 0, interactive: false, blend: { from: null, p: 0 } });
+    const b1 = buildScene(inp, { t: 0, interactive: false, blend: { from: null, p: 1 } });
+    const sw = buildScene(inp, { t: 0, interactive: false });
+    expect(b0.param).toBeCloseTo(st.param);
+    expect(b0.axes.y.u1).toBeCloseTo(st.axes.y.u1);
+    expect(b0.titleSlot.mix).toBe(0);
+    expect(b1.param).toBeCloseTo(sw.param);
+    expect(b1.axes.y.u1).toBeCloseTo(sw.axes.y.u1);
+    expect(b1.titleSlot.mix).toBe(1);
+    const mid = buildScene(inp, { t: 0, interactive: false, blend: { from: null, p: 0.5 } });
+    expect(mid.param).toBeGreaterThan(st.param);
+    expect(mid.param).toBeLessThan(sw.param);
+  });
+  it('places the legend where it covers no curve (brightness slice, small plot)', () => {
+    const all = [iphone, mate, mate60, pro];
+    for (const [w, h] of [
+      [1008, 612],
+      [1320, 790],
+      [506, 840],
+    ]) {
+      for (const sliceNits of [2, 7.5]) {
+        const sc = buildScene({ ...base, records: all, styles: recordStyles(all), sliceMode: 'brightness', sliceNits }, { t: null, interactive: false });
+        const res = renderChart(mockCtx(), w, h, 1, sc);
+        const L = res.legend!;
+        const { plot } = computeLayout(w, h, 1);
+        const X = (u: number) => plot.x + ((u - sc.axes.x.u0) / (sc.axes.x.u1 - sc.axes.x.u0)) * plot.w;
+        const Y = (v: number) => plot.y + plot.h - ((v - sc.axes.y.u0) / (sc.axes.y.u1 - sc.axes.y.u0)) * plot.h;
+        let inside = 0;
+        for (const se of sc.series) {
+          for (let g = 0; g <= 255; g += 1) {
+            const v = se.curve ? evalCurve(se.curve, g) : null;
+            if (v === null || v > sc.axes.y.u1) continue;
+            const x = X(g);
+            const y = Y(v);
+            if (x > L.x && x < L.x + L.w && y > L.y && y < L.y + L.h) inside++;
+          }
+        }
+        expect(inside).toBe(0);
+        // compact: never more than about a quarter of the plot
+        expect((L.w * L.h) / (plot.w * plot.h)).toBeLessThan(0.3);
+      }
+    }
+  });
+});
+
+function records0(file: string, id: string, device: string, mode: string): SvmRecord {
+  return asRec(load(file), id, device, mode);
+}
+
+describe('read-out helper for stats (docs/adr/0009)', () => {
+  it('graySliceSvmAt equals the 2D table value', () => {
+    const records = [iphone];
+    const sc = buildScene(
+      { records, hiddenIds: [], styles: recordStyles(records), lang: 'zh', sliceMode: 'gray', sliceGray: 127, sliceNits: 100, axisMode: 'standard', clipLowGray: false, presenting: false, presentBlack: false },
+      { t: null, interactive: false },
+    );
+    const tb = buildTable(sc);
+    tb.xs.forEach((x, i) => {
+      const v = tb.rows[0].values[i];
+      if (v !== null) expect(graySliceSvmAt(iphone, 127, x)).toBeCloseTo(v, 9);
+    });
   });
 });
