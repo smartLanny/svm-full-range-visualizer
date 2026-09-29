@@ -198,7 +198,7 @@ export function makeNoDataMaterial(): NoDataMaterial {
 /** Soft radial floor under the terrain (3D only). */
 export function makeFloorMaterial(): THREE.ShaderMaterial {
   return new THREE.ShaderMaterial({
-    uniforms: { uOpacity: { value: 1 }, uColor: { value: new THREE.Color('#0f141c') }, uRadius: { value: 20 } },
+    uniforms: { uOpacity: { value: 1 }, uColor: { value: new THREE.Color('#0f141c') }, uRadius: { value: 20 }, uCenter: { value: new THREE.Vector2() } },
     vertexShader: /* glsl */ `
       varying vec2 vXZ;
       void main() {
@@ -210,9 +210,10 @@ export function makeFloorMaterial(): THREE.ShaderMaterial {
       uniform float uOpacity;
       uniform vec3 uColor;
       uniform float uRadius;
+      uniform vec2 uCenter;
       varying vec2 vXZ;
       void main() {
-        float d = length(vXZ) / uRadius;
+        float d = length(vXZ - uCenter) / uRadius;
         float a = (1.0 - smoothstep(0.35, 1.0, d)) * 0.9 * uOpacity;
         gl_FragColor = vec4(uColor, a);
         #include <colorspace_fragment>

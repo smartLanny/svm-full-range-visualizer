@@ -13,7 +13,7 @@ import { logNits } from '../../data/grid';
 import { SX, SY, type SceneModel } from './model';
 import type { TextStyle } from './text';
 
-export type AxisId = 'lum' | 'gray' | 'value' | 'caption';
+export type AxisId = 'lum' | 'gray' | 'value';
 
 export interface AxisLabelSpec {
   axis: AxisId;
@@ -32,7 +32,8 @@ export interface AxisLabelSpec {
 
 export const TICK_STYLE: TextStyle = { size: 11, weight: 500, color: '#8e98a8' };
 export const TITLE_STYLE: TextStyle = { size: 12, weight: 600, color: '#b9c1cd' };
-export const CAPTION_STYLE: TextStyle = { size: 13, weight: 600, color: '#eef1f5' };
+/** Side-by-side panel captions (drawn by the engine's HUD pass, never culled). */
+export const CAPTION_STYLE = { size: 13, weight: 600, color: '#eef1f5' };
 
 const lumPriority = (n: number) => {
   if (n <= 0) return 9;
@@ -46,7 +47,6 @@ export interface AxisTexts {
   lum: string;
   gray: string;
   value: string;
-  captions: string[];
 }
 
 /** Which plate edges carry the axes this frame. */
@@ -121,7 +121,6 @@ export class Axes {
         grid.push(x0, 0.002, z, x1, 0.002, z);
       }
       this.labels.push({ axis: 'lum', kind: 'title', text: texts.lum, style: TITLE_STYLE, coord: panelMid, priority: 40, panel: pi });
-      if (texts.captions[pi]) this.labels.push({ axis: 'caption', kind: 'title', text: texts.captions[pi], style: CAPTION_STYLE, coord: panelMid, priority: 5, panel: pi });
     });
     for (const g of model.grayTicks) {
       const z = -(g - gMid) * model.sz;
@@ -207,7 +206,6 @@ export class Axes {
       return out.set(spec.coord, 0, this.edges.lumFront ? r.z1 : r.z0);
     }
     if (spec.axis === 'gray') return out.set(this.edges.grayLeft ? b.x0 : b.x1, 0, spec.coord);
-    if (spec.axis === 'caption') return out.set(spec.coord, 0, m.panels[spec.panel].rect.z0);
     return out.set(0, spec.coord, 0);
   }
 
@@ -215,7 +213,6 @@ export class Axes {
   outward(axis: AxisId): THREE.Vector3 {
     if (axis === 'lum') return new THREE.Vector3(0, 0, this.edges.lumFront ? 1 : -1);
     if (axis === 'gray') return new THREE.Vector3(this.edges.grayLeft ? -1 : 1, 0, 0);
-    if (axis === 'caption') return new THREE.Vector3(0, 0, -1);
     return new THREE.Vector3(0, 0, 0);
   }
 

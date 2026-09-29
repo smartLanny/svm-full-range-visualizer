@@ -1,6 +1,6 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { Box, Maximize2, Minus, Plus } from 'lucide-react';
+import { Box, Hash, Maximize2, Minus, Plus } from 'lucide-react';
 import { getAppState, selectActiveRecord, selectCompareRecord, useAppStore, type AppState } from '../store/appStore';
 import { getT, useT } from '../i18n';
 import { IconButton, Segmented } from '../ui';
@@ -37,6 +37,8 @@ function readSettings(st: AppState): EngineSettings {
     colorMax: st.colorMax,
     overlays: st.overlays,
     background: st.presenting && st.presentBlack ? '#000000' : BG,
+    // Presentation: keep the in-canvas title clear of the exit button (shell contract).
+    safeLeft: st.presenting ? st.presentSafeLeft : 0,
   };
 }
 
@@ -58,6 +60,7 @@ const RELEVANT: (keyof AppState)[] = [
   'overlays',
   'presenting',
   'presentBlack',
+  'presentSafeLeft',
 ];
 
 /**
@@ -147,6 +150,8 @@ export default function Scene3DView() {
   const visible = tab === 'scene3d';
   const [model, setModel] = useState<ModelResult | null>(null);
   const [hover, setHover] = useState<HoverInfo | null>(null);
+  /** Values overlay on, but the cells are too small to print them (engine decision, docs/adr/0002). */
+  const [valuesHidden, setValuesHidden] = useState(false);
   const tipRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const tl = useTimeline(INTRO_DURATION);
@@ -167,6 +172,7 @@ export default function Scene3DView() {
       hoverKey.current = null;
       setHover(null);
     };
+    engine.onValuesHint = setValuesHidden;
     engine.sync(readSettings(getAppState()));
     const unsub = useAppStore.subscribe((st, prev) => {
       if (!RELEVANT.some((k) => st[k] !== prev[k])) return;
@@ -184,6 +190,7 @@ export default function Scene3DView() {
     return () => {
       unsub();
       engine.onModel = () => {};
+      engine.onValuesHint = () => {};
     };
   }, [engine]);
 
@@ -453,6 +460,20 @@ export default function Scene3DView() {
       )}
 
       <SceneTooltip ref={tipRef} info={hover} layout={layout} />
+
+      {valuesHidden && !introOpen && !empty && (
+        <div
+          data-testid="scene3d-values-hint"
+          role="status"
+          className={cn(
+            'pointer-events-none absolute bottom-3 left-3 flex max-w-[min(420px,calc(100%-24px))] items-center gap-1.5 rounded-lg bg-surface-2/85 px-2.5 py-1.5 text-2xs leading-snug text-ink-2 shadow-panel ring-1 ring-line backdrop-blur-md transition-opacity duration-300',
+            uiHidden && 'opacity-0',
+          )}
+        >
+          <Hash size={12} className="shrink-0 text-ink-3" />
+          <span>{t(layout === 'single' ? 'scene3d.valuesHint.single' : 'scene3d.valuesHint.compare')}</span>
+        </div>
+      )}
 
       {!introOpen && !empty && (
         <div

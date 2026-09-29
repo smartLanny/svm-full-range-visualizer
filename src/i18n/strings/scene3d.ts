@@ -84,6 +84,10 @@ const strings: StringsModule = {
       intro: '开场动画',
       introOnlyA: '开场动画（仅 A：{name}）',
     },
+    valuesHint: {
+      single: '数值未显示：格子太小，放大窗口后显示',
+      compare: '数值未显示：格子太小，放大窗口或切换到“单个”布局',
+    },
     colormaps: {
       RD_YL_BU_ENHANCED: '增强 RdYlBu（推荐）',
       TRAFFIC_LIGHT: '交通灯（绿-黄-红）',
@@ -179,6 +183,10 @@ const strings: StringsModule = {
     export: {
       intro: 'Intro animation',
       introOnlyA: 'Intro animation (A only: {name})',
+    },
+    valuesHint: {
+      single: 'Values hidden: cells too small — enlarge the window',
+      compare: 'Values hidden: cells too small — enlarge the window or switch to the Single layout',
     },
     colormaps: {
       RD_YL_BU_ENHANCED: 'Enhanced RdYlBu (recommended)',
