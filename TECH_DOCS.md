@@ -110,7 +110,7 @@ release/              单文件离线版（构建产物，已提交）、icon.ic
 ### 3.5 2D 截面（`src/chart2d`）
 
 - `scene.ts`：数据 + 设置 + 扫描时间 → 图表模型（与像素无关的纯函数）。
-- `slices.ts`：截面与扫描。灰阶扫描 G255 → G50，档位亮度扫描 500 → 2 nits（对数），时长 `SWEEP_DURATION` = 10 秒，easeInOutSine 缓动。
+- `slices.ts`：截面与扫描。灰阶扫描 G255 → G50，档位亮度扫描 500 → 2 nits（对数），时长 `SWEEP_DURATION` = 10 秒，easeInOutSine 缓动。静态截面（不在扫描或过渡中）经 `settleSlice()` 处理：每个点要么完全不透明（插值权重 a ≥ 0.5，与数据表、统计的取值规则一致），要么视为缺口、只画虚线桥接，不会出现半透明的“残影”线段；扫描时的淡入淡出规则不变。
 - `spline.ts`：单调三次（Fritsch–Carlson）插值，同时用于画曲线、悬停读数和数据表，读数与画出的线一致。
 - `scales.ts`：标准 / 自适应 / 自由三种坐标范围和刻度。
 - `render.ts`：Canvas 2D 绘制，所有字号、线宽、边距乘以 UI 缩放 `s`（1 = 1600×900 参考布局），屏幕、1080p、4K、竖屏共用一套设计。标题和图例都画在画布里。
@@ -151,7 +151,7 @@ interface ExportTarget {
 - **PNG**（`png.ts`）：`begin(size)` → `renderFrame(null)` → 立即复制到 2D 画布（WebGL 缓冲在合成后会被清空）→ `end()` → 编码。`renderFrame(null)` 必须渲染用户此刻看到的画面：动画开着（播放、暂停或拖到某处）时，就渲染动画在当前时间的那一帧。导出开始前会暂停正在播放的时间轴，结束后恢复。
 - **视频**（`video.ts`）：按帧求值 `renderFrame(i / fps)`，帧数 = 时长 × fps + 1（最后一帧是动画终点）。优先 WebCodecs 编码 H.264（硬件优先），不支持时用 VP9，都封装为 MP4（mp4-muxer）；两者都是离线逐帧渲染，与机器速度无关，不掉帧。浏览器没有可用的 WebCodecs 编码器时退回 MediaRecorder 实时录制（WebM / MP4）。编码器队列有背压，可随时取消。`codecs.ts` 按分辨率和帧率选择 H.264 level。
 - **尺寸**（`presets.ts`）：当前视图（`viewSize()`，与屏幕上的画面尺寸和比例一致，最长边不超过 4096）/ 1080p / 1440p / 4K，画幅 16:9、9:16、1:1；视频尺寸取偶数。
-- **文件名**：PNG 用 `fileName('image')`；视频优先用 `animation().fileName`（例如 2D 扫描、并排布局下只含记录 A 的开场动画），否则用 `fileName('video')`；再附上尺寸和帧率。`safeFileName()` 去掉 Windows / macOS 不允许的字符，保留中文。
+- **文件名**：PNG 用 `fileName('image')`；视频优先用 `animation().fileName`（例如 2D 扫描、并排布局下只含记录 A 的开场动画），否则用 `fileName('video')`；再附上尺寸和帧率。`safeFileName()` 去掉 Windows / macOS 不允许的字符，保留中文；标题里的“·”连同两侧空格合并为一个 `_`。
 - `session.ts`：同一时间只有一个导出任务；进度弹窗的预览画布命令式绘制（约 8 Hz），React 状态最多约 12 Hz 更新一次。导出期间全局快捷键被屏蔽，Esc 取消。
 - 没有记录、在统计页、或视图尚未注册时，“导出”按钮禁用并在提示中说明原因。并排 / 差值布局下，导出对话框提示视频只演示记录 A。
 
