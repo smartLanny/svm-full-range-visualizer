@@ -104,6 +104,9 @@ export function TimelineBar({ timeline, chapters = [], onClose, title, className
   return (
     <div
       data-timeline-bar=""
+      // Toasts stay above the bar and the ~64 px of axis labels a view draws right above its
+      // transport (src/ui/Toast.tsx, finding N22).
+      data-toast-avoid="64"
       className={cn(
         'pointer-events-auto flex w-[min(720px,calc(100%-32px))] items-center gap-2 rounded-xl bg-surface-2/90 px-2.5 py-2 shadow-panel ring-1 ring-line backdrop-blur-md',
         className,

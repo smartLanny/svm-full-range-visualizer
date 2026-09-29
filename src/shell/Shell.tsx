@@ -162,11 +162,14 @@ function MainArea({ docked }: { docked: boolean }) {
     };
     if (!presenting || !el) {
       setSafe(0);
+      shellUi.setPresentStage(null);
       return;
     }
     const update = () => {
       const r = el.getBoundingClientRect();
       setSafe(r.top < PRESENT_EXIT_BOTTOM ? Math.max(0, Math.round(PRESENT_EXIT_RIGHT - r.left)) : 0);
+      // The presentation hint places itself from the stage rect (letterbox bars or the stage's title band).
+      shellUi.setPresentStage({ x: Math.round(r.left), y: Math.round(r.top), w: Math.round(r.width), h: Math.round(r.height) });
     };
     update();
     const ro = new ResizeObserver(update);
@@ -176,6 +179,7 @@ function MainArea({ docked }: { docked: boolean }) {
       ro.disconnect();
       window.removeEventListener('resize', update);
       setSafe(0);
+      shellUi.setPresentStage(null);
     };
   }, [presenting, aspect]);
 

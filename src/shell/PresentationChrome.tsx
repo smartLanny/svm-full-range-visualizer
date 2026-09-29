@@ -4,6 +4,8 @@ import { useAppStore } from '../store/appStore';
 import { useT } from '../i18n';
 import { cn } from '../ui';
 import { exitPresentation } from './presentation';
+import { hintPlacement } from './presentLayout';
+import { useShellUi } from './uiStore';
 
 const IDLE_MS = 2500;
 
@@ -12,14 +14,17 @@ export const PRESENT_EXIT_RIGHT = 16 + 32 + 8;
 export const PRESENT_EXIT_BOTTOM = 16 + 32 + 4;
 
 /**
- * Presentation overlay chrome (contract C1): a key hint that fades after ~2.5 s, bottom-centre
- * just above the 96 px bottom safe zone the timelines use, and an exit button top-left that
- * appears while the pointer moves, so the views' own top-right toolbars are never covered. The cursor hides when idle so recordings stay clean.
+ * Presentation overlay chrome (contract C1): a key hint that fades after ~2.5 s, placed where no
+ * view draws anything (a letterbox bar, or the right end of the stage's top title band: see
+ * hintPlacement), and an exit button top-left that appears while the pointer moves, so the views'
+ * own top-right toolbars are never covered (the views keep their top-left titles right of
+ * `presentSafeLeft`). The cursor hides when idle so recordings stay clean.
  * Visibility is toggled through DOM classes (no React state per mouse move).
  */
 export function PresentationChrome() {
   const t = useT();
   const presenting = useAppStore((s) => s.presenting);
+  const stage = useShellUi((s) => s.presentStage);
   const [hintVisible, setHintVisible] = useState(false);
   const exitRef = useRef<HTMLButtonElement>(null);
 
@@ -51,17 +56,28 @@ export function PresentationChrome() {
   }, [presenting]);
 
   if (!presenting) return null;
+  const place = stage ? hintPlacement({ w: window.innerWidth, h: window.innerHeight }, stage) : null;
   return (
     <>
       <div
         aria-live="polite"
         data-testid="present-hint"
+        data-place={place?.where}
+        style={place?.style}
         className={cn(
-          'pointer-events-none fixed bottom-[108px] left-1/2 z-40 -translate-x-1/2 rounded-full bg-black/70 px-4 py-1.5 text-xs text-white/85 ring-1 ring-white/10 backdrop-blur transition-opacity duration-700',
-          hintVisible ? 'opacity-100' : 'opacity-0',
+          'pointer-events-none fixed z-40 w-max rounded-2xl bg-black/70 px-4 py-1.5 text-center text-xs leading-4 text-white/85 text-balance ring-1 ring-white/10 backdrop-blur transition-opacity duration-700',
+          hintVisible && place ? 'opacity-100' : 'opacity-0',
         )}
       >
-        {t('shell.present.hint')}
+        {/* In a narrow letterbox bar the pill wraps between "key action" pairs, never inside one. */}
+        {t('shell.present.hint')
+          .split(' · ')
+          .map((part, i) => (
+            <React.Fragment key={part}>
+              {i > 0 && ' · '}
+              <span className="whitespace-nowrap">{part}</span>
+            </React.Fragment>
+          ))}
       </div>
       <button
         ref={exitRef}

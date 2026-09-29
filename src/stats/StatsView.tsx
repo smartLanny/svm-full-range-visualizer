@@ -12,6 +12,12 @@ import { thumbExtent } from './Thumbnail';
 
 type ViewMode = 'cards' | 'table';
 
+/**
+ * Presentation with the header hidden: space kept free above the body (plus its own 20 px
+ * padding) so the first row starts below the shell's exit button (16 + 32 px) and key hint.
+ */
+const PRESENT_TOP_BAND = 36;
+
 const LS_KEY = 'svm.stats.ui';
 
 /** Per-viewer UI convenience (view mode + sort); never required for correctness. */
@@ -48,6 +54,11 @@ export default function StatsView() {
   // Pure-black presentation background (recording / keying): the page and its bars are #000.
   const presenting = useAppStore((s) => s.presenting);
   const black = useAppStore((s) => s.presenting && s.presentBlack);
+  // Presentation: the header starts right of the shell's exit button, and follows the H toggle
+  // (overlays.title) like the 3D / 2D in-picture titles. The workbench header always shows (it
+  // holds the controls).
+  const safeLeft = useAppStore((s) => s.presentSafeLeft);
+  const showHeader = useAppStore((s) => !s.presenting || s.overlays.title);
 
   const [ui, setUi] = useState(loadUi);
   useEffect(() => {
@@ -143,69 +154,85 @@ export default function StatsView() {
   return (
     <div className={cn('flex h-full min-h-0 flex-col', black ? 'bg-black' : 'bg-canvas')}>
       {/* header: the title block keeps a minimum width; when title + controls do not fit on one
-          line the controls wrap to a second row (never squeezing the title). */}
-      <div
-        className={cn(
-          'group/hdr flex flex-wrap items-center justify-between gap-x-6 gap-y-2.5 border-b border-line px-6 py-3.5',
-          black ? 'bg-black' : 'bg-surface-1',
-        )}
-      >
-        <div className="min-w-[min(100%,280px)] flex-[1_1_280px]">
-          <div className="flex items-baseline gap-2.5 whitespace-nowrap">
-            <h1 className="text-base font-semibold text-ink-1">{t('stats.title')}</h1>
-            <span className="text-xs tabular-nums text-ink-3">{t('stats.count', { n: records.length })}</span>
-          </div>
-          <div className="mt-0.5 text-xs leading-snug text-ink-3">
-            <span className="text-ink-2">{t('stats.scope.label')}：</span>
-            {scope}
-          </div>
-        </div>
-        {/* In presentation the controls stay out of the picture until the pointer reaches the bar (pure CSS, no timers). */}
+          line the controls wrap to a second row (never squeezing the title). In presentation it
+          is only the title + scope lines (the controls float over its right end on hover), starts
+          right of the exit button (presentSafeLeft) and hides with the in-picture titles (H). */}
+      {showHeader && (
         <div
+          data-testid="stats-header"
           className={cn(
-            'flex max-w-full flex-wrap items-center gap-3',
-            presenting && 'opacity-0 transition-opacity duration-200 focus-within:opacity-100 group-hover/hdr:opacity-100',
+            'group/hdr relative flex flex-wrap items-center justify-between gap-x-6 gap-y-2.5 border-b border-line px-6 py-3.5',
+            black ? 'bg-black' : 'bg-surface-1',
           )}
+          style={presenting ? { paddingLeft: Math.max(24, safeLeft) } : undefined}
         >
-          <Switch checked={clipLowGray} onChange={(v) => set('clipLowGray', v)} label={t('stats.clipToggle')} className="items-center" />
-          <div className="h-5 w-px bg-line" />
-          {ui.mode === 'cards' && (
-            <div className="flex items-center gap-1">
-              <Select<SortKey>
-                aria-label={t('stats.sort.label')}
-                value={ui.sortKey}
-                onChange={(k) => setUi((u) => ({ ...u, sortKey: k, sortDir: defaultDir(k) }))}
-                options={sortOptions}
-                className="w-40"
-              />
-              <IconButton
-                size="md"
-                variant="ghost"
-                label={t('stats.sort.toggle', { dir: dirLabel })}
-                icon={ui.sortDir === 'asc' ? <ArrowUpNarrowWide size={15} /> : <ArrowDownWideNarrow size={15} />}
-                onClick={() => setUi((u) => ({ ...u, sortDir: u.sortDir === 'asc' ? 'desc' : 'asc' }))}
-                aria-pressed={ui.sortDir === 'desc'}
-              />
+          <div className="min-w-[min(100%,280px)] flex-[1_1_280px]">
+            <div className="flex items-baseline gap-2.5 whitespace-nowrap">
+              <h1 className="text-base font-semibold text-ink-1">{t('stats.title')}</h1>
+              <span className="text-xs tabular-nums text-ink-3">{t('stats.count', { n: records.length })}</span>
             </div>
-          )}
-          <Segmented<ViewMode>
-            aria-label={t('stats.view.label')}
-            value={ui.mode}
-            onChange={(mode) => setUi((u) => ({ ...u, mode }))}
-            size="md"
-            options={[
-              { value: 'cards', label: t('stats.view.cards'), icon: <LayoutGrid size={13} /> },
-              { value: 'table', label: t('stats.view.table'), icon: <Table2 size={13} /> },
-            ]}
-          />
-          <Button size="md" icon={<ClipboardCopy size={14} />} onClick={onCopy} disabled={records.length === 0}>
-            {t('stats.copyTsv')}
-          </Button>
+            <div className="mt-0.5 text-xs leading-snug text-ink-3">
+              <span className="text-ink-2">{t('stats.scope.label')}：</span>
+              {scope}
+            </div>
+          </div>
+          {/* In presentation the controls stay out of the picture (and out of the layout, so the header
+              collapses to its two text lines) until the pointer reaches the bar: they float over its
+              right end (pure CSS, no timers). */}
+          <div
+            data-testid="stats-controls"
+            className={cn(
+              'flex flex-wrap items-center gap-3',
+              presenting
+                ? cn(
+                    'pointer-events-none absolute right-4 top-2 z-20 max-w-[calc(100%-2rem)] justify-end rounded-xl p-2 opacity-0 shadow-panel ring-1 ring-line transition-opacity duration-200',
+                    'focus-within:pointer-events-auto focus-within:opacity-100 group-hover/hdr:pointer-events-auto group-hover/hdr:opacity-100',
+                    black ? 'bg-black' : 'bg-surface-1',
+                  )
+                : 'max-w-full',
+            )}
+          >
+            <Switch checked={clipLowGray} onChange={(v) => set('clipLowGray', v)} label={t('stats.clipToggle')} className="items-center" />
+            <div className="h-5 w-px bg-line" />
+            {ui.mode === 'cards' && (
+              <div className="flex items-center gap-1">
+                <Select<SortKey>
+                  aria-label={t('stats.sort.label')}
+                  value={ui.sortKey}
+                  onChange={(k) => setUi((u) => ({ ...u, sortKey: k, sortDir: defaultDir(k) }))}
+                  options={sortOptions}
+                  className="w-40"
+                />
+                <IconButton
+                  size="md"
+                  variant="ghost"
+                  label={t('stats.sort.toggle', { dir: dirLabel })}
+                  icon={ui.sortDir === 'asc' ? <ArrowUpNarrowWide size={15} /> : <ArrowDownWideNarrow size={15} />}
+                  onClick={() => setUi((u) => ({ ...u, sortDir: u.sortDir === 'asc' ? 'desc' : 'asc' }))}
+                  aria-pressed={ui.sortDir === 'desc'}
+                />
+              </div>
+            )}
+            <Segmented<ViewMode>
+              aria-label={t('stats.view.label')}
+              value={ui.mode}
+              onChange={(mode) => setUi((u) => ({ ...u, mode }))}
+              size="md"
+              options={[
+                { value: 'cards', label: t('stats.view.cards'), icon: <LayoutGrid size={13} /> },
+                { value: 'table', label: t('stats.view.table'), icon: <Table2 size={13} /> },
+              ]}
+            />
+            <Button size="md" icon={<ClipboardCopy size={14} />} onClick={onCopy} disabled={records.length === 0}>
+              {t('stats.copyTsv')}
+            </Button>
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* body */}
-      <div className="relative min-h-0 flex-1">
+      {/* body (header hidden in presentation: a top band as tall as the exit button's corner keeps
+          the first row clear of the shell's exit button and key hint) */}
+      <div className="relative min-h-0 flex-1" style={showHeader ? undefined : { paddingTop: PRESENT_TOP_BAND }}>
         <div ref={bodyRef} className="h-full overflow-auto" onScroll={measure}>
           {records.length === 0 ? (
             <div className="flex h-full min-h-[320px] flex-col items-center justify-center px-6 text-center">

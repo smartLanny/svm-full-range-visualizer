@@ -72,23 +72,27 @@ export function StatsCard({ row, style, lang, rank, clipLowGray, maxNits, colorm
   return (
     <article className="group flex min-w-0 flex-col rounded-xl bg-surface-2 ring-1 ring-inset ring-line transition-shadow hover:ring-line-strong">
       {/* header */}
-      <header className="flex items-start gap-2.5 px-4 pb-3 pt-3.5">
-        <RecordKey style={style} className="mt-1" />
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-semibold text-ink-1" title={device}>
+      <header className="px-4 pb-3 pt-3.5">
+        <div className="flex items-start gap-2.5">
+          <RecordKey style={style} className="mt-1" />
+          {/* a long name wraps (two lines at most) rather than losing its last word to the button */}
+          <div className="line-clamp-2 min-w-0 flex-1 break-words text-sm font-semibold text-ink-1" title={device}>
             {device}
           </div>
-          {/* the badge wraps under the mode name rather than truncating it */}
-          <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1">
-            <span className="max-w-full truncate text-xs text-ink-3" title={mode}>
-              {mode || ' '}
-            </span>
-            <ExclusionBadge rec={rec} stats={s} />
-          </div>
+          {/* -my-0.5: the 24 px button does not make the 20 px title row taller */}
+          <Button size="xs" variant="ghost" icon={<Box size={13} />} onClick={() => onOpen3d(rec.id)} className="-my-0.5 -mr-1.5 shrink-0 text-ink-3 group-hover:text-ink-1">
+            {t('stats.openIn3d')}
+          </Button>
         </div>
-        <Button size="xs" variant="ghost" icon={<Box size={13} />} onClick={() => onOpen3d(rec.id)} className="-mr-1.5 text-ink-3 group-hover:text-ink-1">
-          {t('stats.openIn3d')}
-        </Button>
+        {/* The mode tells sibling cards apart ("… Pro off" / "… Pro on"): it gets its own line the
+            full width of the card under the title row (aligned with the name, not sharing the row
+            with the button), wraps onto a second line before it is cut, and the badge wraps under it. */}
+        <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 pl-[50px]" data-testid="stats-card-mode">
+          <span className="line-clamp-2 max-w-full break-words text-xs text-ink-3" title={mode}>
+            {mode || ' '}
+          </span>
+          <ExclusionBadge rec={rec} stats={s} />
+        </div>
       </header>
 
       {empty ? (

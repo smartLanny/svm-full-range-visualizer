@@ -28,6 +28,15 @@ interface ShellUi {
   shortcutsOpen: boolean;
   aboutOpen: boolean;
   clearOpen: boolean;
+  /** Presentation only: the stage's window rect (CSS px), for the shell's own overlay chrome. */
+  presentStage: StageRect | null;
+}
+
+export interface StageRect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
 }
 
 const LS_KEY = 'svm.shell.ui.v1';
@@ -58,6 +67,7 @@ export const useShellUi = create<ShellUi>(() => ({
   shortcutsOpen: false,
   aboutOpen: false,
   clearOpen: false,
+  presentStage: null,
 }));
 
 useShellUi.subscribe((s, prev) => {
@@ -93,6 +103,12 @@ export const shellUi = {
   toggleShortcuts: () => useShellUi.setState((s) => ({ shortcutsOpen: !s.shortcutsOpen })),
   setAbout: (on: boolean) => useShellUi.setState({ aboutOpen: on }),
   setClear: (on: boolean) => useShellUi.setState({ clearOpen: on }),
+  setPresentStage: (r: StageRect | null) =>
+    useShellUi.setState((s) => {
+      const p = s.presentStage;
+      if (p === r || (p && r && p.x === r.x && p.y === r.y && p.w === r.w && p.h === r.h)) return s;
+      return { presentStage: r };
+    }),
 };
 
 /** Width below which the inspector stops docking and becomes an overlay drawer. */

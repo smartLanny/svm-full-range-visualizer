@@ -564,7 +564,14 @@ export default function Chart2DView() {
       {/* workbench: a transport strip that is always there (the plot never reflows) and keeps
           the chart's own controls out of the picture and away from the shell's floating buttons */}
       {!presenting && (
-        <div className="flex shrink-0 items-center gap-2 border-t border-line bg-surface-1 px-3" style={{ height: BAND_H }} data-testid="chart2d-transport">
+        <div
+          className="flex shrink-0 items-center gap-2 border-t border-line bg-surface-1 px-3"
+          style={{ height: BAND_H }}
+          data-testid="chart2d-transport"
+          // toasts keep clear of the band and of the x-axis labels right above it (computeLayout:
+          // 62 px × the UI scale, at most 1.25)
+          data-toast-avoid="78"
+        >
           <div className="hidden min-w-0 flex-1 lg:block" />
           <div className="flex min-w-0 flex-[0_1_720px] justify-center">
             {timelineBar ?? (

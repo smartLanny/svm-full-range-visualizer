@@ -58,3 +58,49 @@ export function reasonsText(t: TFunction, byReason: Partial<Record<string, numbe
     .map((k) => `${k} ${byReason[k]}`);
   return [...known, ...other].join(sep);
 }
+
+export interface DatasetRanges {
+  /** Gray levels of the rows that keep at least one valid cell. */
+  gray: [number, number] | null;
+  /** Level luminance (column header nits) of the columns that keep at least one valid cell. */
+  level: [number, number] | null;
+  svm: [number, number] | null;
+  /** Valid cells. */
+  points: number;
+}
+
+const span = (vs: number[]): [number, number] | null => {
+  let lo = Infinity;
+  let hi = -Infinity;
+  for (const v of vs) {
+    if (!Number.isFinite(v)) continue;
+    if (v < lo) lo = v;
+    if (v > hi) hi = v;
+  }
+  return lo <= hi ? [lo, hi] : null;
+};
+
+/**
+ * Importer preview ranges of what will actually be imported (finding N13): computed from the
+ * valid grid cells, so with the exclusion on they describe the screened dataset, not the raw
+ * table (a −0.05 nits cell with a raw SVM of 62.8 does not widen the SVM range once excluded).
+ */
+export function datasetRanges(ds: Pick<Dataset, 'matrix'>): DatasetRanges {
+  const { rows, headerNits, grid } = ds.matrix;
+  const grays: number[] = [];
+  const levels: number[] = [];
+  const svms: number[] = [];
+  const colUsed = new Set<number>();
+  grid.forEach((row, r) => {
+    let any = false;
+    row.forEach((p, c) => {
+      if (!p || !Number.isFinite(p.svm)) return;
+      any = true;
+      colUsed.add(c);
+      svms.push(p.svm);
+    });
+    if (any) grays.push(rows[r]);
+  });
+  for (const c of colUsed) levels.push(headerNits[c]);
+  return { gray: span(grays), level: span(levels), svm: span(svms), points: svms.length };
+}

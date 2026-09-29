@@ -143,11 +143,13 @@ export function Thumbnail({ rec, clipLowGray, maxNits, colormap, colorMax, slice
 
   return (
     <div>
-      <div className="mb-1.5 flex items-center justify-between gap-2 pl-9 text-2xs text-ink-3">
-        <span className="truncate" title={t('stats.thumb.caption')}>
+      {/* The legend keys move under the caption when both do not fit on one line (narrow cards,
+          or the extra "no valid data" key), so the caption is not cut down to "Heatmap · gr…". */}
+      <div className="mb-1.5 flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5 pl-9 text-2xs text-ink-3">
+        <span className="max-w-full truncate" title={t('stats.thumb.caption')}>
           {t('stats.thumb.caption')}
         </span>
-        <span className="inline-flex shrink-0 items-center gap-2.5">
+        <span className="ml-auto inline-flex shrink-0 items-center gap-2.5">
           {noData && (
             <span className="inline-flex items-center gap-1" title={t('stats.thumb.noDataHint')}>
               <span className="h-2.5 w-3.5 rounded-[2px] ring-1 ring-inset ring-white/10" style={{ background: HATCH_CSS }} />

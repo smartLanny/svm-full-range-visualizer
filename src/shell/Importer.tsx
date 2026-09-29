@@ -11,7 +11,7 @@ import { getJsColor } from '../colormaps';
 import { Button, Checkbox, Dialog, NumberInput, Segmented, cn, toast } from '../ui';
 import { FormRow, TextInput, useFieldId } from './controls';
 import { JSON_ACCEPT, addResults, errorText, pickFiles, readRecordFiles, resultFileLabel, type FileResult } from './fileImport';
-import { applyScreening, mergeByReason, reasonsText, screenDataset, type Screening } from './screening';
+import { applyScreening, datasetRanges, mergeByReason, reasonsText, screenDataset, type Screening } from './screening';
 import { shellUi, useShellUi, type ImporterTab } from './uiStore';
 
 interface ParseOk {
@@ -355,6 +355,10 @@ function PasteTab({ state }: { state: PasteState }) {
   const r = state.result;
   // What will be imported: the parsed table with the accepted exclusions applied.
   const shown = useMemo(() => (r && r.ok ? applyScreening(r.ds, r.screening, state.exclude) : null), [r, state.exclude]);
+  // Ranges of what will be imported (after the exclusion when it is on), not of the raw table.
+  const ranges = useMemo(() => (shown ? datasetRanges(shown) : null), [shown]);
+  // The raw maximum, when the exclusion removed it (shown as "raw max …, excluded").
+  const excludedMax = r && r.ok && ranges?.svm && shown !== r.ds && r.svm[1] > ranges.svm[1] ? r.svm[1] : null;
   const screenings = state.multi ? state.multi.map((m) => (m.res?.ok ? m.res.screening : null)) : r && r.ok ? [r.screening] : [];
   const anyOk = state.multi ? state.multi.some((m) => m.res?.ok) : !!(r && r.ok);
   const devicePlaceholder = useMemo(() => defaultNames(t, 1)[0], [t]);
@@ -489,7 +493,7 @@ function PasteTab({ state }: { state: PasteState }) {
                 <span>{errorText(t, r.error)}</span>
               </div>
             )}
-            {!state.multi && r && r.ok && shown && (
+            {!state.multi && r && r.ok && shown && ranges && (
               <>
                 <div className="flex items-center gap-2 text-xs font-medium text-ink-1">
                   <CheckCircle2 size={15} className="shrink-0 text-green-400" />
@@ -497,16 +501,21 @@ function PasteTab({ state }: { state: PasteState }) {
                 </div>
                 <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-2xs">
                   <dt className="text-ink-3">{t('shell.importer.grayRange')}</dt>
-                  <dd className="text-right font-mono tabular-nums text-ink-1">
-                    G{r.gray[0]} – G{r.gray[1]}
+                  <dd className="text-right font-mono tabular-nums text-ink-1" data-testid="importer-gray-range">
+                    {ranges.gray ? `G${ranges.gray[0]} – G${ranges.gray[1]}` : '—'}
                   </dd>
                   <dt className="text-ink-3">{t('shell.importer.levelRange')}</dt>
-                  <dd className="text-right font-mono tabular-nums text-ink-1">
-                    {fmtNum(r.level[0])} – {fmtNum(r.level[1])} nits
+                  <dd className="text-right font-mono tabular-nums text-ink-1" data-testid="importer-level-range">
+                    {ranges.level ? `${fmtNum(ranges.level[0])} – ${fmtNum(ranges.level[1])} nits` : '—'}
                   </dd>
                   <dt className="text-ink-3">{t('shell.importer.svmRange')}</dt>
-                  <dd className="text-right font-mono tabular-nums text-ink-1">
-                    {r.svm[0].toFixed(3)} – {r.svm[1].toFixed(3)}
+                  <dd className="text-right font-mono tabular-nums text-ink-1" data-testid="importer-svm-range">
+                    {ranges.svm ? `${ranges.svm[0].toFixed(3)} – ${ranges.svm[1].toFixed(3)}` : '—'}
+                    {excludedMax !== null && (
+                      <div className="font-sans text-amber-300/90" title={t('shell.importer.rawMaxHint')}>
+                        {t('shell.importer.rawMax', { v: fmtNum(excludedMax) })}
+                      </div>
+                    )}
                   </dd>
                   <dt className="text-ink-3">{t('shell.importer.points')}</dt>
                   <dd className="text-right font-mono tabular-nums text-ink-1">

@@ -88,7 +88,11 @@ export function subscribeExportTargets(fn: () => void): () => void {
   };
 }
 
-/** Filename-safe slug that keeps CJK characters. */
+/**
+ * Filename-safe slug that keeps CJK characters. Separators (whitespace, characters file systems
+ * reject, and the middle dot of labels like "Xiaomi 18 Pro Max · Adaptive refresh Pro on") collapse
+ * into one '_': "Xiaomi_18_Pro_Max_Adaptive_refresh_Pro_on", never "…_·_…".
+ */
 export function safeFileName(s: string): string {
-  return s.replace(/[\\/:*?"<>|\s]+/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '').slice(0, 80) || 'svm';
+  return s.replace(/[\\/:*?"<>|\s·•・]+/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '').slice(0, 80) || 'svm';
 }
