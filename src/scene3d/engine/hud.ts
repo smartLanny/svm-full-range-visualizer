@@ -7,6 +7,7 @@
 import * as THREE from 'three';
 import type { ColormapType } from '../../types';
 import { colormapCss, divergingCss } from '../../colormaps';
+import { diffColorbarTicks } from './model';
 import { fontString, SANS, type TextTexture } from './text';
 
 export interface Rect {
@@ -16,6 +17,9 @@ export interface Rect {
   y1: number;
 }
 
+/** Axis line color (same as the 3D axis lines). */
+const RULE_COLOR = '#4a5464';
+
 export const rectsOverlap = (a: Rect, b: Rect, pad = 0) => a.x0 < b.x1 + pad && a.x1 + pad > b.x0 && a.y0 < b.y1 + pad && a.y1 + pad > b.y0;
 
 export class Hud {
@@ -23,6 +27,11 @@ export class Hud {
   readonly camera = new THREE.OrthographicCamera(0, 1, 1, 0, -10, 10);
   private pool: THREE.Mesh[] = [];
   private used = 0;
+  /**
+   * Snap quads to whole pixels (crisp text). Off while the camera moves continuously (intro):
+   * labels then glide sub-pixel instead of stepping 1 px every other frame.
+   */
+  snap = true;
   private geo = new THREE.PlaneGeometry(1, 1);
 
   resize(w: number, h: number) {
@@ -56,9 +65,10 @@ export class Hud {
     mat.opacity = Math.min(1, opacity);
     m.visible = true;
     m.renderOrder = this.used;
+    const px = (v: number) => (this.snap ? Math.round(v) : v);
     if (rotation === 0) {
-      const left = Math.round(x);
-      const top = Math.round(yTop);
+      const left = px(x);
+      const top = px(yTop);
       m.position.set(left + w / 2, top - h / 2, 0);
       m.rotation.set(0, 0, 0);
       m.scale.set(w, h, 1);
@@ -66,10 +76,26 @@ export class Hud {
       // Rotated quads: (x, yTop) is the top-left of the ROTATED bounding box.
       const bw = Math.abs(rotation) > 1 ? h : w;
       const bh = Math.abs(rotation) > 1 ? w : h;
-      m.position.set(Math.round(x) + bw / 2, Math.round(yTop) - bh / 2, 0);
+      m.position.set(px(x) + bw / 2, px(yTop) - bh / 2, 0);
       m.rotation.set(0, 0, rotation);
       m.scale.set(w, h, 1);
     }
+  }
+
+  private solidTex: THREE.Texture | null = null;
+
+  /** Solid color rectangle (rulers / tick marks), (x, yTop) = top-left in px. */
+  rule(x: number, yTop: number, w: number, h: number, opacity: number) {
+    if (!this.solidTex) {
+      const c = document.createElement('canvas');
+      c.width = c.height = 2;
+      const ctx = c.getContext('2d')!;
+      ctx.fillStyle = RULE_COLOR;
+      ctx.fillRect(0, 0, 2, 2);
+      this.solidTex = new THREE.CanvasTexture(c);
+      this.solidTex.colorSpace = THREE.SRGBColorSpace;
+    }
+    this.quad(this.solidTex, x, yTop, Math.max(1, w), Math.max(1, h), opacity);
   }
 
   /** Text texture with its box centered at (cx, cy). Returns the rect. */
@@ -87,6 +113,8 @@ export class Hud {
   dispose() {
     for (const m of this.pool) (m.material as THREE.Material).dispose();
     this.geo.dispose();
+    this.solidTex?.dispose();
+    this.solidTex = null;
   }
 }
 
@@ -183,6 +211,10 @@ export interface ColorbarSpec {
   marks: number[];
   /** Diff: end annotations (negative end, positive end). */
   ends?: [string, string];
+  /** Diff: values exist beyond the (negative, positive) end — the scale saturates there. */
+  over?: [boolean, boolean];
+  /** Legend chip for cells without valid data (hatched swatch + this label); omitted when none. */
+  noData?: string;
   orientation: 'vertical' | 'horizontal';
   /** Bar length in CSS px. */
   length: number;
@@ -195,10 +227,7 @@ const fmtTick = (v: number) => {
 };
 
 export function colorbarTicks(spec: Pick<ColorbarSpec, 'kind' | 'max'>): number[] {
-  if (spec.kind === 'diff') {
-    const D = spec.max;
-    return [-D, -D / 2, 0, D / 2, D].map((v) => Number(v.toFixed(3)));
-  }
+  if (spec.kind === 'diff') return diffColorbarTicks(spec.max).map((v) => Number(v.toFixed(3)));
   const base = [0, 0.4, 1, 2, 3, 4, 6, 8, 10];
   const out = base.filter((v) => v <= spec.max + 1e-9);
   if (out[out.length - 1] < spec.max - 1e-9) {
@@ -217,7 +246,14 @@ export function drawColorbarTexture(spec: ColorbarSpec, scale: number, bg: strin
   const titleFont = `600 ${(11.5 * S).toFixed(2)}px ${SANS}`;
   const endFont = `500 ${(10 * S).toFixed(2)}px ${SANS}`;
   const ticks = colorbarTicks(spec);
-  const labels = ticks.map((v) => (spec.kind === 'svm' && Math.abs(v - spec.max) < 1e-9 && spec.max >= 4 ? `${fmtTick(v)}+` : fmtTick(v)));
+  const labels = ticks.map((v) => {
+    if (spec.kind === 'svm') return Math.abs(v - spec.max) < 1e-9 && spec.max >= 4 ? `${fmtTick(v)}+` : fmtTick(v);
+    // Diff: signed; a saturating end reads "≥ +R" / "≤ −R".
+    const txt = v > 0 ? `+${fmtTick(v)}` : fmtTick(v);
+    if (v >= spec.max - 1e-9 && spec.over?.[1]) return `≥ ${txt}`;
+    if (v <= -spec.max + 1e-9 && spec.over?.[0]) return `≤ ${txt}`;
+    return txt;
+  });
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d')!;
   ctx.font = tickFont;
@@ -228,13 +264,51 @@ export function drawColorbarTexture(spec: ColorbarSpec, scale: number, bg: strin
   const endW = spec.ends ? Math.max(...spec.ends.map((e) => ctx.measureText(e).width)) / S : 0;
   const colorAt = (u: number) => (spec.kind === 'diff' ? divergingCss(-1 + 2 * u) : colormapCss(spec.colormap, u * spec.max, spec.max));
   const valueToU = (v: number) => (spec.kind === 'diff' ? (v + spec.max) / (2 * spec.max) : v / spec.max);
-  const arrow = spec.kind === 'svm' ? 7 : 0; // extension triangle at the top (values above max)
+  // Extension triangles where values continue beyond the scale: the top of the SVM map, the
+  // saturating ends of the ΔSVM map.
+  const arrowHi = spec.kind === 'svm' || spec.over?.[1] ? 7 : 0;
+  const arrowLo = spec.kind === 'diff' && spec.over?.[0] ? 7 : 0;
+  const arrow = arrowHi;
+  const chip = spec.noData ? 22 : 0; // legend row height (CSS px)
+  ctx.font = endFont;
+  const chipW = spec.noData ? 12 + 6 + ctx.measureText(spec.noData).width / S : 0;
+  /** "No data" legend chip: hatched swatch (as drawn under missing cells) + label; (x, yMid) in px. */
+  const drawChip = (x: number, yMid: number) => {
+    if (!spec.noData) return;
+    const sw = 12 * S;
+    const y0 = Math.round(yMid - sw / 2);
+    const x0 = Math.round(x);
+    ctx.save();
+    ctx.fillStyle = '#0d1117';
+    ctx.fillRect(x0, y0, sw, sw);
+    ctx.beginPath();
+    ctx.rect(x0, y0, sw, sw);
+    ctx.clip();
+    ctx.strokeStyle = '#5b6576';
+    ctx.lineWidth = Math.max(1, S);
+    // Same direction as the floor hatch in the plot (top-left to bottom-right).
+    for (let k = -sw; k < sw * 2; k += 4 * S) {
+      ctx.beginPath();
+      ctx.moveTo(x0 + k, y0);
+      ctx.lineTo(x0 + k + sw, y0 + sw);
+      ctx.stroke();
+    }
+    ctx.restore();
+    ctx.strokeStyle = 'rgba(255,255,255,0.22)';
+    ctx.lineWidth = Math.max(1, S);
+    ctx.strokeRect(x0 + 0.5 * S, y0 + 0.5 * S, sw - S, sw - S);
+    ctx.font = endFont;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#aeb7c4';
+    ctx.fillText(spec.noData, x0 + sw + 6 * S, yMid);
+  };
 
   if (spec.orientation === 'vertical') {
     const titleH = 22;
     const endH = spec.ends ? 16 : 0;
-    const wCss = Math.max(barT + 6 + maxLabelW + 4, titleW + 2, endW + 2) + 4;
-    const hCss = titleH + arrow + L + endH * 2 + 8;
+    const wCss = Math.max(barT + 6 + maxLabelW + 4, titleW + 2, endW + 2, chipW + 2) + 4;
+    const hCss = titleH + arrow + L + arrowLo + endH * 2 + 8 + chip;
     canvas.width = Math.ceil(wCss * S);
     canvas.height = Math.ceil(hCss * S);
     const bx = 2 * S;
@@ -260,6 +334,15 @@ export function drawColorbarTexture(spec: ColorbarSpec, scale: number, bg: strin
       ctx.moveTo(bx, by + 0.5);
       ctx.lineTo(bx + bw / 2, by - arrow * S);
       ctx.lineTo(bx + bw, by + 0.5);
+      ctx.closePath();
+      ctx.fill();
+    }
+    if (arrowLo) {
+      ctx.fillStyle = colorAt(0);
+      ctx.beginPath();
+      ctx.moveTo(bx, by + bh - 0.5);
+      ctx.lineTo(bx + bw / 2, by + bh + arrowLo * S);
+      ctx.lineTo(bx + bw, by + bh - 0.5);
       ctx.closePath();
       ctx.fill();
     }
@@ -292,15 +375,17 @@ export function drawColorbarTexture(spec: ColorbarSpec, scale: number, bg: strin
       ctx.font = endFont;
       ctx.textBaseline = 'alphabetic';
       ctx.fillStyle = '#4b8bd4';
-      ctx.fillText(spec.ends[0], bx, by + bh + 14 * S);
+      ctx.fillText(spec.ends[0], bx, by + bh + (arrowLo + 14) * S);
     }
+    drawChip(bx, by + bh + (arrowLo + endH + 4 + chip / 2) * S);
   } else {
     const hCss = 16 + barT + 6 + 14 + 4;
     const labelW = Math.max(titleW, spec.ends ? 0 : 0) + 10;
-    const wCss = labelW + arrow + L + 8 + maxLabelW / 2 + 4;
+    const chipGap = spec.noData ? 18 : 0;
+    const wCss = labelW + arrowLo + arrow + L + 8 + maxLabelW / 2 + 4 + chipGap + chipW;
     canvas.width = Math.ceil(wCss * S);
     canvas.height = Math.ceil(hCss * S);
-    const bx = labelW * S;
+    const bx = (labelW + arrowLo) * S;
     const by = 16 * S;
     const bw = L * S;
     const bh = barT * S;
@@ -308,6 +393,15 @@ export function drawColorbarTexture(spec: ColorbarSpec, scale: number, bg: strin
     ctx.fillStyle = '#c9d0db';
     ctx.textBaseline = 'middle';
     ctx.fillText(spec.title, 0, by + bh / 2);
+    if (arrowLo) {
+      ctx.fillStyle = colorAt(0);
+      ctx.beginPath();
+      ctx.moveTo(bx + 0.5, by);
+      ctx.lineTo(bx - arrowLo * S, by + bh / 2);
+      ctx.lineTo(bx + 0.5, by + bh);
+      ctx.closePath();
+      ctx.fill();
+    }
     const grad = ctx.createLinearGradient(bx, 0, bx + bw, 0);
     for (let i = 0; i <= 48; i++) grad.addColorStop(i / 48, colorAt(i / 48));
     ctx.fillStyle = grad;
@@ -351,6 +445,7 @@ export function drawColorbarTexture(spec: ColorbarSpec, scale: number, bg: strin
       ctx.fillStyle = '#e0714f';
       ctx.fillText(spec.ends[1], bx + bw, by - 3 * S);
     }
+    drawChip(bx + bw + (arrow + 8 + maxLabelW / 2 + chipGap) * S, by + bh / 2);
   }
   const inset = Math.round(8 * S);
   return toTexture(withGlow(canvas, bg, inset), inset);

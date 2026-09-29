@@ -7,7 +7,7 @@
  *   "color max" is applied by rescaling the input: s = svm * 4 / colorMax.
  * - Stop values are LINEAR-light RGB. They are displayed through the sRGB transfer function
  *   (three.js output encoding; `colormapCss` for canvases), exactly like v1 rendered them.
- * - The diverging ΔSVM map takes t in [-1, 1] (negative = blue, 0 = neutral gray, positive = red).
+ * - The diverging ΔSVM map takes t in [-1, 1] (negative = blue, 0 = near-white neutral, positive = red).
  */
 import * as THREE from 'three';
 import { ColormapType } from './types';
@@ -91,15 +91,17 @@ const hexLinear = (hex: string): RGB => {
 };
 
 /**
- * ΔSVM diverging map over t in [-1, 1], designed in sRGB for a dark background: neutral gray at 0,
- * increasingly saturated blue (A lower = better) / red (A higher = worse) toward the extremes.
+ * ΔSVM diverging map over t in [-1, 1], designed in sRGB for a dark background: blue – white – red.
+ * A light (near-white) neutral at 0 so "no difference" reads as blank and even small differences
+ * show their sign; increasingly saturated and darker blue (A lower = better) / red (A higher =
+ * worse) toward the extremes, which stay distinct from the dark page.
  */
 export const DIVERGING_STOPS: readonly ColormapStop[] = [
   s(-1, hexLinear('#2156a8')),
   s(-0.5, hexLinear('#4b8bd4')),
-  s(-0.15, hexLinear('#8fa6c2')),
-  s(0, hexLinear('#9a9ea6')),
-  s(0.15, hexLinear('#c6a497')),
+  s(-0.15, hexLinear('#b3c6de')),
+  s(0, hexLinear('#dfe1e5')),
+  s(0.15, hexLinear('#e5c5b8')),
   s(0.5, hexLinear('#e0714f')),
   s(1, hexLinear('#b01c2e')),
 ];

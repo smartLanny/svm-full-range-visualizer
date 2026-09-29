@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { ColormapType } from '../../types';
 import { linearToCss, relativeLuminance, sampleColormap, sampleDiverging } from '../../colormaps';
 import type { PanelModel } from './model';
+import type { LabelBox } from './contours';
 import { SANS } from './text';
 
 export interface ValuesTextureOptions {
@@ -32,7 +33,19 @@ export function formatCellValue(v: number, kind: 'svm' | 'diff'): string {
 const MIN_CSS = 7;
 const MAX_CSS = 12.5;
 
-export function buildValuesTexture(panel: PanelModel, opt: ValuesTextureOptions, maxTex = 4096): THREE.CanvasTexture | null {
+export interface ValuesLayer {
+  texture: THREE.CanvasTexture;
+  /**
+   * World boxes (xz) of the printed values, padded by ~4 CSS px: contour lines are cut here while
+   * the value table shows, so no line ever crosses a number (docs/adr/0002).
+   */
+  boxes: LabelBox[];
+}
+
+/** Padding (CSS px) around a printed value that contour lines keep clear of. */
+const BOX_PAD = 4;
+
+export function buildValuesTexture(panel: PanelModel, opt: ValuesTextureOptions, maxTex = 4096): ValuesLayer | null {
   const { x0, x1, z0, z1 } = panel.rect;
   const cssPerWorld = 1 / Math.max(1e-6, opt.worldPerCssPx);
   // Texture density: device px with 2x headroom for zooming in, capped.
@@ -54,6 +67,9 @@ export function buildValuesTexture(panel: PanelModel, opt: ValuesTextureOptions,
     text: string;
     cx: number;
     cy: number;
+    /** World center. */
+    wx: number;
+    wz: number;
     fit: number;
     dark: boolean;
     /** Cell color (display sRGB): used as a halo that masks contour lines under the digits. */
@@ -75,7 +91,7 @@ export function buildValuesTexture(panel: PanelModel, opt: ValuesTextureOptions,
       const cy = (zc - z0) * texPerWorld;
       if (panel.kind === 'diff') sampleDiverging(v / Math.max(1e-6, opt.colorMax), lin);
       else sampleColormap(opt.colormap, v, opt.colorMax, lin);
-      cells.push({ text, cx, cy, fit, dark: relativeLuminance(lin) > 0.28, bg: linearToCss(lin) });
+      cells.push({ text, cx, cy, wx: (panel.xe[c] + panel.xe[c + 1]) / 2, wz: zc, fit, dark: relativeLuminance(lin) > 0.28, bg: linearToCss(lin) });
     }),
   );
   if (cells.length === 0) return null;
@@ -84,10 +100,15 @@ export function buildValuesTexture(panel: PanelModel, opt: ValuesTextureOptions,
   const nominal = Math.max(MIN_CSS, Math.min(MAX_CSS, fits[Math.floor(fits.length * 0.3)]));
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
+  const boxes: LabelBox[] = [];
+  const worldPerCss = 1 / cssPerWorld;
   for (const cell of cells) {
     const fs = Math.min(nominal, cell.fit);
     if (fs < MIN_CSS) continue;
     ctx.font = `600 ${(fs * texPerCss).toFixed(2)}px ${SANS}`;
+    const wCss = ctx.measureText(cell.text).width / texPerCss;
+    // Digits (no descenders): ~0.74 em tall around the middle baseline.
+    boxes.push({ x: cell.wx, y: 0, z: cell.wz + fs * 0.04 * worldPerCss, hw: (wCss / 2 + BOX_PAD) * worldPerCss, hh: (fs * 0.37 + BOX_PAD) * worldPerCss });
     const y = cell.cy + fs * texPerCss * 0.04;
     ctx.lineJoin = 'round';
     ctx.lineWidth = Math.max(1, fs * texPerCss * 0.2);
@@ -102,5 +123,5 @@ export function buildValuesTexture(panel: PanelModel, opt: ValuesTextureOptions,
   tex.minFilter = THREE.LinearMipmapLinearFilter;
   tex.magFilter = THREE.LinearFilter;
   tex.anisotropy = 4;
-  return tex;
+  return { texture: tex, boxes };
 }
