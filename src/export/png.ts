@@ -11,7 +11,7 @@ export interface PngResult {
 }
 
 export function pngFileName(target: ExportTarget, size: ExportSize): string {
-  return `${target.fileName()}_${size.width}x${size.height}.png`;
+  return `${target.fileName('image')}_${size.width}x${size.height}.png`;
 }
 
 /** Render the target's current static state at exactly `size` and encode it as PNG. */

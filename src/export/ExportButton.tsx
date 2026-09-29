@@ -15,21 +15,24 @@ if (import.meta.env.DEV) {
 
 /**
  * Header entry point for PNG / video export (docs/adr/0010). Exports the active tab's view;
- * disabled with a hint on the stats tab or while the view has not registered an ExportTarget.
+ * disabled with a hint on the stats tab, when there are no records, or while the view has not
+ * registered an ExportTarget.
  */
 export default function ExportButton() {
   const t = useT();
   const tab = useAppStore((s) => s.tab);
   const target = useExportTarget(tab);
   const busy = useExportSession((s) => s.job !== null);
+  const empty = useAppStore((s) => s.records.length === 0);
   const [open, setOpen] = useState(false);
 
-  const reason = tab === 'stats' ? t('export.unavailableStats') : !target ? t('export.unavailableView') : null;
+  const reason =
+    tab === 'stats' ? t('export.unavailableStats') : empty ? t('export.unavailableEmpty') : !target ? t('export.unavailableView') : null;
 
-  // Close the dialog if its target disappears (tab switch, view unmount).
+  // Close the dialog if its target disappears (tab switch, view unmount) or the last record goes.
   useEffect(() => {
-    if (open && !target) setOpen(false);
-  }, [open, target]);
+    if (open && (!target || empty)) setOpen(false);
+  }, [open, target, empty]);
 
   // While exporting, swallow keyboard input so global shortcuts (Space, ←/→, R) cannot drive
   // the view mid-export. Esc cancels.
@@ -63,7 +66,7 @@ export default function ExportButton() {
           {t('export.button')}
         </Button>
       </span>
-      {target && <ExportDialog open={open && !busy} onClose={() => setOpen(false)} target={target} />}
+      {target && <ExportDialog open={open && !busy && !empty} onClose={() => setOpen(false)} target={target} />}
       <ExportProgress />
     </>
   );

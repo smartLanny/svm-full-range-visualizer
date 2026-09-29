@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Box, Clapperboard, Download, Film, Image as ImageIcon, LineChart } from 'lucide-react';
+import { Box, Clapperboard, Download, Film, Image as ImageIcon, Info, LineChart } from 'lucide-react';
 import { useT } from '../i18n';
+import { useAppStore } from '../store/appStore';
 import { Button, Dialog, Segmented, cn } from '../ui';
 import {
   ASPECTS,
@@ -131,12 +132,14 @@ export default function ExportDialog({ open, onClose, target }: ExportDialogProp
   const [prefs, setPrefs] = useState<Prefs>(loadPrefs);
   const [windowSize, setWindowSize] = useState<ExportSize>(() => currentViewSize(target));
   const [encoder, setEncoder] = useState<EncoderStatus>({ state: 'checking' });
+  // The 3D intro always plays record A alone (docs/adr/0010, contract C6).
+  const layout = useAppStore((s) => s.layout);
 
   const anim = open ? target.animation() : null;
   const kind: ExportKind = anim ? prefs.kind : 'image';
   const isVideo = kind === 'video';
 
-  // Refresh the "current window" size each time the dialog opens.
+  // Refresh the "current view" size each time the dialog opens.
   useEffect(() => {
     if (open) setWindowSize(currentViewSize(target));
   }, [open, target]);
@@ -191,6 +194,7 @@ export default function ExportDialog({ open, onClose, target }: ExportDialogProp
   const aspectName = (a: ExportAspect) => (a === '16:9' ? t('export.aspect.landscape') : a === '9:16' ? t('export.aspect.portrait') : t('export.aspect.square'));
 
   const ViewIcon = target.id === 'scene3d' ? Box : LineChart;
+  const introLayoutNote = target.id === 'scene3d' && anim && layout !== 'single' ? t('export.layoutNote') : null;
 
   let encoderLine: React.ReactNode = null;
   if (isVideo) {
@@ -249,6 +253,12 @@ export default function ExportDialog({ open, onClose, target }: ExportDialogProp
             </div>
           </div>
         </div>
+        {introLayoutNote && (
+          <p className="-mt-2 flex items-start gap-1.5 px-1 text-2xs leading-snug text-ink-3" data-testid="export-layout-note">
+            <Info size={12} className="mt-px shrink-0 text-accent-hover" />
+            <span>{introLayoutNote}</span>
+          </p>
+        )}
 
         <Row label={t('export.kind.label')}>
           <Segmented<ExportKind>

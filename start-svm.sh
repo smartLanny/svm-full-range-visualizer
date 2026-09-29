@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # SVM 全范围可视化 — Linux quick launcher (docs/adr/0008).
 # Opens the offline single-file build as an app window (Chromium / Chrome / Edge --app), or with
-# xdg-open; without the release file it starts the dev server (needs Node.js 18+).
+# xdg-open; without the release file it starts the dev server (needs Node.js 20.19+ or 22.12+).
 cd "$(dirname "$0")" || exit 1
 ROOT="$PWD"
 APP="$ROOT/release/SVM-Visualizer.html"
+NODE_OK_JS="const [a,b]=process.versions.node.split('.').map(Number);process.exit((a===20&&b>=19)||(a===22&&b>=12)||a>22?0:1)"
 
 # Percent-encode a path for a file:// URL (byte-wise; keeps / and unreserved characters).
 urlencode_path() {
@@ -34,7 +35,13 @@ fi
 
 if ! command -v node >/dev/null 2>&1; then
   echo "未找到离线版文件 release/SVM-Visualizer.html，也没有安装 Node.js。"
-  echo "请下载包含 release 文件夹的完整版本，或安装 Node.js 18+（https://nodejs.org/）后重新运行。"
+  echo "请下载包含 release 文件夹的完整版本，或安装 Node.js 22 LTS（至少 20.19 或 22.12，https://nodejs.org/）后重新运行。"
+  exit 1
+fi
+# Same range as package.json "engines" (@vitejs/plugin-react needs ^20.19 or >=22.12).
+if ! node -e "$NODE_OK_JS" >/dev/null 2>&1; then
+  echo "未找到离线版文件 release/SVM-Visualizer.html，而本机的 Node.js $(node -v 2>/dev/null) 版本过旧，无法启动开发服务。"
+  echo "请下载包含 release 文件夹的完整版本，或升级到 Node.js 22 LTS（至少 20.19 或 22.12，https://nodejs.org/）后重新运行。"
   exit 1
 fi
 if [ ! -d node_modules ]; then

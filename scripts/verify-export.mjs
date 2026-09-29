@@ -17,8 +17,12 @@ const outDir = process.argv[3] || 'snap-out/export';
 fs.mkdirSync(outDir, { recursive: true });
 const { chromium } = await import(process.env.PW_MODULE || 'playwright');
 
+// Chromium on Linux turns a non-ASCII download name into "download" when the process locale is
+// not UTF-8 (e.g. LANG unset / C in containers); real desktops are UTF-8. Match them.
+const utf8 = /utf-?8/i.test(process.env.LC_ALL || process.env.LC_CTYPE || process.env.LANG || '');
 const browser = await chromium.launch({
   args: ['--no-proxy-server', '--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'],
+  env: utf8 ? process.env : { ...process.env, LC_ALL: 'C.UTF-8' },
 });
 let failures = 0;
 const ok = (cond, msg) => {

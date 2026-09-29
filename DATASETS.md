@@ -14,12 +14,13 @@
 
 ## 数据结构
 
-- `data`：有效测量点的扁平列表，包含 `gray`、`brightnessPercent`、`nits`、`svm`
+- `data`：有效测量点的扁平列表，包含 `gray`、`brightnessPercent`、`nits`、`svm`（为兼容 v1 保留；应用加载时总是由 `matrix.grid` 重新生成，离线版只内嵌 `matrix`）
 - `matrix.rows`：灰阶轴
 - `matrix.cols`：亮度百分比轴
 - `matrix.grid`：按灰阶与亮度组织的二维数据；无有效记录的位置保留为 `null`
 - `matrix.headerNits`：最高灰阶对应的亮度参考值（即“档位亮度”，3D 与热力图的横轴）
 - `device` / `mode`（v2 导出时写入，可选）：机型与模式
+- `excluded`（可选）：被剔除的原始测量点，每项是测量点加上 `reason`（`belowNoise` / `duplicateColumn` / `duplicateRow` / `nitsShift` / `svmSpike`）和说明 `detail`；这些位置在 `matrix.grid` 中为 `null`
 
 `manifest.json` 中每条记录的字段：`file`（文件名，区分大小写）、`device`、`mode`，以及可选的英文名 `deviceEn`、`modeEn`。应用按清单顺序加载；2D 图中同一 `device` 同一颜色（按首次出现顺序分配），不同 `mode` 用不同线型。新增记录请追加到末尾，这样已有机型的颜色不会变化。
 
