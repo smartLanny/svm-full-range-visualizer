@@ -36,16 +36,22 @@ export function parseRawData(raw: string, name: string, correctionFactor = 1.0):
   const grayRows: number[] = [];
   const grid: (DataPoint | null)[][] = [];
 
-  for (let i = headerLineIdx + 1; i < lines.length; i++) {
-    const line = lines[i].trim();
-    if (!line) continue;
-    const tokens = line.split(/\t+/);
+  // Data rows split on SINGLE tabs: an empty cell (missing measurement) must keep its column
+  // instead of shifting the following values left. The layout (dual "nits<TAB>svm" columns vs
+  // compact "nits svm" cells) is decided once for the whole table, so rows with missing
+  // trailing cells are still read in the right layout.
+  const dataRows = lines
+    .slice(headerLineIdx + 1)
+    .map((l) => l.trim())
+    .filter((l) => l && !Number.isNaN(parseInt(l.split('\t')[0], 10)))
+    .map((l) => l.split('\t'));
+  const isDualColMode = dataRows.some((tokens) => tokens.length - 1 >= brightnessCols.length * 1.5);
+
+  for (const tokens of dataRows) {
     const grayLevel = parseInt(tokens[0], 10);
-    if (Number.isNaN(grayLevel)) continue;
 
     grayRows.push(grayLevel);
     const rowPoints: (DataPoint | null)[] = [];
-    const isDualColMode = tokens.length - 1 >= brightnessCols.length * 1.5;
 
     for (let j = 0; j < brightnessCols.length; j++) {
       let nits = NaN;
