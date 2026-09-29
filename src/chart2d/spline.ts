@@ -2,13 +2,14 @@
  * Monotone cubic (Fritsch–Carlson) interpolation.
  *
  * Used twice in the 2D chart:
- * - to draw each curve through its slice points (in axis space: log10 nits or gray), and
+ * - to draw each curve through its slice points (in axis space: log10 nits or gray; see
+ *   buildCurve: a parametric form with per-point opacity), and
  * - to interpolate the measurement grid ALONG the sweep parameter (gray rows / level columns),
  *   so that the curves move with C1-continuous velocity during a sweep instead of the
  *   piecewise-linear "kinks" of bilinear interpolation (which read as visual stutter).
  *
  * Fritsch–Carlson is affine-invariant in each axis (its limiter works on ratios m/Δ), so a
- * spline built in axis space maps exactly onto screen space by transforming the Bézier
+ * curve built in axis space maps exactly onto screen space by transforming the Bézier
  * control points, and evaluating it for the hover read-out matches the drawn line.
  */
 
@@ -130,32 +131,215 @@ export function evalSpline(s: Spline, x: number): number | null {
   return hermite(s.xs[lo], s.xs[hi], s.ys[lo], s.ys[hi], s.ms[lo], s.ms[hi], x);
 }
 
-export interface PathSink {
-  moveTo(x: number, y: number): void;
-  lineTo(x: number, y: number): void;
-  bezierCurveTo(c1x: number, c1y: number, c2x: number, c2y: number, x: number, y: number): void;
+// ---------------------------------------------------------------------------------------------
+// Curves with per-point opacity (sweeps over records with missing cells, docs/adr/0003).
+
+export interface CurveNode {
+  x: number;
+  y: number;
+  /** Opacity 0..1 (points entering / leaving the slice fade). */
+  a: number;
+  /**
+   * Measured column / row of the point. The curve runs through the nodes in key order (the
+   * order of the measurement sequence), and a key missing between two nodes is a gap.
+   */
+  key: number;
+}
+
+/** Dotted connection across a gap (missing / excluded samples) between two opaque nodes. */
+export interface Bridge {
+  i0: number;
+  i1: number;
+  /** Tangents (d/ds) at both ends, already limited for this span. */
+  mx0: number;
+  my0: number;
+  mx1: number;
+  my1: number;
+  alpha: number;
 }
 
 /**
- * Trace the spline as cubic Béziers after an affine map (px = ax*x + bx, py = ay*y + by).
- * A single point is traced as a zero-length segment (round caps render it as a dot).
+ * Parametric monotone curve: x(s) and y(s) are each Fritsch–Carlson cubics over a chord-length
+ * parameter s. When x increases along the nodes (the normal case) this is, up to a tiny
+ * second-order term, the monotone spline y(x) of buildSpline; when two readings share an x
+ * (quantised nits) or swap order (a stale reading), the curve stays continuous instead of
+ * reordering its nodes, so a sweep never flips the curve between two shapes.
  */
-export function traceSpline(s: Spline, sink: PathSink, ax: number, bx: number, ay: number, by: number) {
-  const n = s.xs.length;
-  if (n === 0) return;
-  sink.moveTo(ax * s.xs[0] + bx, ay * s.ys[0] + by);
-  if (n === 1) {
-    sink.lineTo(ax * s.xs[0] + bx + 0.01, ay * s.ys[0] + by);
-    return;
+export interface Curve {
+  xs: Float64Array;
+  ys: Float64Array;
+  /** Chord-length parameter per node (strictly increasing). */
+  ss: Float64Array;
+  /** Tangents dx/ds, dy/ds per node. */
+  mx: Float64Array;
+  my: Float64Array;
+  /** Node opacity. */
+  a: Float64Array;
+  /** Opacity of the solid segment i → i+1 (0 = not drawn: a gap). Length n-1. */
+  seg: Float64Array;
+  /** Opacity of the dot drawn for a node without any drawn segment. */
+  dot: Float64Array;
+  bridges: Bridge[];
+}
+
+/** Weight of |Δy| in the chord parameter: s ≈ x for ordinary curves, > 0 for equal x. */
+const CHORD_Y = 0.05;
+
+/** Fritsch–Carlson limiter for one segment, blended in with weight w (keeps continuity). */
+function limitSegment(m0: number, m1: number, d: number, w: number): [number, number] {
+  if (w <= 0) return [m0, m1];
+  let a0 = 0;
+  let a1 = 0;
+  if (d !== 0) {
+    a0 = Math.max(0, m0 / d);
+    a1 = Math.max(0, m1 / d);
+    const s = a0 * a0 + a1 * a1;
+    if (s > 9) {
+      const tau = 3 / Math.sqrt(s);
+      a0 *= tau;
+      a1 *= tau;
+    }
   }
+  return [m0 + w * (a0 * d - m0), m1 + w * (a1 * d - m1)];
+}
+
+/**
+ * One-coordinate tangents over s. Each node blends the two-sided Fritsch–Carlson slope with the
+ * one-sided end slopes by the opacity of its two segments, so the shape changes continuously
+ * while a neighbour fades out (and does not jump when it is finally gone).
+ */
+function blendedSlopes(ss: Float64Array, vs: Float64Array, seg: Float64Array): Float64Array {
+  const n = vs.length;
+  const d = new Float64Array(Math.max(0, n - 1));
+  for (let i = 0; i < n - 1; i++) d[i] = (vs[i + 1] - vs[i]) / (ss[i + 1] - ss[i]);
+  const m = new Float64Array(n);
+  for (let i = 0; i < n; i++) {
+    const wl = i > 0 ? seg[i - 1] : 0;
+    const wr = i < n - 1 ? seg[i] : 0;
+    const dl = i > 0 ? d[i - 1] : 0;
+    const dr = i < n - 1 ? d[i] : 0;
+    const both = dl * dr <= 0 ? 0 : (dl + dr) / 2;
+    m[i] = wl * wr * both + wl * (1 - wr) * dl + (1 - wl) * wr * dr;
+  }
+  for (let k = 0; k < n - 1; k++) [m[k], m[k + 1]] = limitSegment(m[k], m[k + 1], d[k], seg[k]);
+  return m;
+}
+
+/**
+ * Curve through nodes (any order; sorted by key here), each with an opacity. The drawing is a
+ * CONTINUOUS function of the node positions and opacities, so a sweep never pops:
+ * - segment opacity = min of its two nodes, or 0 across a gap (a key missing in between);
+ * - tangents blend with the neighbouring segments' opacity (blendedSlopes);
+ * - between two opaque nodes with a gap (or fading nodes) in between, a dotted bridge fades in
+ *   as the nodes in between fade out. It is never solid: an excluded sample is not bridged
+ *   silently.
+ * With every node opaque and no gap this is the ordinary monotone spline.
+ */
+export function buildCurve(nodes: CurveNode[]): Curve | null {
+  const pts = nodes.filter((p) => Number.isFinite(p.x) && Number.isFinite(p.y) && p.a > 0).sort((p, q) => p.key - q.key);
+  const n = pts.length;
+  if (n === 0) return null;
+  const xs = Float64Array.from(pts, (p) => p.x);
+  const ys = Float64Array.from(pts, (p) => p.y);
+  const a = Float64Array.from(pts, (p) => Math.min(1, p.a));
+  const ss = new Float64Array(n);
+  for (let i = 1; i < n; i++) ss[i] = ss[i - 1] + Math.max(1e-9, Math.hypot(xs[i] - xs[i - 1], CHORD_Y * (ys[i] - ys[i - 1])));
+  const seg = new Float64Array(Math.max(0, n - 1));
+  const gap = new Uint8Array(Math.max(0, n - 1));
   for (let i = 0; i < n - 1; i++) {
-    const x0 = s.xs[i];
-    const x1 = s.xs[i + 1];
-    const h = (x1 - x0) / 3;
-    const c1x = x0 + h;
-    const c1y = s.ys[i] + s.ms[i] * h;
-    const c2x = x1 - h;
-    const c2y = s.ys[i + 1] - s.ms[i + 1] * h;
-    sink.bezierCurveTo(ax * c1x + bx, ay * c1y + by, ax * c2x + bx, ay * c2y + by, ax * x1 + bx, ay * s.ys[i + 1] + by);
+    gap[i] = pts[i + 1].key - pts[i].key > 1 ? 1 : 0;
+    seg[i] = gap[i] ? 0 : Math.min(a[i], a[i + 1]);
   }
+  const mx = blendedSlopes(ss, xs, seg);
+  const my = blendedSlopes(ss, ys, seg);
+  const dot = new Float64Array(n);
+  for (let i = 0; i < n; i++) dot[i] = a[i] * (1 - Math.max(i > 0 ? seg[i - 1] : 0, i < n - 1 ? seg[i] : 0));
+
+  // Bridges over gaps. Bridge i → j (i < j) spans the nodes strictly between them and any
+  // missing keys; opacity = min(a_i, a_j) × (1 − max opacity of the nodes in between), so a
+  // bridge grows exactly as the nodes it replaces fade out (and fades with its end points).
+  const bridges: Bridge[] = [];
+  for (let i = 0; i < n - 1; i++) {
+    for (let j = i + 1; j < n && j <= i + 4; j++) {
+      let maxA = 0;
+      for (let k = i + 1; k < j; k++) maxA = Math.max(maxA, a[k]);
+      if (j === i + 1 && !gap[i]) continue;
+      const alpha = Math.min(a[i], a[j]) * (1 - maxA);
+      if (alpha <= 1e-4) continue;
+      const h = ss[j] - ss[i];
+      const [mx0, mx1] = limitSegment(mx[i], mx[j], (xs[j] - xs[i]) / h, 1);
+      const [my0, my1] = limitSegment(my[i], my[j], (ys[j] - ys[i]) / h, 1);
+      bridges.push({ i0: i, i1: j, mx0, my0, mx1, my1, alpha });
+    }
+  }
+  return { xs, ys, ss, mx, my, a, seg, dot, bridges };
+}
+
+export type Bezier = [number, number, number, number, number, number, number, number];
+
+/** Cubic Bézier (x0, y0, c1x, c1y, c2x, c2y, x1, y1) of segment i → i+1, in axis units. */
+export function segmentBezier(c: Curve, i: number): Bezier {
+  const h = (c.ss[i + 1] - c.ss[i]) / 3;
+  return [c.xs[i], c.ys[i], c.xs[i] + c.mx[i] * h, c.ys[i] + c.my[i] * h, c.xs[i + 1] - c.mx[i + 1] * h, c.ys[i + 1] - c.my[i + 1] * h, c.xs[i + 1], c.ys[i + 1]];
+}
+
+/** Cubic Bézier of a bridge, in axis units. */
+export function bridgeBezier(c: Curve, b: Bridge): Bezier {
+  const h = (c.ss[b.i1] - c.ss[b.i0]) / 3;
+  return [c.xs[b.i0], c.ys[b.i0], c.xs[b.i0] + b.mx0 * h, c.ys[b.i0] + b.my0 * h, c.xs[b.i1] - b.mx1 * h, c.ys[b.i1] - b.my1 * h, c.xs[b.i1], c.ys[b.i1]];
+}
+
+/** Point on a Bézier at parameter u ∈ [0, 1]. */
+export function bezierAt(b: Bezier, u: number): [number, number] {
+  const v = 1 - u;
+  const k0 = v * v * v;
+  const k1 = 3 * v * v * u;
+  const k2 = 3 * v * u * u;
+  const k3 = u * u * u;
+  return [k0 * b[0] + k1 * b[2] + k2 * b[4] + k3 * b[6], k0 * b[1] + k1 * b[3] + k2 * b[5] + k3 * b[7]];
+}
+
+/**
+ * Curve value at x, or null outside the curve, inside a gap, or where the curve is mostly
+ * faded (< 50 % opacity: a point entering / leaving the slice is not a reading). Where the curve
+ * passes x more than once (equal or swapped readings) the segment latest in the measurement
+ * order (the brightest column) wins.
+ */
+export function evalCurve(c: Curve, x: number): number | null {
+  const n = c.xs.length;
+  if (n === 1) return c.a[0] >= 0.5 && Math.abs(x - c.xs[0]) < 1e-9 ? c.ys[0] : null;
+  for (let i = n - 2; i >= 0; i--) {
+    if (c.seg[i] < 0.5) continue;
+    const x0 = c.xs[i];
+    const x1 = c.xs[i + 1];
+    if (x < Math.min(x0, x1) - 1e-12 || x > Math.max(x0, x1) + 1e-12) continue;
+    const b = segmentBezier(c, i);
+    if (x1 === x0) return Math.max(c.ys[i], c.ys[i + 1]);
+    // x(u) is monotone on a segment (Fritsch–Carlson in x): bisection.
+    const up = x1 > x0;
+    let lo = 0;
+    let hi = 1;
+    for (let k = 0; k < 40; k++) {
+      const mid = (lo + hi) / 2;
+      const xm = bezierAt(b, mid)[0];
+      if (xm < x === up) lo = mid;
+      else hi = mid;
+    }
+    return bezierAt(b, (lo + hi) / 2)[1];
+  }
+  return null;
+}
+
+/** x range covered by drawn (≥ 50 % opaque) segments, or null. */
+export function curveXRange(c: Curve): [number, number] | null {
+  let lo = Infinity;
+  let hi = -Infinity;
+  const n = c.xs.length;
+  if (n === 1 && c.a[0] >= 0.5) return [c.xs[0], c.xs[0]];
+  for (let i = 0; i < n - 1; i++) {
+    if (c.seg[i] < 0.5) continue;
+    lo = Math.min(lo, c.xs[i], c.xs[i + 1]);
+    hi = Math.max(hi, c.xs[i], c.xs[i + 1]);
+  }
+  return hi >= lo ? [lo, hi] : null;
 }

@@ -9,7 +9,12 @@
  * stutter. Here the same slices are interpolated with a monotone cubic (Fritsch–Carlson)
  * along the swept axis: identical values at every measured row / column (see slices.test.ts),
  * never overshooting the neighbouring measurements, but C1-continuous in the parameter, so
- * the motion is fluid. Missing cells are never bridged (same rule as grid.ts).
+ * the motion is fluid.
+ *
+ * Missing (or excluded, docs/adr/0012) cells are never interpolated across along the swept
+ * axis: a point whose neighbouring row / column is missing stays at its measured value and
+ * fades out over that interval (and fades in on the way back), so nothing pops. Along the
+ * curve a missing sample is a gap; the renderer marks it (dotted) instead of bridging it.
  */
 import type { SvmRecord, SliceMode } from '../types';
 import { bracket, gridView, logNits, type SlicePoint } from '../data/grid';
@@ -50,43 +55,115 @@ function grayProfile(rec: Pick<SvmRecord, 'matrix'>): GrayProfile {
   return prof;
 }
 
+/** Smooth 0→1 ramp (zero slope at both ends): alpha ramps start and end gently. */
+const smooth01 = (u: number) => {
+  const v = Math.min(1, Math.max(0, u));
+  return v * v * (3 - 2 * v);
+};
+
+/**
+ * A slice point as drawn: `a` is its opacity (0..1] and `key` the measured column (gray slice)
+ * or row (brightness slice) it comes from, so gaps can be recognised (a key between two
+ * drawn points that is not drawn itself = a missing / excluded measurement).
+ */
+export interface CurvePoint extends SlicePoint {
+  a: number;
+  key: number;
+}
+
+/** Opacity in the middle of a short missing span that is interpolated across (see sampleAlong). */
+const SHORT_GAP_ALPHA = 0.35;
+
+/** Fade windows along the swept axis, ≈ 8 frames at the sweep's peak speed (never a blink). */
+export const GRAY_FADE = 4.5;
+export const LEVEL_FADE = 0.045;
+
+/**
+ * One measured series (a column of the gray profile, a row of the level profile) at position q
+ * of the swept axis, between samples i0 ≤ i1 (xs[i0] ≤ q ≤ xs[i1]).
+ *
+ * - Both samples valid: monotone cubic, fully opaque.
+ * - Otherwise let lo / hi be the nearest valid samples below / above. A short missing span
+ *   (shorter than two fade windows) is interpolated across with a dip in opacity (so the point
+ *   does not blink out and back in within a few frames, and is still marked as not measured).
+ * - A longer span, or a series that ends: the point stays at the last valid sample's value and
+ *   fades out across the interval next to it (at least `fade` wide, at most half the span), and
+ *   fades in the same way before the next valid sample.
+ *
+ * So a point never appears or disappears in one frame: records with excluded cells and grids
+ * whose rows / columns do not all cover the same range fade instead of popping (docs/adr/0003:
+ * the frame is a continuous function of the sweep parameter).
+ */
+function sampleAlong(
+  xs: number[],
+  i0: number,
+  i1: number,
+  q: number,
+  fade: number,
+  svmA: Float64Array,
+  lnA: Float64Array,
+  ms: Float64Array,
+  ml: Float64Array,
+): { svm: number; ln: number; a: number } | null {
+  const ok = (i: number) => Number.isFinite(svmA[i]);
+  if (ok(i0) && ok(i1)) {
+    if (i1 === i0 || q <= xs[i0]) return { svm: svmA[i0], ln: lnA[i0], a: 1 };
+    if (q >= xs[i1]) return { svm: svmA[i1], ln: lnA[i1], a: 1 };
+    const svm = hermite(xs[i0], xs[i1], svmA[i0], svmA[i1], ms[i0], ms[i1], q);
+    const ln = Number.isFinite(lnA[i0]) && Number.isFinite(lnA[i1]) ? hermite(xs[i0], xs[i1], lnA[i0], lnA[i1], ml[i0], ml[i1], q) : NaN;
+    return { svm, ln, a: 1 };
+  }
+  let lo = i0;
+  while (lo >= 0 && !ok(lo)) lo--;
+  let hi = i1;
+  while (hi < xs.length && !ok(hi)) hi++;
+  const hasLo = lo >= 0;
+  const hasHi = hi < xs.length;
+  const span = hasLo && hasHi ? xs[hi] - xs[lo] : Infinity;
+  if (span < 2 * fade) {
+    // short gap: interpolate across it (linear), opacity dips smoothly toward SHORT_GAP_ALPHA
+    const u = Math.min(1, Math.max(0, (q - xs[lo]) / span));
+    const bump = Math.sin(Math.PI * u) ** 2;
+    const a = 1 - (1 - SHORT_GAP_ALPHA) * Math.min(1, span / (2 * fade)) * bump;
+    const lin = (A: Float64Array) => A[lo] + (A[hi] - A[lo]) * u;
+    return { svm: lin(svmA), ln: Number.isFinite(lnA[lo]) && Number.isFinite(lnA[hi]) ? lin(lnA) : NaN, a };
+  }
+  if (hasLo && q >= xs[lo]) {
+    const w = Math.min(Math.max(xs[Math.min(lo + 1, xs.length - 1)] - xs[lo], fade), span / 2);
+    const a = 1 - smooth01((q - xs[lo]) / w);
+    if (a > 0) return { svm: svmA[lo], ln: lnA[lo], a };
+  }
+  if (hasHi && q <= xs[hi]) {
+    const w = Math.min(Math.max(xs[hi] - xs[Math.max(hi - 1, 0)], fade), span / 2);
+    const a = 1 - smooth01((xs[hi] - q) / w);
+    if (a > 0) return { svm: svmA[hi], ln: lnA[hi], a };
+  }
+  return null;
+}
+
 /**
  * Gray slice at a (fractional) gray level. Same contract as grid.sliceAtGray (gray clamped to
- * the measured range, nits <= 0 dropped, sorted by nits) with C1 interpolation between rows.
+ * the measured range, nits <= 0 dropped, sorted by nits) with C1 interpolation between rows;
+ * cells missing on one side of the interval fade (see sampleAlong). Ties in nits are kept
+ * (several columns can share a quantised reading; the curve then shows their spread instead
+ * of an average) and ordered by column.
  */
-export function smoothSliceAtGray(rec: Pick<SvmRecord, 'matrix'>, gray: number): SlicePoint[] {
+export function smoothSliceAtGray(rec: Pick<SvmRecord, 'matrix'>, gray: number): CurvePoint[] {
   const { grays, cols } = grayProfile(rec);
   const R = grays.length;
   if (R === 0) return [];
   const g = Math.min(grays[R - 1], Math.max(grays[0], gray));
   const r = Math.max(0, bracket(grays, g));
   const r1 = Math.min(r + 1, R - 1);
-  const t = r1 === r ? 0 : (g - grays[r]) / (grays[r1] - grays[r]);
-  const out: SlicePoint[] = [];
-  for (const col of cols) {
-    let svm: number;
-    let ln: number;
-    const ok0 = Number.isFinite(col.svm[r]);
-    const ok1 = Number.isFinite(col.svm[r1]);
-    if (ok0 && ok1) {
-      svm = hermite(grays[r], grays[r1], col.svm[r], col.svm[r1], col.ms[r], col.ms[r1], g);
-      ln = hermite(grays[r], grays[r1], col.ln[r], col.ln[r1], col.ml[r], col.ml[r1], g);
-      if (r1 === r) {
-        svm = col.svm[r];
-        ln = col.ln[r];
-      }
-    } else if (ok0 && t < 1e-6) {
-      svm = col.svm[r];
-      ln = col.ln[r];
-    } else if (ok1 && t > 1 - 1e-6) {
-      svm = col.svm[r1];
-      ln = col.ln[r1];
-    } else continue;
-    const nits = Math.exp(ln);
-    if (!(nits > 0) || !Number.isFinite(svm)) continue;
-    out.push({ x: nits, svm, nits, gray: g });
-  }
-  out.sort((a, b) => a.x - b.x);
+  const out: CurvePoint[] = [];
+  cols.forEach((col, c) => {
+    const v = sampleAlong(grays, r, r1, g, GRAY_FADE, col.svm, col.ln, col.ms, col.ml);
+    if (!v) return;
+    const nits = Math.exp(v.ln);
+    if (!(nits > 0) || !Number.isFinite(v.svm)) return;
+    out.push({ x: nits, svm: v.svm, nits, gray: g, a: v.a, key: c });
+  });
+  out.sort((a, b) => a.x - b.x || a.key - b.key);
   return out;
 }
 
@@ -130,41 +207,40 @@ function levelProfile(rec: Pick<SvmRecord, 'matrix'>, clipLowGray: boolean): Lev
 }
 
 /**
- * Brightness slice at a level luminance (G255 nits). Same contract as grid.sliceAtLevel
- * (honours the low-gray clip; a level outside the record's measured range yields no points;
- * sorted by gray) with C1 interpolation between columns in log1p-nits space.
+ * Outside its measured level range a record's brightness slice is held at the nearest measured
+ * column and fades out over this distance (in logNits units, ≈ 15 % in nits). A level sweep
+ * that runs past a record's range therefore fades its curve instead of dropping it in one
+ * frame; beyond the margin the record has no slice (same as grid.sliceAtLevel).
  */
-export function smoothSliceAtLevel(rec: Pick<SvmRecord, 'matrix'>, levelNits: number, opts: { clipLowGray?: boolean } = {}): SlicePoint[] {
+export const LEVEL_EDGE_FADE = 0.06;
+
+/**
+ * Brightness slice at a level luminance (G255 nits). Same contract as grid.sliceAtLevel
+ * (honours the low-gray clip; sorted by gray) with C1 interpolation between columns in
+ * log1p-nits space; cells missing on one side fade (see sampleAlong) and a level just outside
+ * the measured range yields the nearest column, fading (LEVEL_EDGE_FADE).
+ */
+export function smoothSliceAtLevel(rec: Pick<SvmRecord, 'matrix'>, levelNits: number, opts: { clipLowGray?: boolean } = {}): CurvePoint[] {
   const { grays, x, rows } = levelProfile(rec, !!opts.clipLowGray);
+  const C = x.length;
+  if (C === 0) return [];
   const xq = logNits(levelNits);
-  const c = bracket(x, xq);
-  if (c < 0) return [];
-  const c1 = Math.min(c + 1, x.length - 1);
-  const t = c1 === c ? 0 : (xq - x[c]) / (x[c1] - x[c]);
-  const out: SlicePoint[] = [];
+  let edge = 1;
+  let q = xq;
+  if (xq < x[0] || xq > x[C - 1]) {
+    const d = xq < x[0] ? x[0] - xq : xq - x[C - 1];
+    edge = 1 - smooth01(d / LEVEL_EDGE_FADE);
+    if (!(edge > 0)) return [];
+    q = xq < x[0] ? x[0] : x[C - 1];
+  }
+  const c = Math.max(0, bracket(x, q));
+  const c1 = Math.min(c + 1, C - 1);
+  const out: CurvePoint[] = [];
   for (let r = 0; r < rows.length; r++) {
     const row = rows[r];
-    let svm: number;
-    let ln: number;
-    const ok0 = Number.isFinite(row.svm[c]);
-    const ok1 = Number.isFinite(row.svm[c1]);
-    if (ok0 && ok1) {
-      if (c1 === c) {
-        svm = row.svm[c];
-        ln = row.ln[c];
-      } else {
-        svm = hermite(x[c], x[c1], row.svm[c], row.svm[c1], row.ms[c], row.ms[c1], xq);
-        ln = Number.isFinite(row.ln[c]) && Number.isFinite(row.ln[c1]) ? hermite(x[c], x[c1], row.ln[c], row.ln[c1], row.ml[c], row.ml[c1], xq) : NaN;
-      }
-    } else if (ok0 && t < 1e-6) {
-      svm = row.svm[c];
-      ln = row.ln[c];
-    } else if (ok1 && t > 1 - 1e-6) {
-      svm = row.svm[c1];
-      ln = row.ln[c1];
-    } else continue;
-    if (!Number.isFinite(svm)) continue;
-    out.push({ x: grays[r], svm, nits: Number.isFinite(ln) ? Math.exp(ln) : NaN, gray: grays[r] });
+    const v = sampleAlong(x, c, c1, q, LEVEL_FADE, row.svm, row.ln, row.ms, row.ml);
+    if (!v || !Number.isFinite(v.svm)) continue;
+    out.push({ x: grays[r], svm: v.svm, nits: Number.isFinite(v.ln) ? Math.exp(v.ln) : NaN, gray: grays[r], a: v.a * edge, key: r });
   }
   return out;
 }
@@ -172,7 +248,7 @@ export function smoothSliceAtLevel(rec: Pick<SvmRecord, 'matrix'>, levelNits: nu
 // ---------------------------------------------------------------------------------------------
 // Slice dispatch, sweeps and data extents.
 
-export function sliceFor(rec: SvmRecord, mode: SliceMode, param: number, clipLowGray: boolean): SlicePoint[] {
+export function sliceFor(rec: SvmRecord, mode: SliceMode, param: number, clipLowGray: boolean): CurvePoint[] {
   return mode === 'gray' ? smoothSliceAtGray(rec, param) : smoothSliceAtLevel(rec, param, { clipLowGray });
 }
 
@@ -236,6 +312,7 @@ export function sweepExtent(records: SvmRecord[], mode: SliceMode, clipLowGray: 
       for (const g of params) e = extendExtent(e, smoothSliceAtGray(rec, g));
     } else {
       const [hi, lo] = LEVEL_SWEEP;
+      // measured columns inside the sweep (the held edge values are measured columns too)
       const params = [hi, lo, ...gridView(rec).levelNits.filter((n) => n > lo && n < hi)];
       for (const n of params) e = extendExtent(e, smoothSliceAtLevel(rec, n, { clipLowGray }));
     }
@@ -243,9 +320,9 @@ export function sweepExtent(records: SvmRecord[], mode: SliceMode, clipLowGray: 
   return e;
 }
 
-/** Title / label formatting of a level luminance: 500, 35, 7.5. */
+/** Title / label formatting of a level luminance: 500, 35, 7.5, 2 (at most one decimal, no trailing ".0"). */
 export function fmtLevel(n: number): string {
   if (!Number.isFinite(n)) return '—';
-  if (n >= 10) return String(Math.round(n));
-  return n.toFixed(1);
+  if (n >= 9.95) return String(Math.round(n));
+  return String(Number(n.toFixed(1)));
 }

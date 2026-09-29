@@ -4,7 +4,7 @@ import { useT } from '../i18n';
 import { Button, IconButton, cn, toast } from '../ui';
 import { SVM_CRITICAL, SVM_SAFE } from '../types';
 import type { Scene } from './scene';
-import { titleText } from './scene';
+import { exclusionText, titleText } from './scene';
 import { buildTable, columnLabel, tableToTsv } from './table';
 
 async function copyText(text: string): Promise<boolean> {
@@ -41,6 +41,7 @@ function DashSample({ color, dash }: { color: string; dash: number[] }) {
 export function DataTablePanel({ scene, onClose }: { scene: Scene; onClose: () => void }) {
   const t = useT();
   const model = useMemo(() => buildTable(scene), [scene]);
+  const exclusions = useMemo(() => new Map(scene.series.map((se) => [se.id, se.exclusion])), [scene]);
   const heading = titleText(scene.lang, scene.mode, scene.param);
 
   const onCopy = async () => {
@@ -81,9 +82,10 @@ export function DataTablePanel({ scene, onClose }: { scene: Scene; onClose: () =
               {model.rows.map((r) => (
                 <tr key={r.id} className="hover:bg-surface-3/60">
                   <th scope="row" className="sticky left-0 z-10 border-r border-line bg-surface-2 px-3 py-1 text-left font-medium text-ink-2">
-                    <span className="flex items-center gap-2 whitespace-nowrap">
+                    <span className="flex items-center gap-2 whitespace-nowrap" title={exclusions.get(r.id) ? exclusionText(scene.lang, exclusions.get(r.id)!) : undefined}>
                       <DashSample color={r.color} dash={r.dash} />
                       {r.label}
+                      {r.excluded > 0 && <span className="-ml-1 font-semibold text-amber-300">*</span>}
                     </span>
                   </th>
                   {r.values.map((v, i) => (
@@ -103,7 +105,10 @@ export function DataTablePanel({ scene, onClose }: { scene: Scene; onClose: () =
           </table>
         </div>
       )}
-      <div className="border-t border-line px-3 py-1.5 text-2xs text-ink-4">{t('chart2d.table.note')}</div>
+      <div className="border-t border-line px-3 py-1.5 text-2xs text-ink-4">
+        {t('chart2d.table.note')}
+        {model.rows.some((r) => r.excluded > 0) && <div className="mt-0.5 text-amber-300/80">{t('chart2d.table.excludedNote')}</div>}
+      </div>
     </div>
   );
 }

@@ -3,17 +3,26 @@ import { LineChart, Play, Square, Table2 } from 'lucide-react';
 import { useAppStore, getAppState } from '../store/appStore';
 import { useRecordStyles } from '../store/hooks';
 import { translate, useT } from '../i18n';
-import { Button, cn } from '../ui';
-import { useRegisterActiveTimeline, useTimeline, useTimelineSnapshot } from '../timeline/timeline';
+import { Button, IconButton, cn } from '../ui';
+import { useRegisterActiveTimeline, useTimeline } from '../timeline/timeline';
 import { TimelineBar } from '../timeline/TimelineBar';
 import { registerExportTarget, safeFileName } from '../export/registry';
-import { buildScene, CHART_BG, titleText, type ChartInputs } from './scene';
+import { exclusionSummary } from '../data/anomalies';
+import { buildScene, CHART_BG, exclusionText, sliceParam, sweepProgressOf, titleText, type ChartInputs, type SceneOptions } from './scene';
 import { exportScale, font, renderChart, screenScale, type LegendHit } from './render';
-import { SWEEP_DURATION, fmtLevel } from './slices';
+import { easeInOutSine, fmtLevel, GRAY_SWEEP, LEVEL_SWEEP, SWEEP_DURATION } from './slices';
 import { ChartTooltip } from './tooltip';
 import { DataTablePanel } from './DataTablePanel';
 
 const sweepLabelKey = (mode: ChartInputs['sliceMode']) => (mode === 'gray' ? 'chart2d.sweep.gray' : 'chart2d.sweep.level');
+
+/**
+ * Height (CSS px) of the transport band under the chart: in the workbench a docked strip that is
+ * always there (idle: a play button; sweeping: the timeline bar), in presentation an empty band
+ * reserved inside the picture for the overlaid timeline bar. Either way the plot never reflows
+ * when a sweep starts or ends, and the bar never covers the axes.
+ */
+const BAND_H = 60;
 
 /** Make sure the canvas fonts are ready before drawing text that ends up in a PNG / video. */
 async function ensureFonts(): Promise<void> {
@@ -26,6 +35,17 @@ async function ensureFonts(): Promise<void> {
   }
 }
 
+/**
+ * Sweep lifecycle. Starting a sweep glides from the current frame to the sweep's first frame
+ * ('enter', then the timeline plays); closing it glides back to the static slice ('exit').
+ * The glides are UI transitions outside the timeline: exported videos are unaffected.
+ */
+type Phase =
+  | { kind: 'static' }
+  | { kind: 'enter'; start: number; dur: number; from: number | null }
+  | { kind: 'sweep' }
+  | { kind: 'exit'; start: number; dur: number; from: number };
+
 interface Runtime {
   w: number;
   h: number;
@@ -36,6 +56,18 @@ interface Runtime {
   hoverId: string | null;
   hoverDevice: string | null;
   hits: LegendHit[];
+  phase: Phase;
+}
+
+/** Glide duration for a jump of `dq` sweep lengths: short hops are quick, long ones ≤ 1.2 s. */
+const glideDuration = (dq: number) => Math.min(1.2, 0.35 + 0.9 * Math.abs(dq));
+
+/** Tooltip text for a record with excluded anomalous points (docs/adr/0012). */
+function exclusionTip(recId: string): string | null {
+  const st = getAppState();
+  const rec = st.records.find((r) => r.id === recId);
+  const sum = rec ? exclusionSummary(rec) : null;
+  return sum ? exclusionText(st.lang, sum) : null;
 }
 
 /**
@@ -56,6 +88,9 @@ export default function Chart2DView() {
   const clipLowGray = useAppStore((s) => s.clipLowGray);
   const presenting = useAppStore((s) => s.presenting);
   const presentBlack = useAppStore((s) => s.presentBlack);
+  // H shortcut (C2): overlays.title -> title + subtitle, overlays.colorbar -> legend.
+  const showTitle = useAppStore((s) => s.overlays.title);
+  const showLegend = useAppStore((s) => s.overlays.colorbar);
   const tab = useAppStore((s) => s.tab);
   const playNonce = useAppStore((s) => s.playNonce.chart2d);
   const stopNonce = useAppStore((s) => s.stopNonce.chart2d);
@@ -63,25 +98,47 @@ export default function Chart2DView() {
   const isActiveTab = tab === 'chart2d';
 
   const tl = useTimeline(SWEEP_DURATION);
-  const snap = useTimelineSnapshot(tl);
   const [sweeping, setSweeping] = useState(false);
   const [tableOpen, setTableOpen] = useState(false);
   const [chromeVisible, setChromeVisible] = useState(true);
+  const [tableNonce, setTableNonce] = useState(0);
 
   const inputs: ChartInputs = useMemo(
-    () => ({ records, hiddenIds, styles, lang, sliceMode, sliceGray, sliceNits, axisMode, clipLowGray, presenting, presentBlack }),
-    [records, hiddenIds, styles, lang, sliceMode, sliceGray, sliceNits, axisMode, clipLowGray, presenting, presentBlack],
+    () => ({ records, hiddenIds, styles, lang, sliceMode, sliceGray, sliceNits, axisMode, clipLowGray, presenting, presentBlack, showTitle, showLegend }),
+    [records, hiddenIds, styles, lang, sliceMode, sliceGray, sliceNits, axisMode, clipLowGray, presenting, presentBlack, showTitle, showLegend],
   );
   const visibleCount = useMemo(() => records.filter((r) => !hiddenIds.includes(r.id)).length, [records, hiddenIds]);
 
   const inputsRef = useRef(inputs);
-  const sweepingRef = useRef(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const hostRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const toolbarRef = useRef<HTMLDivElement>(null);
   const tooltipElRef = useRef<HTMLDivElement>(null);
   const tooltipRef = useRef<ChartTooltip | null>(null);
-  const rt = useRef<Runtime>({ w: 0, h: 0, dpr: 1, raf: 0, visible: false, pointer: null, hoverId: null, hoverDevice: null, hits: [] });
+  const rt = useRef<Runtime>({ w: 0, h: 0, dpr: 1, raf: 0, visible: false, pointer: null, hoverId: null, hoverDevice: null, hits: [], phase: { kind: 'static' } });
+
+  /** Scene options of the frame on screen now (advances finished glides). */
+  const frameOptions = useCallback(
+    (interactive: boolean): SceneOptions => {
+      const r = rt.current;
+      const ph = r.phase;
+      const now = performance.now() / 1000;
+      if (ph.kind === 'enter') {
+        const p = (now - ph.start) / ph.dur;
+        if (p < 1) return { t: tl.time, interactive, blend: { from: ph.from, p: easeInOutSine(p) } };
+        r.phase = { kind: 'sweep' };
+        if (!tl.playing && tl.time === 0) tl.play();
+      } else if (ph.kind === 'exit') {
+        const p = (now - ph.start) / ph.dur;
+        if (p < 1) return { t: null, interactive, blend: { from: ph.from, p: easeInOutSine(p) } };
+        r.phase = { kind: 'static' };
+        tl.seek(0);
+      }
+      return { t: r.phase.kind === 'sweep' ? tl.time : null, interactive };
+    },
+    [tl],
+  );
 
   // ---------------------------------------------------------------- drawing
   const draw = useCallback(() => {
@@ -92,14 +149,27 @@ export default function Chart2DView() {
     if (!ctx) return;
     ctx.setTransform(r.dpr, 0, 0, r.dpr, 0, 0);
     const inp = inputsRef.current;
-    const scene = buildScene(inp, { t: sweepingRef.current ? tl.time : null, interactive: !inp.presenting });
-    const res = renderChart(ctx, r.w, r.h, screenScale(r.w, r.h), scene, { hoverId: r.hoverId, hoverDevice: r.hoverDevice, pointer: r.pointer });
+    const scene = buildScene(inp, frameOptions(!inp.presenting));
+    const s = screenScale(r.w, r.h);
+    const res = renderChart(ctx, r.w, r.h, s, scene, {
+      hoverId: r.hoverId,
+      hoverDevice: r.hoverDevice,
+      pointer: r.pointer,
+      insetBottom: inp.presenting ? BAND_H : 0,
+    });
     r.hits = res.hits;
     if (tooltipElRef.current) {
       if (!tooltipRef.current) tooltipRef.current = new ChartTooltip(tooltipElRef.current);
       tooltipRef.current.update(res, scene, r.w, r.h);
     }
-  }, [tl]);
+    // Presentation toolbar (C1): an icon column at the top of the plot's right margin, which is
+    // never over the title (any stage aspect), the axes or the plot.
+    const tb = toolbarRef.current;
+    if (tb) {
+      tb.style.top = `${Math.round(res.plot.y)}px`;
+      tb.style.right = `${Math.max(4, Math.round((r.w - res.plot.x - res.plot.w - 28) / 2))}px`;
+    }
+  }, [frameOptions]);
 
   const requestDraw = useCallback(() => {
     const r = rt.current;
@@ -107,8 +177,9 @@ export default function Chart2DView() {
     r.raf = requestAnimationFrame(() => {
       r.raf = 0;
       draw();
-      // keep rendering every frame while the sweep plays
-      if (sweepingRef.current && tl.playing) requestDraw();
+      // keep rendering every frame while the sweep plays or a glide runs
+      const k = r.phase.kind;
+      if (k === 'enter' || k === 'exit' || (k === 'sweep' && tl.playing)) requestDraw();
     });
   }, [draw, tl]);
 
@@ -179,23 +250,43 @@ export default function Chart2DView() {
     };
   }, [draw, requestDraw]);
 
-  // Timeline: coarse events (play / pause / seek / end) -> redraw; the frame loop continues while playing.
-  useEffect(() => tl.subscribe(() => requestDraw()), [tl, requestDraw]);
+  // Timeline: coarse events (play / pause / seek / end) -> redraw and refresh an open table;
+  // the frame loop continues while playing.
+  useEffect(
+    () =>
+      tl.subscribe(() => {
+        requestDraw();
+        setTableNonce((n) => n + 1);
+      }),
+    [tl, requestDraw],
+  );
 
   // ---------------------------------------------------------------- sweep
   const startSweep = useCallback(() => {
-    sweepingRef.current = true;
-    setSweeping(true);
+    const r = rt.current;
+    const inp = inputsRef.current;
+    // glide from where the chart is now (static slice, or the current sweep frame on a restart)
+    const from = r.phase.kind === 'sweep' || r.phase.kind === 'enter' ? tl.time : null;
+    tl.pause();
     tl.seek(0);
-    tl.play();
+    const dq = sweepProgressOf(inp.sliceMode, sliceParam(inp, from));
+    r.phase = Math.abs(dq) < 1e-3 ? { kind: 'sweep' } : { kind: 'enter', start: performance.now() / 1000, dur: glideDuration(dq), from };
+    if (r.phase.kind === 'sweep') tl.play();
+    setSweeping(true);
     requestDraw();
   }, [tl, requestDraw]);
 
   const closeSweep = useCallback(() => {
-    sweepingRef.current = false;
-    setSweeping(false);
+    const r = rt.current;
+    const inp = inputsRef.current;
+    const from = r.phase.kind === 'sweep' || r.phase.kind === 'enter' ? tl.time : null;
     tl.pause();
-    tl.seek(0);
+    if (from === null) r.phase = { kind: 'static' };
+    else {
+      const dq = sweepProgressOf(inp.sliceMode, sliceParam(inp, null)) - sweepProgressOf(inp.sliceMode, sliceParam(inp, from));
+      r.phase = { kind: 'exit', start: performance.now() / 1000, dur: glideDuration(dq), from };
+    }
+    setSweeping(false);
     requestDraw();
   }, [tl, requestDraw]);
 
@@ -253,7 +344,10 @@ export default function Chart2DView() {
     const r = rt.current;
     r.pointer = { x, y };
     const hit = hitAt(x, y);
-    r.hoverId = hit?.kind === 'record' ? hit.id : null;
+    const id = hit?.kind === 'record' ? hit.id : null;
+    // legend row of a record with excluded points: native tooltip with the breakdown (C4)
+    if (id !== r.hoverId) e.currentTarget.title = (id && exclusionTip(id)) || '';
+    r.hoverId = id;
     r.hoverDevice = hit?.kind === 'device' ? hit.device : null;
     e.currentTarget.style.cursor = hit ? 'pointer' : '';
     requestDraw();
@@ -265,6 +359,7 @@ export default function Chart2DView() {
     r.hoverId = null;
     r.hoverDevice = null;
     e.currentTarget.style.cursor = '';
+    e.currentTarget.title = '';
     requestDraw();
   };
 
@@ -286,13 +381,27 @@ export default function Chart2DView() {
     let canvas: HTMLCanvasElement | null = null;
     return registerExportTarget({
       id: 'chart2d',
-      fileName: () => {
+      /**
+       * kind 'video' = the sweep: SVM_2D_sweep_G255-G50 / SVM_2D_sweep_500-2nits. Otherwise the
+       * frame on screen, named after its own gray / level (mid-sweep too).
+       */
+      fileName: (kind?: 'image' | 'video') => {
         const i = inputsRef.current;
-        return safeFileName(`SVM_2D_${i.sliceMode === 'gray' ? `G${Math.round(i.sliceGray)}` : `${fmtLevel(i.sliceNits)}nits`}`);
+        if (kind === 'video') {
+          return safeFileName(i.sliceMode === 'gray' ? `SVM_2D_sweep_G${GRAY_SWEEP[0]}-G${GRAY_SWEEP[1]}` : `SVM_2D_sweep_${LEVEL_SWEEP[0]}-${LEVEL_SWEEP[1]}nits`);
+        }
+        const p = buildScene(i, frameOptions(false)).param;
+        return safeFileName(`SVM_2D_${i.sliceMode === 'gray' ? `G${Math.round(p)}` : `${fmtLevel(p)}nits`}`);
       },
       animation: () => {
         const i = inputsRef.current;
         return { duration: SWEEP_DURATION, label: translate(i.lang, sweepLabelKey(i.sliceMode)) };
+      },
+      // "Current view" preset (C5): the on-screen drawing buffer in device px (the view's aspect).
+      viewSize: () => {
+        const cv = canvasRef.current;
+        const r = rt.current;
+        return { width: cv?.width || Math.round(r.w * r.dpr), height: cv?.height || Math.round(r.h * r.dpr) };
       },
       begin: async ({ width, height }) => {
         await ensureFonts();
@@ -310,8 +419,7 @@ export default function Chart2DView() {
         }
         const ctx = canvas.getContext('2d')!;
         ctx.setTransform(1, 0, 0, 1, 0, 0);
-        const tt = time ?? (sweepingRef.current ? tl.time : null);
-        const scene = buildScene(inputsRef.current, { t: tt, interactive: false });
+        const scene = buildScene(inputsRef.current, time === null ? frameOptions(false) : { t: time, interactive: false });
         renderChart(ctx, canvas.width, canvas.height, exportScale(canvas.width, canvas.height), scene, { emptyMessage: true });
         return canvas;
       },
@@ -319,13 +427,14 @@ export default function Chart2DView() {
         canvas = null;
       },
     });
-  }, [tl]);
+  }, [frameOptions]);
 
   // ---------------------------------------------------------------- data table
   const tableScene = useMemo(
-    () => (tableOpen ? buildScene(inputs, { t: sweeping ? tl.time : null, interactive: false }) : null),
-    // `snap` is a dependency on purpose: re-read the frame when the sweep is paused / scrubbed.
-    [tableOpen, inputs, sweeping, snap, tl],
+    () => (tableOpen ? buildScene(inputs, frameOptions(false)) : null),
+    // `tableNonce` / `sweeping` are dependencies on purpose: re-read the frame when the sweep
+    // is paused / scrubbed / closed.
+    [tableOpen, inputs, sweeping, tableNonce, frameOptions], // eslint-disable-line react-hooks/exhaustive-deps
   );
 
   const chromeHidden = presenting && !chromeVisible;
@@ -333,6 +442,11 @@ export default function Chart2DView() {
   const sweepLabel = t(sweepLabelKey(sliceMode));
   const ariaTitle = titleText(lang, sliceMode, sliceMode === 'gray' ? sliceGray : sliceNits);
   const timelineBar = sweeping ? <TimelineBar timeline={tl} title={sweepLabel} onClose={closeSweep} /> : null;
+  const tableToggle = (
+    <Button size="sm" variant="secondary" active={tableOpen} icon={<Table2 size={13} />} title={t('chart2d.toolbar.tableTitle')} aria-pressed={tableOpen} onClick={() => setTableOpen((o) => !o)}>
+      {t('chart2d.toolbar.table')}
+    </Button>
+  );
 
   return (
     <div ref={rootRef} className={cn('relative flex h-full w-full flex-col overflow-hidden', chromeHidden && 'cursor-none')} style={{ background: bg }}>
@@ -352,22 +466,24 @@ export default function Chart2DView() {
           style={{ display: 'none' }}
         />
 
-        {/* in-chart toolbar (top-right, in the title band above the plot) */}
-        <div className={cn('absolute right-3 top-3 z-20 flex items-center gap-1.5 transition-opacity duration-300', chromeHidden && 'pointer-events-none opacity-0')}>
-          <Button
-            size="sm"
-            variant={sweeping ? 'subtle' : 'secondary'}
-            icon={sweeping ? <Square size={11} /> : <Play size={13} />}
-            title={sweepLabel}
-            onClick={sweeping ? closeSweep : startSweep}
-            disabled={visibleCount === 0}
+        {/* presentation: auto-hidden icon column in the plot's right margin (positioned in draw) */}
+        {presenting && (
+          <div
+            ref={toolbarRef}
+            data-testid="chart2d-toolbar"
+            className={cn('absolute right-3 top-3 z-20 flex flex-col items-center gap-1.5 transition-opacity duration-300', chromeHidden && 'pointer-events-none opacity-0')}
           >
-            {sweeping ? t('chart2d.toolbar.stop') : t('chart2d.toolbar.play')}
-          </Button>
-          <Button size="sm" variant="secondary" active={tableOpen} icon={<Table2 size={13} />} title={t('chart2d.toolbar.tableTitle')} aria-pressed={tableOpen} onClick={() => setTableOpen((o) => !o)}>
-            {t('chart2d.toolbar.table')}
-          </Button>
-        </div>
+            <IconButton
+              size="sm"
+              variant="secondary"
+              label={sweeping ? t('chart2d.toolbar.stop') : `${t('chart2d.toolbar.play')} · ${sweepLabel}`}
+              icon={sweeping ? <Square size={11} /> : <Play size={13} />}
+              onClick={sweeping ? closeSweep : startSweep}
+              disabled={visibleCount === 0}
+            />
+            <IconButton size="sm" variant="secondary" active={tableOpen} label={t('chart2d.toolbar.tableTitle')} aria-pressed={tableOpen} icon={<Table2 size={13} />} onClick={() => setTableOpen((o) => !o)} />
+          </div>
+        )}
 
         {visibleCount === 0 && (
           <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
@@ -386,13 +502,34 @@ export default function Chart2DView() {
 
         {tableOpen && tableScene && <DataTablePanel scene={tableScene} onClose={() => setTableOpen(false)} />}
 
+        {/* presentation: the timeline overlays the band reserved below the axes (insetBottom) */}
         {presenting && timelineBar && (
-          <div className={cn('pointer-events-none absolute inset-x-0 bottom-4 z-30 flex justify-center transition-opacity duration-300', chromeHidden && 'opacity-0 [&>*]:pointer-events-none')}>
+          <div
+            className={cn('pointer-events-none absolute inset-x-0 bottom-0 z-30 flex items-center justify-center transition-opacity duration-300', chromeHidden && 'opacity-0 [&>*]:pointer-events-none')}
+            style={{ height: BAND_H }}
+          >
             {timelineBar}
           </div>
         )}
       </div>
-      {!presenting && timelineBar && <div className="flex shrink-0 justify-center border-t border-line bg-surface-1 py-2">{timelineBar}</div>}
+      {/* workbench: a transport strip that is always there (the plot never reflows) and keeps
+          the chart's own controls out of the picture and away from the shell's floating buttons */}
+      {!presenting && (
+        <div className="flex shrink-0 items-center gap-2 border-t border-line bg-surface-1 px-3" style={{ height: BAND_H }} data-testid="chart2d-transport">
+          <div className="hidden min-w-0 flex-1 lg:block" />
+          <div className="flex min-w-0 flex-[0_1_720px] justify-center">
+            {timelineBar ?? (
+              <div className="flex w-full min-w-0 items-center gap-3 px-1">
+                <Button size="sm" variant="secondary" icon={<Play size={13} />} onClick={startSweep} disabled={visibleCount === 0} title={sweepLabel}>
+                  {t('chart2d.toolbar.play')}
+                </Button>
+                <span className="truncate text-xs text-ink-3">{sweepLabel}</span>
+              </div>
+            )}
+          </div>
+          <div className="flex flex-1 justify-end">{tableToggle}</div>
+        </div>
+      )}
     </div>
   );
 }
