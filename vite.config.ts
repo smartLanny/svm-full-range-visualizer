@@ -5,6 +5,8 @@ import react from '@vitejs/plugin-react';
 // `npm run build:standalone` (mode "standalone") is configured by the export/standalone module.
 export default defineConfig(({ mode }) => ({
   base: './',
+  // Separate dep-optimizer caches let several dev servers share one node_modules.
+  cacheDir: process.env.VITE_CACHE_DIR || 'node_modules/.vite',
   server: {
     port: 3000,
     host: '0.0.0.0',

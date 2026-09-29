@@ -32,3 +32,5 @@ desktop.ini
 
 # Visual smoke-test output
 snap-out/
+.vite-cache/
+dist-standalone/
