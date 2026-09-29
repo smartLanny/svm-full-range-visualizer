@@ -82,6 +82,15 @@ const CAM_DUR = 0.85;
 const HUD_MARGIN = 20;
 const FADE_DUR = 0.4;
 const SNAP_DUR = 0.45;
+/**
+ * Live start / replay of the intro: dissolve from the frame on screen into the intro (the empty
+ * plate at t = 0) instead of cutting to it. Longer and gentler (smoothstep) than the other
+ * crossfades: it replaces the whole picture, and the change per frame stays even.
+ */
+const INTRO_SNAP_DUR = 0.8;
+/** An intro time jump back by more than this while playing (restart, loop) dissolves too (s). */
+const INTRO_REPLAY_JUMP = 0.5;
+const smoothstep01 = (p: number) => p * p * (3 - 2 * p);
 
 const PRESET_ORIENT: Record<Exclude<ViewPreset, 'perspective'>, { theta: number; phi: number }> = {
   top: { theta: 0, phi: 0 },
@@ -182,11 +191,26 @@ export class Engine {
   private hasRendered = false;
   private lastTime = now();
 
-  // snapshot crossfade (any discontinuous static change)
-  private snapRT: THREE.WebGLRenderTarget | null = null;
+  // snapshot crossfade (any discontinuous static change, live intro start)
+  /**
+   * Pixels of the last presented frame, copied from the canvas itself (same multisampling,
+   * blending and color encoding as the screen), so the first crossfade frame equals it exactly.
+   */
+  private snapTex: THREE.FramebufferTexture | null = null;
   private snapT0 = -1;
+  private snapDur = SNAP_DUR;
+  private snapEase: (p: number) => number = easeInOutCubic;
   private readonly snapScene = new THREE.Scene();
   private readonly snapQuad: THREE.Mesh;
+  private readonly snapMat: THREE.ShaderMaterial;
+  private readonly snapBuf = new THREE.Vector2();
+  /** On-screen frames presented so far; `snapOf` = the one the snapshot holds. */
+  private presented = 0;
+  private snapOf = -1;
+  /** The last frame drawn on the canvas was an on-screen frame (not an export frame). */
+  private lastFrameOnScreen = false;
+  /** Intro time of the last presented intro frame (replay detection). */
+  private lastIntroT = 0;
 
   // intro
   private intro: { tl: Timeline; plan: IntroPlan | null; planKey: string } | null = null;
@@ -241,8 +265,20 @@ export class Engine {
     this.hover.visible = false;
     this.hover.frustumCulled = false;
 
-    const snapMat = new THREE.MeshBasicMaterial({ transparent: true, depthTest: false, depthWrite: false, toneMapped: false });
-    this.snapQuad = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), snapMat);
+    // The copied canvas pixels are already display-encoded: written back unchanged (no color-space
+    // conversion, nearest texels over the whole viewport), so at full opacity the quad reproduces
+    // the presented frame exactly.
+    this.snapMat = new THREE.ShaderMaterial({
+      uniforms: { map: { value: null }, opacity: { value: 1 } },
+      vertexShader: 'varying vec2 vUv;\nvoid main() {\n  vUv = uv;\n  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);\n}',
+      fragmentShader: 'uniform sampler2D map;\nuniform float opacity;\nvarying vec2 vUv;\nvoid main() {\n  gl_FragColor = vec4(texture2D(map, vUv).rgb, opacity);\n}',
+      transparent: true,
+      depthTest: false,
+      depthWrite: false,
+      toneMapped: false,
+    });
+    this.snapQuad = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), this.snapMat);
+    this.snapQuad.frustumCulled = false;
     this.snapScene.add(this.snapQuad);
 
     this.controls = new ViewControls({
@@ -978,6 +1014,11 @@ export class Engine {
     if (this.introDriving && !driving) {
       if (this.intro && this.intro.tl.time >= this.intro.tl.duration - 1e-6) this.onIntroEnd();
       this.leaveIntro();
+    } else if (driving && this.intro!.tl.playing && (!this.introDriving || this.intro!.tl.time < this.lastIntroT - INTRO_REPLAY_JUMP)) {
+      // The intro starts playing on screen (start, replay after the end, restart mid-way, loop):
+      // dissolve from the frame on screen instead of cutting to the empty plate. Scrubbing (paused)
+      // stays direct; exports never see this (the video starts at t = 0).
+      this.captureSnapshot(INTRO_SNAP_DUR, smoothstep01);
     }
     this.introDriving = driving;
 
@@ -985,8 +1026,10 @@ export class Engine {
     this.introFrame = false;
     if (driving) {
       const plan = this.ensurePlan();
-      fp = plan ? plan.evaluate(this.intro!.tl.time, this.frame) : this.staticFrame(t);
+      const it = this.intro!.tl.time;
+      fp = plan ? this.liveHud(plan.evaluate(it, this.frame)) : this.staticFrame(t);
       this.introFrame = !!plan;
+      this.lastIntroT = it;
       more = this.intro!.tl.playing;
     } else {
       more = this.controls.update(dt) || more;
@@ -994,8 +1037,22 @@ export class Engine {
       more = more || this.staticAnimating(t);
     }
     this.render(fp);
+    this.presented++;
+    this.lastFrameOnScreen = true;
     if (this.snapT0 >= 0) more = true;
     return more;
+  }
+
+  /**
+   * Intro frames in the live view (screen, current-view PNG): the title and colorbar stay up —
+   * they were on screen before the intro started. Only the exported video fades them in from
+   * black at its start.
+   */
+  private liveHud(fp: FrameParams): FrameParams {
+    const ov = this.settings!.overlays;
+    if (ov.title) fp.hud.title = 1;
+    if (ov.colorbar) fp.hud.colorbar = 1;
+    return fp;
   }
 
   private staticAnimating(t: number) {
@@ -1451,13 +1508,14 @@ export class Engine {
       gl.clearDepth();
       gl.render(this.hud.scene, this.hud.camera);
     }
-    if (withSnapshot && this.snapRT && this.snapT0 >= 0 && !target) {
-      const p = (now() - this.snapT0) / SNAP_DUR;
+    if (withSnapshot && this.snapTex && this.snapT0 >= 0 && !target) {
+      const p = (now() - this.snapT0) / this.snapDur;
       if (p >= 1) this.snapT0 = -1;
       else {
-        const mat = this.snapQuad.material as THREE.MeshBasicMaterial;
-        mat.map = this.snapRT.texture;
-        mat.opacity = 1 - easeInOutCubic(p);
+        const u = this.snapMat.uniforms;
+        u.map.value = this.snapTex;
+        u.opacity.value = 1 - this.snapEase(Math.max(0, p));
+        // Over the whole viewport (= the whole drawing buffer the pixels were copied from).
         this.snapQuad.position.set(this.vp.width / 2, this.vp.height / 2, 0);
         this.snapQuad.scale.set(this.vp.width, this.vp.height, 1);
         gl.clearDepth();
@@ -1486,19 +1544,35 @@ export class Engine {
     }
   }
 
-  /** Freeze the current image; it fades out over the next frames (hides discontinuities). */
-  private captureSnapshot() {
+  /**
+   * Freeze the image on screen; it fades out over the next frames (hides discontinuities). The
+   * last presented frame is drawn again on the canvas — same frame parameters, same pipeline, a
+   * still-fading older snapshot included — and its pixels copied, so the snapshot equals what was
+   * on screen (an offscreen render target would differ in multisampling and blending space).
+   */
+  private captureSnapshot(dur = SNAP_DUR, ease: (p: number) => number = easeInOutCubic) {
     const gl = this.gl;
-    if (!gl || !this.settings || !this.model || this.vp.width < 4) return;
-    const { width, height } = this.vp;
-    if (!this.snapRT || this.snapRT.width !== width || this.snapRT.height !== height) {
-      this.snapRT?.dispose();
-      this.snapRT = new THREE.WebGLRenderTarget(width, height, { samples: 4, colorSpace: THREE.SRGBColorSpace });
+    if (!gl || !this.settings || !this.model || this.exporting || !this.lastFrameOnScreen) return;
+    // Several changes before the next frame: the snapshot already holds the last presented frame
+    // (the longer fade wins; nothing has faded yet).
+    if (this.snapT0 >= 0 && this.snapOf === this.presented) {
+      if (dur > this.snapDur) {
+        this.snapDur = dur;
+        this.snapEase = ease;
+      }
+      return;
     }
-    // If a snapshot is still fading, keep showing it instead of re-capturing a blend.
-    if (this.snapT0 >= 0 && now() - this.snapT0 < SNAP_DUR * 0.5) return;
-    this.render(this.frame, this.snapRT, false);
+    // The canvas must already have the frame's size (drawing buffer = viewport, ±1 px rounding).
+    const buf = gl.getDrawingBufferSize(this.snapBuf);
+    if (buf.x < 4 || buf.y < 4 || Math.abs(buf.x - this.vp.width) > 1 || Math.abs(buf.y - this.vp.height) > 1) return;
+    if (this.snapTex && (this.snapTex.image.width !== buf.x || this.snapTex.image.height !== buf.y)) this.disposeSnapshot();
+    this.snapTex ??= new THREE.FramebufferTexture(buf.x, buf.y);
+    this.render(this.frame, null, true);
+    gl.copyFramebufferToTexture(this.snapTex);
     this.snapT0 = now();
+    this.snapDur = dur;
+    this.snapEase = ease;
+    this.snapOf = this.presented;
   }
 
   // ------------------------------------------------------------------ HUD
@@ -1902,8 +1976,10 @@ export class Engine {
       const gxE = e.grayLeft ? b.x0 : b.x1;
       const lumVis = smoothstep(50, 140, axisLen(new THREE.Vector3(b.x0, 0, lz), new THREE.Vector3(b.x1, 0, lz)));
       const grayVis = smoothstep(50, 140, axisLen(new THREE.Vector3(gxE, 0, b.z0), new THREE.Vector3(gxE, 0, b.z1)));
-      // Short value axes (small side-by-side cells) stay readable; the tick collision pass thins them.
-      const valueVis = smoothstep(16, 50, axisLen(corner, corner.clone().setY(ax.valueTop * SY * sy)));
+      // The value axis fades only when it collapses; seen end-on is the polar-angle factor (alphaOf).
+      // Never by its length: a low height cap or a small side-by-side cell makes it short, not
+      // degenerate — its title stays and the tick collision pass thins crowded ticks.
+      const valueVis = smoothstep(4, 12, axisLen(corner, corner.clone().setY(ax.valueTop * SY * sy)));
       const dirs = new Map<string, { x: number; y: number }>();
       const tmp = new THREE.Vector3();
       const dirFor = (spec: AxisLabelSpec) => {
@@ -2348,9 +2424,10 @@ export class Engine {
     if (!this.gl || !this.settings) return;
     let fp: FrameParams;
     this.introFrame = false;
+    this.lastFrameOnScreen = false;
     if (t === null) {
       const plan = this.introShowing() ? this.ensurePlan() : null;
-      fp = plan ? plan.evaluate(Math.min(INTRO_DURATION, Math.max(0, this.intro!.tl.time)), this.frame) : this.staticFrame(now());
+      fp = plan ? this.liveHud(plan.evaluate(Math.min(INTRO_DURATION, Math.max(0, this.intro!.tl.time)), this.frame)) : this.staticFrame(now());
       this.introFrame = !!plan;
     } else {
       if (this.settings.layout !== 'single' && this.layoutOverride !== 'single') {
@@ -2392,10 +2469,11 @@ export class Engine {
     this.invalidate();
   }
 
-  /** Drop the cross-fade snapshot and its (MSAA) render target. */
+  /** Drop the cross-fade snapshot and its texture. */
   private disposeSnapshot() {
-    this.snapRT?.dispose();
-    this.snapRT = null;
+    this.snapTex?.dispose();
+    this.snapTex = null;
+    this.snapMat.uniforms.map.value = null;
     this.snapT0 = -1;
   }
 
@@ -2415,7 +2493,18 @@ export class Engine {
     return `${recordLabel(s.a, s.lang)}_${translate(s.lang, 'scene3d.export.intro')}`;
   }
 
-  /** Label / info for export file names. */
+  /**
+   * File name of a still image (PNG): the intro frame when the intro is on screen (paused /
+   * scrubbed; the image shows that frame, see renderExport), e.g. "<A>_开场动画_5.0s"; else the
+   * static view's name.
+   */
+  imageExportName(): string {
+    const tl = this.intro?.tl;
+    if (tl && this.introShowing()) return `${this.introExportName()}_${Math.min(INTRO_DURATION, Math.max(0, tl.time)).toFixed(1)}s`;
+    return this.exportName();
+  }
+
+  /** Label / info for export file names (static view). */
   exportName(): string {
     const s = this.settings;
     const m = this.model;

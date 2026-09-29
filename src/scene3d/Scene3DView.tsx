@@ -325,8 +325,9 @@ export default function Scene3DView() {
     let copy: HTMLCanvasElement | null = null;
     return registerExportTarget({
       id: 'scene3d',
-      // The intro video is named after the record it shows (A alone in every layout, C6).
-      fileName: (kind?: 'image' | 'video') => safeFileName(kind === 'video' ? engine.introExportName() : engine.exportName()),
+      // The intro video is named after the record it shows (A alone in every layout, C6); a PNG
+      // taken while the intro is on screen after the intro frame it shows (…_开场动画_5.0s).
+      fileName: (kind?: 'image' | 'video') => safeFileName(kind === 'video' ? engine.introExportName() : engine.imageExportName()),
       animation: () => {
         const st = getAppState();
         const a = selectActiveRecord(st);
@@ -413,6 +414,12 @@ export default function Scene3DView() {
   const onPointerLeave = () => {
     clearHover();
   };
+  // Presentation chrome idle (cursor hidden): no stale tooltip / cell outline left on screen (a
+  // recording would keep it for the whole take). The next pointer move picks again.
+  useEffect(() => {
+    if (uiHidden) clearHover();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [uiHidden]);
   // New tooltip content has a new size: place it again (it was placed with the previous one).
   useLayoutEffect(() => {
     const el = containerRef.current;
