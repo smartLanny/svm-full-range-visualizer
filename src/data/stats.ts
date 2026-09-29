@@ -5,10 +5,19 @@
  * level-luminance cap. Shares and the mean are weighted by cell area in the
  * (x = log10(levelNits + 1), gray) plane, using the same cell layout as the 3D bars /
  * heatmap (docs/adr/0002). Missing cells (null / non-finite SVM) are excluded, never 0.
+ *
+ * Coverage: valid area ÷ nominal area of the scope, both measured on the NOMINAL layout (every
+ * row / column of the matrix inside the scope, whether or not it still holds a valid cell), so
+ * records whose anomalies were excluded (docs/adr/0012) are visibly "smaller" than the others.
+ *
+ * The typical-luminance read-outs (svmAt) use exactly the curve the 2D chart draws and its data
+ * table prints (smooth gray slice + monotone spline in log10 nits), so the two never disagree.
  */
 import type { Dataset } from '../types';
-import { SVM_CRITICAL, SVM_SAFE } from '../types';
-import { cellEdges, gridView, sliceAtGray, type GridView } from './grid';
+import { LOW_GRAY_CLIP, SVM_CRITICAL, SVM_SAFE } from '../types';
+import { cellEdges, gridView, logNits, type GridView } from './grid';
+import { smoothSliceAtGray } from '../chart2d/slices';
+import { buildSpline, evalSpline } from '../chart2d/spline';
 
 /** Luminances (measured nits) at which the gray-slice SVM is reported. */
 export const SVM_AT_NITS = [2, 10, 50, 100] as const;
@@ -33,6 +42,12 @@ export interface StatsPeak {
 export interface RecordStats {
   /** Number of valid (non-missing) cells in scope. */
   cellCount: number;
+  /** Number of cells of the nominal grid in scope (valid + missing / excluded). */
+  nominalCount: number;
+  /** Valid area ÷ nominal area of the scope, on the nominal cell layout (0..1); null if the scope is empty. */
+  coverageShare: number | null;
+  /** Excluded raw points (dataset.excluded, docs/adr/0012) that fall inside the scope. */
+  excludedInScope: number;
   /** Area share with SVM < 0.4 (0..1); null when no cells in scope. */
   safeShare: number | null;
   /** Area share with 0.4 <= SVM < 1.0. */
@@ -51,12 +66,15 @@ export interface RecordStats {
   fullWhiteAllSafe: boolean;
   /** Gray level of the row used for fullWhiteSafeNits (normally 255); null if none. */
   fullWhiteGray: number | null;
-  /** Gray-slice SVM at SVM_AT_NITS (log-nits interpolation); null outside the measured range. */
+  /**
+   * Gray-slice SVM at SVM_AT_NITS, read off the 2D chart's curve (smoothSliceAtGray + monotone
+   * spline in log10 nits); null outside the slice's measured range.
+   */
   svmAt: { nits: number; svm: number | null }[];
   /** Gray level actually used for svmAt (sliceGray clamped to the measured rows). */
   sliceGray: number | null;
   /** Extent of the valid cells in scope. */
-  coverage: { grayMin: number; grayMax: number; levelMin: number; levelMax: number } | null;
+  validExtent: { grayMin: number; grayMax: number; levelMin: number; levelMax: number } | null;
 }
 
 /** Areas of the scope's cells: area[r][c] = Δgray × Δx (0..255 gray, x ≥ 0). */
@@ -68,6 +86,7 @@ export function cellAreas(view: GridView): number[][] {
 
 /**
  * Interpolate SVM at `nits` on a slice sorted by nits ascending, linearly in log10(nits).
+ * (Reference rule; the stats read-outs use sliceSvmAt, the 2D chart's curve.)
  * Inclusive at both ends; null outside [first, last] or for an empty slice.
  */
 export function interpolateAtNits(slice: { nits: number; svm: number }[], nits: number): number | null {
@@ -104,7 +123,58 @@ export function safeFromNits(samples: { nits: number; svm: number }[]): number |
   return from;
 }
 
-function compute(ds: Pick<Dataset, 'matrix'>, opts: StatsOptions): RecordStats {
+/**
+ * Nominal grid of the scope: every matrix row (gray) and column (level luminance) that the
+ * clip / cap keep, INCLUDING rows / columns without a single valid cell (which gridView drops).
+ * Returns the cell areas on that layout and, per cell, whether it holds a valid measurement.
+ */
+export function nominalScope(
+  ds: Pick<Dataset, 'matrix'>,
+  opts: Pick<StatsOptions, 'clipLowGray' | 'maxNits'>,
+): { rows: number[]; cols: number[]; areas: number[][]; valid: boolean[][] } {
+  const m = ds.matrix;
+  const rows = m.rows
+    .map((g, i) => ({ g, i }))
+    .filter(({ g }) => Number.isFinite(g) && (!opts.clipLowGray || g >= LOW_GRAY_CLIP))
+    .sort((a, b) => a.g - b.g);
+  const cols = m.headerNits
+    .map((n, i) => ({ n, i }))
+    .filter(({ n }) => Number.isFinite(n) && n > 0 && (opts.maxNits === null || n <= opts.maxNits))
+    .sort((a, b) => a.n - b.n);
+  const xe = cellEdges(
+    cols.map(({ n }) => logNits(n)),
+    0,
+  );
+  const ge = cellEdges(
+    rows.map(({ g }) => g),
+    0,
+    255,
+  );
+  const areas = rows.map((_, r) => cols.map((_, c) => Math.max(0, xe[c + 1] - xe[c]) * Math.max(0, ge[r + 1] - ge[r])));
+  const valid = rows.map(({ i: ri }) =>
+    cols.map(({ i: ci }) => {
+      const p = m.grid[ri]?.[ci];
+      return !!p && Number.isFinite(p.svm);
+    }),
+  );
+  return { rows: rows.map(({ i }) => i), cols: cols.map(({ i }) => i), areas, valid };
+}
+
+/**
+ * SVM of the gray slice at `nits`, exactly as the 2D chart draws it and its data table prints
+ * it: the smooth gray slice (C1 along gray, identical to the measurements on measured rows)
+ * through a monotone cubic in log10(nits). null outside the slice's measured nits range.
+ */
+export function sliceSvmAt(ds: Pick<Dataset, 'matrix'>, gray: number, nits: readonly number[]): { gray: number | null; svm: (number | null)[] } {
+  const slice = Number.isFinite(gray) ? smoothSliceAtGray(ds, gray) : [];
+  const spline = buildSpline(slice.map((p) => ({ x: Math.log10(p.x), y: p.svm })));
+  return {
+    gray: slice.length > 0 ? slice[0].gray : null,
+    svm: nits.map((n) => (spline && n > 0 ? evalSpline(spline, Math.log10(n)) : null)),
+  };
+}
+
+function compute(ds: Pick<Dataset, 'matrix' | 'excluded'>, opts: StatsOptions): RecordStats {
   const view = gridView(ds, { clipLowGray: opts.clipLowGray, maxNits: opts.maxNits });
   const areas = cellAreas(view);
 
@@ -155,13 +225,35 @@ function compute(ds: Pick<Dataset, 'matrix'>, opts: StatsOptions): RecordStats {
     fullWhiteAllSafe = valid.length > 0 && valid.every((p) => p.svm < SVM_SAFE);
   }
 
-  // Typical-luminance SVM on the gray slice (full slice, like the 2D chart).
-  const slice = Number.isFinite(opts.sliceGray) ? sliceAtGray(ds, opts.sliceGray) : [];
-  const svmAt = SVM_AT_NITS.map((nits) => ({ nits, svm: interpolateAtNits(slice, nits) }));
-  const sliceGray = slice.length > 0 ? slice[0].gray : null;
+  // Typical-luminance SVM on the gray slice (full slice, the 2D chart's curve).
+  const at = sliceSvmAt(ds, opts.sliceGray, SVM_AT_NITS);
+  const svmAt = SVM_AT_NITS.map((nits, i) => ({ nits, svm: at.svm[i] }));
+  const sliceGray = at.gray;
+
+  // Coverage on the nominal layout, and excluded points inside the scope.
+  const nom = nominalScope(ds, opts);
+  let nominalArea = 0;
+  let validArea = 0;
+  let nominalCount = 0;
+  nom.areas.forEach((row, r) =>
+    row.forEach((a, c) => {
+      nominalCount++;
+      nominalArea += a;
+      if (nom.valid[r][c]) validArea += a;
+    }),
+  );
+  let excludedInScope = 0;
+  if (ds.excluded?.length) {
+    const rowSet = new Set(nom.rows.map((i) => ds.matrix.rows[i]));
+    const colSet = new Set(nom.cols.map((i) => ds.matrix.cols[i]));
+    for (const x of ds.excluded) if (rowSet.has(x.gray) && colSet.has(x.brightnessPercent)) excludedInScope++;
+  }
 
   return {
     cellCount,
+    nominalCount,
+    coverageShare: nominalArea > 0 ? validArea / nominalArea : null,
+    excludedInScope,
     safeShare,
     midShare,
     criticalShare,
@@ -172,14 +264,14 @@ function compute(ds: Pick<Dataset, 'matrix'>, opts: StatsOptions): RecordStats {
     fullWhiteGray,
     svmAt,
     sliceGray,
-    coverage: cellCount > 0 ? { grayMin, grayMax, levelMin, levelMax } : null,
+    validExtent: cellCount > 0 ? { grayMin, grayMax, levelMin, levelMax } : null,
   };
 }
 
 const cache = new WeakMap<Dataset['matrix'], Map<string, RecordStats>>();
 
 /** Summary stats of one record under the given scope. Memoized per matrix + options. */
-export function computeRecordStats(ds: Pick<Dataset, 'matrix'>, opts: StatsOptions): RecordStats {
+export function computeRecordStats(ds: Pick<Dataset, 'matrix' | 'excluded'>, opts: StatsOptions): RecordStats {
   const key = `${opts.clipLowGray ? 1 : 0}|${opts.maxNits ?? 'all'}|${opts.sliceGray}`;
   let perMatrix = cache.get(ds.matrix);
   if (!perMatrix) {

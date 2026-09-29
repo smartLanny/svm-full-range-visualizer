@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import fs from 'fs';
 import path from 'path';
-import type { Dataset, DataPoint } from '../types';
+import type { Dataset, DataPoint, SvmRecord } from '../types';
 import { gridView, sliceAtGray } from './grid';
-import { cellAreas, computeRecordStats, interpolateAtNits, safeFromNits, SVM_AT_NITS, type StatsOptions } from './stats';
+import { cellAreas, computeRecordStats, interpolateAtNits, nominalScope, safeFromNits, SVM_AT_NITS, type StatsOptions } from './stats';
+import { detectAnomalies, excludeAnomalies } from './anomalies';
+import { recordStyles } from './colors';
+import { buildScene, type ChartInputs } from '../chart2d/scene';
+import { buildTable } from '../chart2d/table';
 
 const load = (f: string) => JSON.parse(fs.readFileSync(path.resolve(__dirname, '../../public/datasets', f), 'utf8')) as Dataset;
 const BUNDLED = fs.readdirSync(path.resolve(__dirname, '../../public/datasets')).filter((f) => f.endsWith('.json') && f !== 'manifest.json');
@@ -54,7 +58,7 @@ describe('computeRecordStats — synthetic grids', () => {
     expect(s.criticalShare).toBeCloseTo(1 / 3, 9);
     expect(s.meanSvm).toBeCloseTo(0.7, 9);
     expect(s.peak).toEqual({ svm: 1.5, gray: 200, levelNits: 9, nits: 5 });
-    expect(s.coverage).toEqual({ grayMin: 100, grayMax: 200, levelMin: 9, levelMax: 99 });
+    expect(s.validExtent).toEqual({ grayMin: 100, grayMax: 200, levelMin: 9, levelMax: 99 });
   });
 
   it('unequal areas: wide high-luminance cells weigh more', () => {
@@ -101,7 +105,9 @@ describe('computeRecordStats — synthetic grids', () => {
     expect(s.criticalShare).toBeNull();
     expect(s.meanSvm).toBeNull();
     expect(s.peak).toBeNull();
-    expect(s.coverage).toBeNull();
+    expect(s.validExtent).toBeNull();
+    expect(s.coverageShare).toBeNull();
+    expect(s.nominalCount).toBe(0);
     expect(s.fullWhiteSafeNits).toBeNull();
     expect(s.fullWhiteGray).toBeNull();
 
@@ -136,17 +142,13 @@ describe('computeRecordStats — synthetic grids', () => {
       [200, 0.2],
       [500, 0.1],
     ];
-    const ds = synth(
-      [255, 100],
-      pts.map((p) => p[0]).reverse(),
-      (g, lv) => (g === 255 ? pts.find((p) => p[0] === lv)! : [lv / 5, 3]),
-    );
+    const ds = synth([255, 100], pts.map((p) => p[0]).reverse(), (g, lv) => (g === 255 ? pts.find((p) => p[0] === lv)! : [lv / 5, 3]));
     expect(computeRecordStats(ds, ALL).fullWhiteSafeNits).toBe(200);
     // cap below 200: only 2..50 remain, the brightest (50, 0.5) is unsafe -> never
     expect(computeRecordStats(ds, { ...ALL, maxNits: 100 }).fullWhiteSafeNits).toBeNull();
   });
 
-  it('svmAt interpolates in log-nits on the gray slice and is null outside range', () => {
+  it('svmAt follows the 2D curve on the gray slice (monotone, exact at samples) and is null outside range', () => {
     const ds = synth([255, 127], [1000, 100, 10, 1], (g, lv) => {
       if (g === 255) return [lv, 0.1];
       const t: Record<number, [number, number]> = { 1000: [100, 0.2], 100: [10, 0.4], 10: [1, 0.8], 1: [0.5, 1.2] };
@@ -155,10 +157,13 @@ describe('computeRecordStats — synthetic grids', () => {
     const s = computeRecordStats(ds, { ...ALL, sliceGray: 127 });
     expect(s.sliceGray).toBe(127);
     const at = Object.fromEntries(s.svmAt.map((x) => [x.nits, x.svm]));
-    expect(at[2]).toBeCloseTo(0.8 - 0.4 * Math.log10(2), 9);
+    // Exact at measured nits; between samples a monotone cubic (never outside the neighbours).
     expect(at[10]).toBeCloseTo(0.4, 9);
-    expect(at[50]).toBeCloseTo(0.4 - 0.2 * Math.log10(5), 9);
     expect(at[100]).toBeCloseTo(0.2, 9);
+    expect(at[2]).toBeGreaterThan(0.4);
+    expect(at[2]).toBeLessThan(0.8);
+    expect(at[50]).toBeGreaterThan(0.2);
+    expect(at[50]).toBeLessThan(0.4);
     // G255 row: range 1..1000 nits, constant 0.1
     const top = computeRecordStats(ds, { ...ALL, sliceGray: 255 });
     expect(top.svmAt.map((x) => x.svm)).toEqual([0.1, 0.1, 0.1, 0.1].map((v) => expect.closeTo(v, 9)));
@@ -178,20 +183,138 @@ describe('computeRecordStats — synthetic grids', () => {
   });
 });
 
+describe('coverage (valid area / nominal area of the scope)', () => {
+  it('counts missing rows / columns that gridView drops, on the nominal layout', () => {
+    // 2 x 2 nominal grid, equal areas; the whole x=2 column is missing -> gridView drops it.
+    const ds = synth([200, 100], [99, 9], (_g, lv) => (lv === 99 ? null : [1, 0.1]));
+    const s = computeRecordStats(ds, ALL);
+    expect(gridView(ds).x.length).toBe(1);
+    expect(s.cellCount).toBe(2);
+    expect(s.nominalCount).toBe(4);
+    // nominal x edges 0.5 | 1.5 | 2.5 -> equal widths; gray heights equal -> half the area valid
+    expect(s.coverageShare).toBeCloseTo(0.5, 9);
+    const full = computeRecordStats(
+      synth([200, 100], [99, 9], () => [1, 0.1]),
+      ALL,
+    );
+    expect(full.coverageShare).toBeCloseTo(1, 9);
+  });
+
+  it('follows the clip / cap scope', () => {
+    const ds = synth([255, 10], [999, 9], (g, lv) => (g === 10 || lv === 999 ? null : [1, 0.1]));
+    expect(nominalScope(ds, { clipLowGray: true, maxNits: 100 }).areas.flat()).toHaveLength(1);
+    const s = computeRecordStats(ds, { clipLowGray: true, maxNits: 100, sliceGray: 127 });
+    expect(s.nominalCount).toBe(1);
+    expect(s.coverageShare).toBeCloseTo(1, 9);
+  });
+
+  it('counts excluded points in scope (bundled 18 Pro Max records)', () => {
+    for (const f of ['xiaomi18promax_adaptive_pro_off.json', 'xiaomi18promax_adaptive_pro_on.json']) {
+      const ds = load(f);
+      expect(ds.excluded?.length).toBeGreaterThan(0);
+      const all = computeRecordStats(ds, ALL);
+      expect(all.excludedInScope).toBe(ds.excluded!.length);
+      const def = computeRecordStats(ds, DEFAULT);
+      expect(def.excludedInScope).toBeGreaterThan(0);
+      expect(def.excludedInScope).toBeLessThan(ds.excluded!.length);
+      expect(def.coverageShare!).toBeLessThan(0.95);
+    }
+  });
+
+  it('excluding anomalies lowers coverage and leaves the other stats well-defined', () => {
+    const raw = load('iPhone17ProMax.json');
+    const before = computeRecordStats(raw, DEFAULT);
+    const cleaned = excludeAnomalies(raw, detectAnomalies(raw));
+    const after = computeRecordStats(cleaned, DEFAULT);
+    expect(after.coverageShare!).toBeLessThanOrEqual(before.coverageShare! + 1e-12);
+    expect(after.cellCount + after.excludedInScope).toBe(before.cellCount);
+  });
+});
+
+describe('svmAt equals the 2D chart data table (docs/adr/0009)', () => {
+  const asRec = (f: string, id: string): SvmRecord => ({ ...load(f), id, device: id, mode: '', source: 'bundled' });
+  const records = [asRec('iPhone17ProMax.json', 'a'), asRec('huawei_mate80rs.json', 'b'), asRec('xiaomi18promax_adaptive_pro_on.json', 'c')];
+  for (const sliceGray of [127, 100.5, 255, 40]) {
+    it(`G${sliceGray}`, () => {
+      const inputs: ChartInputs = {
+        records,
+        hiddenIds: [],
+        styles: recordStyles(records),
+        lang: 'zh',
+        sliceMode: 'gray',
+        sliceGray,
+        sliceNits: 100,
+        axisMode: 'free',
+        clipLowGray: true,
+        presenting: false,
+        presentBlack: false,
+      };
+      const table = buildTable(buildScene(inputs, { t: null, interactive: false }));
+      let compared = 0;
+      for (const row of table.rows) {
+        const rec = records.find((r) => r.id === row.id)!;
+        const s = computeRecordStats(rec, { ...DEFAULT, sliceGray });
+        for (const a of s.svmAt) {
+          const k = table.xs.findIndex((x) => Math.abs(x - a.nits) < 1e-9);
+          if (k < 0) continue;
+          compared++;
+          if (a.svm === null) expect(row.values[k]).toBeNull();
+          else expect(row.values[k]).toBeCloseTo(a.svm, 12);
+        }
+      }
+      expect(compared).toBeGreaterThanOrEqual(records.length * 2);
+    });
+  }
+});
+
 describe('interpolateAtNits / safeFromNits', () => {
   it('handles empty, single, duplicates and bounds', () => {
     expect(interpolateAtNits([], 10)).toBeNull();
     expect(interpolateAtNits([{ nits: 10, svm: 0.3 }], 10)).toBe(0.3);
     expect(interpolateAtNits([{ nits: 10, svm: 0.3 }], 11)).toBeNull();
-    expect(interpolateAtNits([{ nits: 1, svm: 1 }, { nits: 100, svm: 0 }], 10)).toBeCloseTo(0.5, 9);
-    expect(interpolateAtNits([{ nits: 1, svm: 1 }, { nits: 100, svm: 0 }], 0)).toBeNull();
-    expect(interpolateAtNits([{ nits: 5, svm: 1 }, { nits: 5, svm: 0 }], 5)).toBeCloseTo(0.5, 9);
+    expect(
+      interpolateAtNits(
+        [
+          { nits: 1, svm: 1 },
+          { nits: 100, svm: 0 },
+        ],
+        10,
+      ),
+    ).toBeCloseTo(0.5, 9);
+    expect(
+      interpolateAtNits(
+        [
+          { nits: 1, svm: 1 },
+          { nits: 100, svm: 0 },
+        ],
+        0,
+      ),
+    ).toBeNull();
+    expect(
+      interpolateAtNits(
+        [
+          { nits: 5, svm: 1 },
+          { nits: 5, svm: 0 },
+        ],
+        5,
+      ),
+    ).toBeCloseTo(0.5, 9);
   });
   it('safeFromNits', () => {
     expect(safeFromNits([])).toBeNull();
     expect(safeFromNits([{ nits: 10, svm: 0.5 }])).toBeNull();
-    expect(safeFromNits([{ nits: 10, svm: 0.1 }, { nits: 1, svm: 0.1 }])).toBe(1);
-    expect(safeFromNits([{ nits: 0, svm: 0.1 }, { nits: 3, svm: 0.1 }])).toBe(3); // nits <= 0 ignored
+    expect(
+      safeFromNits([
+        { nits: 10, svm: 0.1 },
+        { nits: 1, svm: 0.1 },
+      ]),
+    ).toBe(1);
+    expect(
+      safeFromNits([
+        { nits: 0, svm: 0.1 },
+        { nits: 3, svm: 0.1 },
+      ]),
+    ).toBe(3); // nits <= 0 ignored
   });
 });
 
@@ -202,7 +325,10 @@ describe('computeRecordStats — bundled records', () => {
       for (const opts of [ALL, DEFAULT]) {
         const s = computeRecordStats(ds, opts);
         const v = gridView(ds, opts);
-        const vals = v.points.flat().filter((p): p is DataPoint => !!p).map((p) => p.svm);
+        const vals = v.points
+          .flat()
+          .filter((p): p is DataPoint => !!p)
+          .map((p) => p.svm);
         expect(s.cellCount).toBe(vals.length);
         expect(s.safeShare! + s.midShare! + s.criticalShare!).toBeCloseTo(1, 9);
         for (const x of [s.safeShare!, s.midShare!, s.criticalShare!]) expect(x).toBeGreaterThanOrEqual(0);
@@ -210,7 +336,7 @@ describe('computeRecordStats — bundled records', () => {
         expect(s.meanSvm!).toBeLessThanOrEqual(Math.max(...vals));
         expect(s.peak!.svm).toBe(Math.max(...vals));
         if (opts.clipLowGray) expect(s.peak!.gray).toBeGreaterThanOrEqual(15);
-        if (opts.maxNits) expect(s.coverage!.levelMax).toBeLessThanOrEqual(opts.maxNits);
+        if (opts.maxNits) expect(s.validExtent!.levelMax).toBeLessThanOrEqual(opts.maxNits);
         expect(s.fullWhiteGray).toBe(255);
 
         // fullWhiteSafeNits: every brighter G255 sample is safe; the next dimmer one is not.

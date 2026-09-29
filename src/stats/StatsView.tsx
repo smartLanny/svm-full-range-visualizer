@@ -1,11 +1,11 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { BarChart3, ClipboardCopy, LayoutGrid, Table2 } from 'lucide-react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { ArrowDownWideNarrow, ArrowUpNarrowWide, BarChart3, ChevronRight, ClipboardCopy, LayoutGrid, Table2, TriangleAlert } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
 import { useRecordStyles, useVisibleRecords } from '../store/hooks';
 import { LOW_GRAY_CLIP } from '../types';
 import { useT } from '../i18n';
-import { Button, Segmented, Select, Switch, toast } from '../ui';
-import { bestValues, buildRows, copyText, defaultDir, METRICS, sortRows, toTsv, type SortDir, type SortKey } from './model';
+import { Button, IconButton, Segmented, Select, Switch, cn, toast } from '../ui';
+import { buildRows, copyText, defaultDir, METRICS, rankRows, sortRows, toTsv, type SortDir, type SortKey } from './model';
 import { StatsCard } from './StatsCard';
 import { StatsTable } from './StatsTable';
 import { thumbExtent } from './Thumbnail';
@@ -45,6 +45,9 @@ export default function StatsView() {
   const colorMax = useAppStore((s) => s.colorMax);
   const set = useAppStore((s) => s.set);
   const setActive = useAppStore((s) => s.setActive);
+  // Pure-black presentation background (recording / keying): the page and its bars are #000.
+  const presenting = useAppStore((s) => s.presenting);
+  const black = useAppStore((s) => s.presenting && s.presentBlack);
 
   const [ui, setUi] = useState(loadUi);
   useEffect(() => {
@@ -57,7 +60,7 @@ export default function StatsView() {
 
   const rows = useMemo(() => buildRows(records, { clipLowGray, maxNits, sliceGray }), [records, clipLowGray, maxNits, sliceGray]);
   const sorted = useMemo(() => sortRows(rows, ui.sortKey, ui.sortDir, lang), [rows, ui.sortKey, ui.sortDir, lang]);
-  const best = useMemo(() => bestValues(rows), [rows]);
+  const rank = useMemo(() => rankRows(rows), [rows]);
   const extent = useMemo(() => thumbExtent(records, { clipLowGray, maxNits }), [records, clipLowGray, maxNits]);
 
   const onSort = useCallback((key: SortKey) => {
@@ -71,6 +74,35 @@ export default function StatsView() {
     },
     [set, setActive],
   );
+
+  // ---- scroll body: reset when the view changes; horizontal-overflow affordance (table) ----
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const [hScroll, setHScroll] = useState({ left: false, right: false, gutter: 0 });
+  const measure = useCallback(() => {
+    const el = bodyRef.current;
+    if (!el) return;
+    const max = el.scrollWidth - el.clientWidth;
+    // Hidden overflow smaller than the body padding (p-5) is only padding: no affordance for it.
+    const next = { left: el.scrollLeft > 1, right: max - el.scrollLeft > 24, gutter: el.offsetWidth - el.clientWidth };
+    // Only commit real changes: scroll events never cause a re-render while nothing flips.
+    setHScroll((h) => (h.left === next.left && h.right === next.right && h.gutter === next.gutter ? h : next));
+  }, []);
+  useLayoutEffect(() => {
+    const el = bodyRef.current;
+    if (el) {
+      el.scrollTop = 0;
+      el.scrollLeft = 0;
+    }
+    measure();
+  }, [ui.mode, measure]);
+  useEffect(() => {
+    const el = bodyRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    if (el.firstElementChild) ro.observe(el.firstElementChild);
+    return () => ro.disconnect();
+  }, [measure, ui.mode, records.length]);
 
   const onCopy = async () => {
     try {
@@ -97,14 +129,29 @@ export default function StatsView() {
     { value: 'mean', label: t('stats.col.mean') },
     { value: 'at1', label: 'SVM @10 nits' },
     { value: 'at3', label: 'SVM @100 nits' },
+    { value: 'coverage', label: t('stats.col.coverage') },
   ];
+  const dirLabel = t(ui.sortDir === 'asc' ? 'stats.sort.asc' : 'stats.sort.desc');
+  const footnote =
+    rank.low.size > 0 ? (
+      <span className="inline-flex items-center gap-1.5">
+        <TriangleAlert size={11} className="text-amber-300" aria-hidden />
+        {t('stats.caveat.footnote')}
+      </span>
+    ) : null;
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-canvas">
-      {/* header */}
-      <div className="flex flex-wrap items-center gap-x-6 gap-y-3 border-b border-line bg-surface-1 px-6 py-3.5">
-        <div className="min-w-0 flex-1">
-          <div className="flex items-baseline gap-2.5">
+    <div className={cn('flex h-full min-h-0 flex-col', black ? 'bg-black' : 'bg-canvas')}>
+      {/* header: the title block keeps a minimum width; when title + controls do not fit on one
+          line the controls wrap to a second row (never squeezing the title). */}
+      <div
+        className={cn(
+          'group/hdr flex flex-wrap items-center justify-between gap-x-6 gap-y-2.5 border-b border-line px-6 py-3.5',
+          black ? 'bg-black' : 'bg-surface-1',
+        )}
+      >
+        <div className="min-w-[min(100%,280px)] flex-[1_1_280px]">
+          <div className="flex items-baseline gap-2.5 whitespace-nowrap">
             <h1 className="text-base font-semibold text-ink-1">{t('stats.title')}</h1>
             <span className="text-xs tabular-nums text-ink-3">{t('stats.count', { n: records.length })}</span>
           </div>
@@ -113,17 +160,33 @@ export default function StatsView() {
             {scope}
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
+        {/* In presentation the controls stay out of the picture until the pointer reaches the bar (pure CSS, no timers). */}
+        <div
+          className={cn(
+            'flex max-w-full flex-wrap items-center gap-3',
+            presenting && 'opacity-0 transition-opacity duration-200 focus-within:opacity-100 group-hover/hdr:opacity-100',
+          )}
+        >
           <Switch checked={clipLowGray} onChange={(v) => set('clipLowGray', v)} label={t('stats.clipToggle')} className="items-center" />
           <div className="h-5 w-px bg-line" />
           {ui.mode === 'cards' && (
-            <Select<SortKey>
-              aria-label={t('stats.sort.label')}
-              value={ui.sortKey}
-              onChange={(k) => setUi((u) => ({ ...u, sortKey: k, sortDir: defaultDir(k) }))}
-              options={sortOptions}
-              className="w-40"
-            />
+            <div className="flex items-center gap-1">
+              <Select<SortKey>
+                aria-label={t('stats.sort.label')}
+                value={ui.sortKey}
+                onChange={(k) => setUi((u) => ({ ...u, sortKey: k, sortDir: defaultDir(k) }))}
+                options={sortOptions}
+                className="w-40"
+              />
+              <IconButton
+                size="md"
+                variant="ghost"
+                label={t('stats.sort.toggle', { dir: dirLabel })}
+                icon={ui.sortDir === 'asc' ? <ArrowUpNarrowWide size={15} /> : <ArrowDownWideNarrow size={15} />}
+                onClick={() => setUi((u) => ({ ...u, sortDir: u.sortDir === 'asc' ? 'desc' : 'asc' }))}
+                aria-pressed={ui.sortDir === 'desc'}
+              />
+            </div>
           )}
           <Segmented<ViewMode>
             aria-label={t('stats.view.label')}
@@ -142,46 +205,90 @@ export default function StatsView() {
       </div>
 
       {/* body */}
-      <div className="min-h-0 flex-1 overflow-auto">
-        {records.length === 0 ? (
-          <div className="flex h-full min-h-[320px] flex-col items-center justify-center px-6 text-center">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-surface-2 text-ink-3 ring-1 ring-inset ring-line">
-              <BarChart3 size={22} />
+      <div className="relative min-h-0 flex-1">
+        <div ref={bodyRef} className="h-full overflow-auto" onScroll={measure}>
+          {records.length === 0 ? (
+            <div className="flex h-full min-h-[320px] flex-col items-center justify-center px-6 text-center">
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-surface-2 text-ink-3 ring-1 ring-inset ring-line">
+                <BarChart3 size={22} />
+              </div>
+              <div className="mt-4 text-sm font-medium text-ink-1">{t('stats.empty.title')}</div>
+              <div className="mt-1 max-w-sm text-xs leading-relaxed text-ink-3">{t('stats.empty.hint')}</div>
             </div>
-            <div className="mt-4 text-sm font-medium text-ink-1">{t('stats.empty.title')}</div>
-            <div className="mt-1 max-w-sm text-xs leading-relaxed text-ink-3">{t('stats.empty.hint')}</div>
-          </div>
-        ) : ui.mode === 'cards' ? (
-          <div className="grid gap-4 p-6" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(330px, 1fr))' }}>
-            {sorted.map((row) => (
-              <StatsCard
-                key={row.rec.id}
-                row={row}
-                style={styles.get(row.rec.id)}
+          ) : ui.mode === 'cards' ? (
+            <div className="p-5">
+              <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 310px), 1fr))' }}>
+                {sorted.map((row) => (
+                  <StatsCard
+                    key={row.rec.id}
+                    row={row}
+                    style={styles.get(row.rec.id)}
+                    lang={lang}
+                    rank={rank}
+                    clipLowGray={clipLowGray}
+                    maxNits={maxNits}
+                    colormap={colormap}
+                    colorMax={colorMax}
+                    extent={extent}
+                    onOpen3d={onOpen3d}
+                  />
+                ))}
+              </div>
+              {footnote && <div className="mt-3 text-2xs text-ink-3">{footnote}</div>}
+            </div>
+          ) : (
+            <div className="min-w-max p-5">
+              <StatsTable
+                rows={sorted}
+                styles={styles}
                 lang={lang}
-                best={best}
-                clipLowGray={clipLowGray}
-                maxNits={maxNits}
-                colormap={colormap}
-                colorMax={colorMax}
-                extent={extent}
+                rank={rank}
+                scrolledX={hScroll.left}
+                sortKey={ui.sortKey}
+                sortDir={ui.sortDir}
+                sliceGray={sliceGray}
+                onSort={onSort}
                 onOpen3d={onOpen3d}
               />
-            ))}
-          </div>
-        ) : (
-          <div className="min-w-max p-6">
-            <StatsTable rows={sorted} styles={styles} lang={lang} best={best} sortKey={ui.sortKey} sortDir={ui.sortDir} sliceGray={sliceGray} onSort={onSort} onOpen3d={onOpen3d} />
-            <div className="mt-2.5 flex items-center gap-4 text-2xs text-ink-3">
-              <span className="inline-flex items-center gap-1.5">
-                <span className="h-2.5 w-4 rounded-sm bg-accent/15 ring-1 ring-inset ring-accent/30" />
-                {t('stats.bestHint')}
-              </span>
-              <span>{t('stats.metric.svmAtHint')}</span>
             </div>
+          )}
+        </div>
+        {/* More columns to the right: edge fade + a "scroll right" button (the sticky record column
+            casts a shadow once the table is scrolled). */}
+        {ui.mode === 'table' && records.length > 0 && (
+          <div
+            className={cn(
+              'pointer-events-none absolute inset-y-0 flex w-16 items-center justify-end bg-gradient-to-l to-transparent pr-2 transition-opacity duration-200',
+              black ? 'from-black via-black/60' : 'from-canvas via-canvas/60',
+              hScroll.right ? 'opacity-100' : 'opacity-0',
+            )}
+            style={{ right: hScroll.gutter }}
+          >
+            <IconButton
+              size="sm"
+              variant="secondary"
+              label={t('stats.table.moreRight')}
+              icon={<ChevronRight size={14} />}
+              tabIndex={hScroll.right ? 0 : -1}
+              onClick={() => bodyRef.current?.scrollBy({ left: Math.max(160, (bodyRef.current?.clientWidth ?? 0) * 0.6), behavior: 'smooth' })}
+              className={cn('rounded-full shadow-panel', hScroll.right && 'pointer-events-auto')}
+            />
           </div>
         )}
       </div>
+      {/* table legend: outside the scroll area so it never scrolls away sideways */}
+      {ui.mode === 'table' && records.length > 0 && (
+        <div
+          className={cn('flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-line px-6 py-2 text-2xs text-ink-3', black ? 'bg-black' : 'bg-surface-1')}
+        >
+          <span className="inline-flex items-center gap-1.5">
+            <span className="h-2.5 w-4 rounded-sm bg-accent/15 ring-1 ring-inset ring-accent/30" />
+            {t('stats.bestHint')}
+          </span>
+          {footnote}
+          <span>{t('stats.metric.svmAtHint')}</span>
+        </div>
+      )}
     </div>
   );
 }
