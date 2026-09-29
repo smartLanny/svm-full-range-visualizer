@@ -12,7 +12,7 @@ import { avcCandidates, codecFamily, RECORDER_MIME_TYPES, vp9Candidates } from '
 import { copyFrame, createCanvas, ExportAbortError, nextTask, throwIfAborted } from './canvas';
 import { safeEnd } from './png';
 import { evenSize, frameCount, frameTime, frameTimestampUs, keyframeInterval, videoBitrate } from './presets';
-import type { ExportSize, ExportTarget } from './registry';
+import { safeFileName, type ExportSize, type ExportTarget } from './registry';
 
 export type VideoMethod = 'webcodecs' | 'mediarecorder';
 export type VideoContainer = 'mp4' | 'webm';
@@ -127,8 +127,22 @@ export async function planVideo(sizeIn: ExportSize, fps: number, force: VideoFor
   return null;
 }
 
+/**
+ * Output name of the video. The animation may be named differently from the static view (2D
+ * sweep, 3D intro of record A in a side-by-side layout), so the animation's own name wins.
+ */
+export function videoBaseName(target: ExportTarget): string {
+  let anim: ReturnType<ExportTarget['animation']> = null;
+  try {
+    anim = target.animation();
+  } catch {
+    /* fall back to the view name */
+  }
+  return anim?.fileName?.trim() ? safeFileName(anim.fileName) : target.fileName('video');
+}
+
 export function videoFileName(target: ExportTarget, size: ExportSize, fps: number, container: VideoContainer): string {
-  return `${target.fileName()}_${size.width}x${size.height}_${fps}fps.${container}`;
+  return `${videoBaseName(target)}_${size.width}x${size.height}_${fps}fps.${container}`;
 }
 
 /**
@@ -197,9 +211,11 @@ export async function exportVideo(target: ExportTarget, opts: VideoExportOptions
   if (!plan) throw new Error('Video encoding is not supported in this browser');
   throwIfAborted(opts.signal);
   opts.onPlan?.(plan);
+  // Named from the state the export starts from (the view may change once it is released).
+  const fileName = videoFileName(target, size, fps, plan.container);
 
   const blob = plan.method === 'webcodecs' ? await encodeWebCodecs(target, plan, size, fps, anim.duration, total, opts) : await encodeRecorder(target, plan, size, fps, anim.duration, total, opts);
-  return { blob, fileName: videoFileName(target, size, fps, plan.container), plan, size, fps, frames: total, duration: total / fps };
+  return { blob, fileName, plan, size, fps, frames: total, duration: total / fps };
 }
 
 async function encodeWebCodecs(

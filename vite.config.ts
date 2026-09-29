@@ -30,6 +30,34 @@ function htmlFlavour(standalone: boolean): Plugin {
   };
 }
 
+/**
+ * Standalone-only size trims (docs/adr/0008). The single HTML file inlines every asset (fonts as
+ * base64, +33 %), so every unused byte ships:
+ * - @fontsource CSS lists a .woff fallback after each .woff2. Every browser that can run the app
+ *   (ES modules, WebGL2, WebCodecs) uses woff2, so the woff sources are dropped and never inlined.
+ * - Bundled datasets carry each measurement twice: the flat `data` list and `matrix.grid`.
+ *   validateDataset() (src/data/records.ts) always rebuilds `data` from the grid, so only the grid
+ *   (plus `excluded` and the metadata) is embedded.
+ */
+function standaloneTrim(): Plugin {
+  const fontCss = /[\\/]@fontsource[\\/][^?]*\.css(?:\?|$)/;
+  const dataset = /[\\/]public[\\/]datasets[\\/](?!manifest\.json)[^/\\?]+\.json(?:\?|$)/;
+  return {
+    name: 'svm:standalone-trim',
+    enforce: 'pre',
+    transform(code, id) {
+      if (fontCss.test(id)) {
+        return { code: code.replace(/,\s*url\([^)]*\.woff\)\s*format\((['"])woff\1\)/g, ''), map: null };
+      }
+      if (dataset.test(id)) {
+        const { data: _flat, ...rest } = JSON.parse(code) as Record<string, unknown>;
+        return { code: JSON.stringify(rest), map: null };
+      }
+      return null;
+    },
+  };
+}
+
 // Modes: default web build (`vite build`, datasets fetched from ./datasets at runtime) and
 // "standalone" (`npm run build:standalone`): one self-contained offline HTML file with every
 // script, style, font, icon and bundled dataset inlined; finalized by scripts/finalize-standalone.mjs.
@@ -45,7 +73,11 @@ export default defineConfig(({ mode }) => {
       port: 3000,
       host: '0.0.0.0',
     },
-    plugins: [react(), htmlFlavour(standalone), ...(standalone ? [viteSingleFile({ removeViteModuleLoader: true })] : [])],
+    plugins: [
+      react(),
+      htmlFlavour(standalone),
+      ...(standalone ? [standaloneTrim(), viteSingleFile({ removeViteModuleLoader: true })] : []),
+    ],
     define: {
       'import.meta.env.VITE_STANDALONE': JSON.stringify(standalone ? '1' : ''),
     },

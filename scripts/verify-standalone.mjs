@@ -5,13 +5,15 @@
  *   npm run build:standalone
  *   PW_MODULE=/path/to/playwright/index.mjs node scripts/verify-standalone.mjs [release/SVM-Visualizer.html] [outDir]
  *
- * Checks: page loads with no page errors, no failed or network requests, all bundled records
- * are present, WebCodecs is available (file:// is a secure context), settings persist across a
+ * Checks: the file was built from the current sources (build-input fingerprint, see
+ * scripts/build-inputs.mjs), page loads with no page errors, no failed or network requests, all
+ * bundled records are present, WebCodecs is available (file:// is a secure context), settings persist across a
  * reload through IndexedDB, and the app still starts silently when IndexedDB is unavailable.
  */
 import fs from 'fs';
 import path from 'path';
-import { pathToFileURL } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
+import { buildInputHash, readBuildInputHash } from './build-inputs.mjs';
 
 const file = path.resolve(process.argv[2] || 'release/SVM-Visualizer.html');
 const outDir = process.argv[3] || 'snap-out/standalone';
@@ -48,6 +50,13 @@ function watch(page) {
 
 const ready = (page) => page.waitForFunction(() => window.__svm?.store.getState().ready === true, null, { timeout: 30000 });
 const recordCount = (page) => page.evaluate(() => window.__svm.store.getState().records.length);
+
+// 0. Built from the current sources?
+{
+  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+  const stamped = readBuildInputHash(fs.readFileSync(file, 'utf8'));
+  ok(stamped === buildInputHash(root), `built from the current sources (fingerprint ${stamped ? stamped.slice(7, 19) : 'missing'})`);
+}
 
 // 1. Fresh load + persistence across reload (same browser profile).
 {

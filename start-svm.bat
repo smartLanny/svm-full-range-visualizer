@@ -33,11 +33,14 @@ start "" "%SVM_APP%"
 exit /b 0
 
 rem ---------------------------------------------------------------------------
-rem No release file: run the development server (needs Node.js 18+).
+rem No release file: run the development server (needs Node.js 20.19+ or 22.12+).
 rem ---------------------------------------------------------------------------
 :dev_server
 where node >nul 2>nul
 if errorlevel 1 goto no_node
+rem Same range as package.json "engines" (@vitejs/plugin-react needs ^20.19 or >=22.12).
+node -e "const [a,b]=process.versions.node.split('.').map(Number);process.exit((a===20&&b>=19)||(a===22&&b>=12)||a>22?0:1)" >nul 2>nul
+if errorlevel 1 goto old_node
 if exist "%~dp0node_modules\" goto run_dev
 echo 首次运行：正在安装依赖 npm install，可能需要几分钟 ...
 call npm install
@@ -65,7 +68,18 @@ echo.
 echo 未找到离线版文件 release\SVM-Visualizer.html，也没有安装 Node.js。
 echo 解决方法任选其一：
 echo   1. 下载包含 release 文件夹的完整版本，然后重新双击 start-svm.bat；
-echo   2. 安装 Node.js 18 或更高版本 https://nodejs.org/ 后重新运行本脚本。
+echo   2. 安装 Node.js 22 LTS（至少 20.19 或 22.12）https://nodejs.org/ 后重新运行本脚本。
+pause
+exit /b 1
+
+:old_node
+set "SVM_NODE_VERSION=unknown"
+for /f "delims=" %%V in ('node -v 2^>nul') do set "SVM_NODE_VERSION=%%V"
+echo.
+echo 未找到离线版文件 release\SVM-Visualizer.html，而本机的 Node.js %SVM_NODE_VERSION% 版本过旧，无法启动开发服务。
+echo 解决方法任选其一：
+echo   1. 下载包含 release 文件夹的完整版本，然后重新双击 start-svm.bat；
+echo   2. 升级到 Node.js 22 LTS（至少 20.19 或 22.12）https://nodejs.org/ 后重新运行本脚本。
 pause
 exit /b 1
 

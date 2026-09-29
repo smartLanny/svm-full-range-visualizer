@@ -9,7 +9,11 @@
     "build:standalone": "vite build --mode standalone && node scripts/finalize-standalone.mjs",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "check:release": "vitest run src/export/releaseFreshness.test.ts"
+  },
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
   },
   "dependencies": {
     "@fontsource/inter": "^5.3.0",

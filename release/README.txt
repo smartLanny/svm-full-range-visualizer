@@ -8,7 +8,7 @@ SVM-Visualizer.html 是完整的单文件离线版：程序、样式、字体和
   1. Windows：双击项目根目录的 start-svm.bat，以独立应用窗口（Edge / Chrome，无地址栏）打开。
   2. Windows：双击 create-desktop-shortcut.bat，在桌面生成带图标的“SVM 全范围可视化”快捷方式，
      以后直接双击桌面图标即可。
-  3. macOS：双击 start-svm.command（首次如被系统拦截：右键 → 打开）。
+  3. macOS：双击 start-svm.command（首次如被系统拦截：右键 → 打开；应用窗口打开后可关闭终端窗口）。
      Linux：运行 ./start-svm.sh。
   4. 也可以直接双击 SVM-Visualizer.html，用默认浏览器打开。
      推荐使用最新版 Microsoft Edge 或 Google Chrome（视频导出为 H.264 MP4）。
