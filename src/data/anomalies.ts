@@ -224,3 +224,25 @@ export function restoreExcluded<T extends Dataset>(ds: T): T {
   const { excluded: _e, ...rest } = ds;
   return { ...(rest as T), data, matrix: { ...ds.matrix, grid } };
 }
+
+export interface ExclusionSummary {
+  /** Number of excluded raw points. */
+  total: number;
+  /** Count per reason (AnomalyKind). */
+  byReason: Partial<Record<AnomalyKind, number>>;
+  /** Nominal grid size (rows × cols) and valid cells left. */
+  nominal: number;
+  valid: number;
+}
+
+/** Summary of a record's excluded points for UI badges / tooltips (null when nothing was excluded). */
+export function exclusionSummary(ds: Pick<Dataset, 'matrix' | 'excluded' | 'data'>): ExclusionSummary | null {
+  const ex = ds.excluded ?? [];
+  if (!ex.length) return null;
+  const byReason: Partial<Record<AnomalyKind, number>> = {};
+  for (const x of ex) byReason[x.reason as AnomalyKind] = (byReason[x.reason as AnomalyKind] ?? 0) + 1;
+  return { total: ex.length, byReason, nominal: ds.matrix.rows.length * ds.matrix.cols.length, valid: ds.data.length };
+}
+
+/** i18n keys (common namespace) for each anomaly kind: common.exclusion.reasons.<kind>. */
+export const ANOMALY_KINDS: AnomalyKind[] = ['belowNoise', 'duplicateColumn', 'duplicateRow', 'nitsShift', 'svmSpike'];

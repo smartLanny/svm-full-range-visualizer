@@ -52,6 +52,22 @@ const strings: StringsModule = {
     unitsSvm: 'SVM',
     a: 'A',
     b: 'B',
+    noValidData: '无有效数据',
+    exclusion: {
+      badge: '已剔除 {n}',
+      title: '已剔除 {n} 个异常点',
+      detail: '按规则剔除的明显异常测量点，原始值保存在记录中，可随时还原',
+      coverage: '有效 {valid} / {nominal} 格',
+      missingCell: '无有效数据',
+      excludedCell: '已剔除：{reason}',
+      reasons: {
+        belowNoise: '低于噪声底',
+        duplicateColumn: '重复列',
+        duplicateRow: '重复行',
+        nitsShift: '陈旧读数 / 错行亮度',
+        svmSpike: 'SVM 尖峰',
+      },
+    },
   },
   en: {
     appName: 'SVM Full-Range Visualizer',
@@ -103,6 +119,22 @@ const strings: StringsModule = {
     unitsSvm: 'SVM',
     a: 'A',
     b: 'B',
+    noValidData: 'No valid data',
+    exclusion: {
+      badge: '{n} excluded',
+      title: '{n} anomalous points excluded',
+      detail: 'Obviously invalid readings removed by rule; raw values are kept in the record and can be restored',
+      coverage: '{valid} / {nominal} cells valid',
+      missingCell: 'No valid data',
+      excludedCell: 'Excluded: {reason}',
+      reasons: {
+        belowNoise: 'Below noise floor',
+        duplicateColumn: 'Duplicate column',
+        duplicateRow: 'Duplicate row',
+        nitsShift: 'Stale / shifted reading',
+        svmSpike: 'SVM spike',
+      },
+    },
   },
 };
 export default strings;
