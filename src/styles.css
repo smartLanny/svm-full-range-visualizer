@@ -100,3 +100,102 @@
     opacity: 0.4;
   }
 }
+
+/* ---------------------------------------------------------------------------------------
+ * Shell (src/shell) — component-level styles.
+ * ------------------------------------------------------------------------------------- */
+@layer components {
+  /* Smooth height collapse (device groups): grid rows 1fr -> 0fr. */
+  .shell-collapse {
+    display: grid;
+    grid-template-rows: 1fr;
+    transition: grid-template-rows 180ms ease-out, opacity 180ms ease-out;
+  }
+  .shell-collapse.is-collapsed {
+    grid-template-rows: 0fr;
+    opacity: 0;
+  }
+
+  /* Row actions revealed on hover / keyboard focus; always visible on touch screens. */
+  .shell-reveal {
+    opacity: 0;
+    transition: opacity 120ms ease-out;
+  }
+  .shell-row:hover .shell-reveal,
+  .shell-row:focus-within .shell-reveal,
+  .shell-row:focus-visible .shell-reveal {
+    opacity: 1;
+  }
+  @media (hover: none) {
+    .shell-reveal {
+      opacity: 1;
+    }
+  }
+
+  /* Loading placeholders. */
+  .shell-skeleton {
+    background: linear-gradient(90deg, #141922 0%, #1c2230 40%, #141922 80%);
+    background-size: 200% 100%;
+    animation: shell-shimmer 1.4s ease-in-out infinite;
+  }
+  @keyframes shell-shimmer {
+    0% {
+      background-position: 100% 0;
+    }
+    100% {
+      background-position: -100% 0;
+    }
+  }
+  .shell-spinner {
+    width: 14px;
+    height: 14px;
+    border-radius: 9999px;
+    border: 2px solid rgba(76, 141, 255, 0.25);
+    border-top-color: #4c8dff;
+    animation: shell-spin 0.8s linear infinite;
+  }
+  @keyframes shell-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  /* Narrow-window inspector drawer. */
+  .shell-drawer {
+    animation: shell-drawer-in 180ms ease-out;
+  }
+  @keyframes shell-drawer-in {
+    from {
+      transform: translateX(16px);
+      opacity: 0;
+    }
+    to {
+      transform: none;
+      opacity: 1;
+    }
+  }
+
+  /* Presentation mode: exit button shows while the pointer moves; cursor hides when idle. */
+  .shell-present-exit {
+    opacity: 0;
+    transition: opacity 300ms ease-out;
+  }
+  .shell-present-exit.is-visible,
+  .shell-present-exit:hover {
+    opacity: 1;
+  }
+  html.shell-idle,
+  html.shell-idle * {
+    cursor: none !important;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .shell-collapse,
+    .shell-drawer,
+    .shell-skeleton,
+    .shell-spinner {
+      transition: none;
+      animation: none;
+    }
+  }
+}
