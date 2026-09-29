@@ -119,3 +119,15 @@ describe('surface grid + contours', () => {
       }
   });
 });
+
+import { formatCellValue } from './values';
+describe('cell value format', () => {
+  it('formats svm and signed differences without "-0.00"', () => {
+    expect(formatCellValue(0.345, 'svm')).toBe('0.34');
+    expect(formatCellValue(12.34, 'svm')).toBe('12.3');
+    expect(formatCellValue(0.004, 'diff')).toBe('0.00');
+    expect(formatCellValue(-0.004, 'diff')).toBe('0.00');
+    expect(formatCellValue(0.25, 'diff')).toBe('+0.25');
+    expect(formatCellValue(-0.5, 'diff')).toBe('−0.50');
+  });
+});

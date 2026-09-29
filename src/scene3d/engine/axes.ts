@@ -63,6 +63,8 @@ export class Axes {
   readonly valueGroup = new THREE.Group();
   readonly labels: AxisLabelSpec[] = [];
   private readonly lineMat: LineMaterial;
+  private readonly lumTickMat: LineMaterial;
+  private readonly grayTickMat: LineMaterial;
   private readonly gridMat: LineMaterial;
   private readonly valueMat: LineMaterial;
   private readonly objects: LineSegments2[] = [];
@@ -75,12 +77,16 @@ export class Axes {
   readonly center: THREE.Vector3;
   valueTop = 1;
   edges: AxisEdges = { lumFront: true, grayLeft: true };
+  /** 0..1 per axis: dips to 0 around an edge switch so labels / ticks cross-fade instead of popping. */
+  edgeFade = { lum: 1, gray: 1 };
 
   constructor(readonly model: SceneModel, texts: AxisTexts) {
     this.lineMat = new LineMaterial({ color: 0x4a5464, linewidth: 1.25, transparent: true, depthWrite: false, worldUnits: false });
     this.lineMat.polygonOffset = true;
     this.lineMat.polygonOffsetFactor = -1;
     this.lineMat.polygonOffsetUnits = -2;
+    this.lumTickMat = this.lineMat.clone() as LineMaterial;
+    this.grayTickMat = this.lineMat.clone() as LineMaterial;
     this.gridMat = new LineMaterial({ color: 0x1b222d, linewidth: 1, transparent: true, depthWrite: false, worldUnits: false });
     this.valueMat = new LineMaterial({ color: 0x4a5464, linewidth: 1.25, transparent: true, depthWrite: false, worldUnits: false });
     this.group.add(this.valueGroup);
@@ -139,10 +145,10 @@ export class Axes {
     this.labels.push({ axis: 'value', kind: 'title', text: texts.value, style: TITLE_STYLE, coord: this.valueTop, priority: 42, panel: 0 });
 
     this.addLines(border, this.lineMat, this.group, 3);
-    this.lumFront = this.addLines(lumF, this.lineMat, this.group, 3);
-    this.lumBack = this.addLines(lumB, this.lineMat, this.group, 3);
-    this.grayLeft = this.addLines(grayL, this.lineMat, this.group, 3);
-    this.grayRight = this.addLines(grayR, this.lineMat, this.group, 3);
+    this.lumFront = this.addLines(lumF, this.lumTickMat, this.group, 3);
+    this.lumBack = this.addLines(lumB, this.lumTickMat, this.group, 3);
+    this.grayLeft = this.addLines(grayL, this.grayTickMat, this.group, 3);
+    this.grayRight = this.addLines(grayR, this.grayTickMat, this.group, 3);
     this.addLines(grid, this.gridMat, this.group, 0);
     this.addLines(vLines, this.valueMat, this.valueGroup, 3);
 
@@ -178,10 +184,14 @@ export class Axes {
     const dLeft = depth(b.x0, cz);
     const dRight = depth(b.x1, cz);
     const e = this.edges;
-    if (e.lumFront && dBack < dFront - hyst) e.lumFront = false;
-    else if (!e.lumFront && dFront < dBack + hyst) e.lumFront = true;
-    if (e.grayLeft && dRight < dLeft - hyst) e.grayLeft = false;
-    else if (!e.grayLeft && dLeft < dRight + hyst) e.grayLeft = true;
+    // One threshold biased toward the conventional edges (front / left): ties (top view) keep them.
+    const pLum = dFront - dBack; // > hyst: back edge is clearly nearer
+    const pGray = dLeft - dRight; // > hyst: right edge is clearly nearer
+    e.lumFront = pLum <= hyst;
+    e.grayLeft = pGray <= hyst;
+    const band = hyst * 0.8;
+    this.edgeFade.lum = Math.min(1, Math.abs(pLum - hyst) / band);
+    this.edgeFade.gray = Math.min(1, Math.abs(pGray - hyst) / band);
     if (this.lumFront) this.lumFront.visible = e.lumFront;
     if (this.lumBack) this.lumBack.visible = !e.lumFront;
     if (this.grayLeft) this.grayLeft.visible = e.grayLeft;
@@ -214,6 +224,14 @@ export class Axes {
     this.gridMat.linewidth = 1 * pxScale;
     this.valueMat.linewidth = 1.25 * pxScale;
     this.lineMat.opacity = opacity.lines;
+    for (const [m, f] of [
+      [this.lumTickMat, this.edgeFade.lum],
+      [this.grayTickMat, this.edgeFade.gray],
+    ] as const) {
+      m.linewidth = 1.25 * pxScale;
+      m.opacity = opacity.lines * f;
+      m.visible = m.opacity > 0.003;
+    }
     this.gridMat.opacity = opacity.grid;
     this.valueMat.opacity = opacity.value;
     this.lineMat.visible = opacity.lines > 0.003;
@@ -224,6 +242,8 @@ export class Axes {
   dispose() {
     for (const o of this.objects) o.geometry.dispose();
     this.lineMat.dispose();
+    this.lumTickMat.dispose();
+    this.grayTickMat.dispose();
     this.gridMat.dispose();
     this.valueMat.dispose();
   }

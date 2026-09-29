@@ -23,8 +23,10 @@ export interface ValuesTextureOptions {
 export function formatCellValue(v: number, kind: 'svm' | 'diff'): string {
   const a = Math.abs(v);
   const s = a >= 10 ? a.toFixed(1) : a.toFixed(2);
-  if (kind === 'diff') return v > 0.004 ? `+${s}` : v < -0.004 ? `−${s}` : '0.00';
-  return v < 0 ? `−${s}` : s;
+  // Sign follows the ROUNDED value, so a tiny difference never prints as "+0.00" / "−0.00".
+  const zero = Number(s) === 0;
+  if (kind === 'diff') return zero ? s : v > 0 ? `+${s}` : `−${s}`;
+  return v < 0 && !zero ? `−${s}` : s;
 }
 
 const MIN_CSS = 7;
@@ -88,7 +90,7 @@ export function buildValuesTexture(panel: PanelModel, opt: ValuesTextureOptions,
     ctx.font = `600 ${(fs * texPerCss).toFixed(2)}px ${SANS}`;
     const y = cell.cy + fs * texPerCss * 0.04;
     ctx.lineJoin = 'round';
-    ctx.lineWidth = Math.max(1, fs * texPerCss * 0.34);
+    ctx.lineWidth = Math.max(1, fs * texPerCss * 0.2);
     ctx.strokeStyle = cell.bg;
     ctx.strokeText(cell.text, cell.cx, y);
     ctx.fillStyle = cell.dark ? 'rgba(11,14,20,0.88)' : 'rgba(250,251,253,0.95)';

@@ -15,7 +15,7 @@ import { buildModel, cellAt, SY, type ModelResult, type PanelId, type SceneModel
 import { makeFloorMaterial, makeTerrainMaterial, setTerrainColormap, type ColorSpec, type TerrainUniforms } from './materials';
 import { PanelContent } from './terrain';
 import { Axes, type AxisLabelSpec } from './axes';
-import { colorbarTicks, drawColorbarTexture, drawTitleTexture, Hud, rectsOverlap, type Rect } from './hud';
+import { drawColorbarTexture, drawTitleTexture, Hud, type Rect } from './hud';
 import { TextCache, type TextTexture } from './text';
 import { buildValuesTexture } from './values';
 import { easeInOutCubic, smoothstep, Tween } from './easing';
@@ -101,7 +101,7 @@ export class Engine {
   private colorKey = '';
   private readonly floor: THREE.Mesh;
   private readonly floorMat: THREE.ShaderMaterial;
-  private readonly hover: THREE.Mesh;
+  private readonly hover: THREE.Line;
 
   // viewport (drawing-buffer px) and CSS px scale
   vp: Viewport = { width: 2, height: 2 };
@@ -177,7 +177,7 @@ export class Engine {
 
     const hoverGeo = new THREE.BufferGeometry();
     hoverGeo.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(15), 3));
-    this.hover = new THREE.Line(hoverGeo, new THREE.LineBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.9, depthTest: false })) as unknown as THREE.Mesh;
+    this.hover = new THREE.Line(hoverGeo, new THREE.LineBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.9, depthTest: false }));
     this.hover.renderOrder = 20;
     this.hover.visible = false;
     this.hover.frustumCulled = false;
@@ -410,10 +410,14 @@ export class Engine {
     };
   }
 
+  /** Radius around the target that must stay between the near / far planes. */
   private sceneRadius() {
-    const b = this.model?.bounds;
-    if (!b) return 20;
-    return Math.hypot(b.x1 - b.x0, b.z1 - b.z0, 8) * 0.6 + 4;
+    const m = this.model;
+    if (!m) return 20;
+    const b = m.bounds;
+    const hs = this.settings?.heightScale ?? 1;
+    const tall = Math.max(8, (m.plotMax - Math.min(0, m.plotMin)) * SY * hs * 1.2);
+    return Math.hypot(b.x1 - b.x0, b.z1 - b.z0, tall) * 0.6 + 4;
   }
 
   // ------------------------------------------------------------------ framing
@@ -628,8 +632,6 @@ export class Engine {
   private leaveIntro() {
     const fp = this.frame;
     if (this.hasRendered && !this.exporting) this.captureSnapshot();
-    const t = now();
-    void t;
     this.tw.heightK.jump(fp.heightK);
     this.tw.values.jump(fp.valuesOpacity);
     this.tw.contours.jump(fp.contourOpacity);
@@ -1030,7 +1032,6 @@ export class Engine {
       }
       hud.quad(tt.texture, x, yTop, tt.w, tt.h, fp.hud.colorbar);
       occupied.push({ x0: x + tt.inset, y0: yTop - tt.h + tt.inset, x1: x + tt.w - tt.inset, y1: yTop - tt.inset });
-      void colorbarTicks;
     }
 
     // axis labels
@@ -1130,10 +1131,10 @@ export class Engine {
     const specs = [...ax.labels].sort((p, q) => p.priority - q.priority);
 
     const alphaOf = (spec: AxisLabelSpec) => {
-      if (spec.axis === 'lum') return fp.axes.lum * lumVis;
+      if (spec.axis === 'lum') return fp.axes.lum * lumVis * ax.edgeFade.lum;
       if (spec.axis === 'gray') {
         const g = spec.gray !== undefined && fp.grayTickAlpha ? fp.grayTickAlpha(spec.gray) : 1;
-        return fp.axes.gray * grayVis * g;
+        return fp.axes.gray * grayVis * g * ax.edgeFade.gray;
       }
       if (spec.axis === 'value') return fp.axes.value * valueVis * smoothstep(0.2, 0.45, fp.pose.phi);
       return fp.axes.captions;
@@ -1143,9 +1144,26 @@ export class Engine {
       if (spec.axis === 'value') return corner.clone().setY(spec.coord * SY * sy);
       return ax.anchor(spec, new THREE.Vector3());
     };
-    const free = (rect: Rect) => !occupied.some((o) => rectsOverlap(o, rect, 2 * S)) && !placed.some((o) => rectsOverlap(o.rect, rect, 3 * S));
+    // Soft collision culling: a label fades out continuously as it approaches a higher-priority
+    // one (instead of popping), so moving cameras / the intro never flicker labels on and off.
+    const separation = (a: Rect, b: Rect) => Math.max(b.x0 - a.x1, a.x0 - b.x1, b.y0 - a.y1, a.y0 - b.y1);
+    const clearance = (rect: Rect) => {
+      let c = 1;
+      for (const o of occupied) c = Math.min(c, smoothstep(2 * S, 5 * S, separation(rect, o)));
+      for (const o of placed) c = Math.min(c, smoothstep(3 * S, 6 * S, separation(rect, o.rect)));
+      return c;
+    };
 
-    for (const pass of ['tick', 'title'] as const) {
+    // Tick-label extent per axis (all candidates) so titles sit beyond the tick column.
+    for (const spec of specs) {
+      if (spec.kind !== 'tick' || alphaOf(spec) <= 0.003) continue;
+      const tt = this.text.get(spec.text, spec.style, S);
+      const d = dirFor(spec);
+      const key = `${spec.axis}${spec.panel}`;
+      tickExtent[key] = Math.max(tickExtent[key] ?? 0, Math.abs(d.x) * tt.w + Math.abs(d.y) * tt.h);
+    }
+    // Titles first (they matter more than any single tick), then ticks around them.
+    for (const pass of ['title', 'tick'] as const) {
       for (const spec of specs) {
         if (spec.kind !== pass) continue;
         let alpha = alphaOf(spec);
@@ -1172,7 +1190,7 @@ export class Engine {
             w = tt.h;
             h = tt.w;
           }
-          const ext = pass === 'title' && spec.axis !== 'caption' ? (tickExtent[key] ?? 0) + (tickExtent[key] ? 5 * S : 0) : 0;
+          const ext = pass === 'title' && spec.axis !== 'caption' ? (tickExtent[key] ?? 0) + (tickExtent[key] ? 7 * S : 0) : 0;
           const off = gap + ext + Math.abs(d.x) * (w / 2) + Math.abs(d.y) * (h / 2);
           cx = a.x + d.x * off;
           cy = a.y + d.y * off;
@@ -1183,8 +1201,8 @@ export class Engine {
         // axis) fades them out instead of drawing text over the terrain.
         alpha *= this.labelVisibility(anchorW, rect, fp);
         if (alpha <= 0.003) continue;
-        if (!free(rect)) continue;
-        if (pass === 'tick') tickExtent[key] = Math.max(tickExtent[key] ?? 0, Math.abs(d.x) * tt.w + Math.abs(d.y) * tt.h);
+        alpha *= clearance(rect);
+        if (alpha <= 0.003) continue;
         placed.push({ tt, rect, alpha, rot });
       }
     }

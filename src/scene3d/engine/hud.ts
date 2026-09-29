@@ -98,26 +98,23 @@ const rgba = (hex: string, a: number) => {
 };
 
 /**
- * Put a soft rounded backdrop in the page background color behind a HUD block: invisible on the
- * empty background, but keeps the text legible when the user zooms / pans terrain under it.
+ * Soft glow in the page background color around every glyph / the bar of a HUD block (shadow
+ * only, drawn from off-canvas so the block itself is composited once): invisible on the empty
+ * background, keeps the text legible when the user zooms / pans terrain under the HUD.
  */
-function withBackdrop(src: HTMLCanvasElement, bg: string, pad: number): HTMLCanvasElement {
+function withGlow(src: HTMLCanvasElement, bg: string, pad: number): HTMLCanvasElement {
   const c = document.createElement('canvas');
   c.width = src.width + pad * 2;
   c.height = src.height + pad * 2;
   const ctx = c.getContext('2d')!;
-  ctx.fillStyle = rgba(bg, 0.78);
-  const r = pad * 1.2;
-  const w = c.width;
-  const h = c.height;
-  ctx.beginPath();
-  ctx.moveTo(r, 0);
-  ctx.arcTo(w, 0, w, h, r);
-  ctx.arcTo(w, h, 0, h, r);
-  ctx.arcTo(0, h, 0, 0, r);
-  ctx.arcTo(0, 0, w, 0, r);
-  ctx.closePath();
-  ctx.fill();
+  const off = c.width + src.width + 100;
+  ctx.shadowColor = rgba(bg, 0.95);
+  ctx.shadowBlur = pad * 0.9;
+  ctx.shadowOffsetX = off;
+  for (let k = 0; k < 3; k++) ctx.drawImage(src, pad - off, pad);
+  ctx.shadowColor = 'rgba(0,0,0,0)';
+  ctx.shadowBlur = 0;
+  ctx.shadowOffsetX = 0;
   ctx.drawImage(src, pad, pad);
   return c;
 }
@@ -171,7 +168,7 @@ export function drawTitleTexture(spec: TitleSpec, scale: number, maxWidthCss: nu
     ctx.fillText(sub, pad, pad + titleH + subStyle.size * 1.05 * scale);
   }
   const inset = Math.round(8 * scale);
-  return toTexture(withBackdrop(canvas, bg, inset), inset);
+  return toTexture(withGlow(canvas, bg, inset), inset);
 }
 
 // --- Colorbar ------------------------------------------------------------------------------
@@ -356,5 +353,5 @@ export function drawColorbarTexture(spec: ColorbarSpec, scale: number, bg: strin
     }
   }
   const inset = Math.round(8 * S);
-  return toTexture(withBackdrop(canvas, bg, inset), inset);
+  return toTexture(withGlow(canvas, bg, inset), inset);
 }

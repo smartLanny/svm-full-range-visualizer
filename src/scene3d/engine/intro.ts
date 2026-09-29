@@ -13,7 +13,7 @@
  * The last frame equals the static view with representation 'surface', view 'top', contours on.
  */
 import type { Overlays } from '../../store/appStore';
-import { clonePose, copyPose, lerpPose, PERSP_MIN, PERSP_TAN, type CamPose } from './camera';
+import { clonePose, copyPose, lerpPose, PERSP_TAN, type CamPose } from './camera';
 import { easeInOutCubic, easeInOutSine, easeOutCubic, easeOutSine, lerp, smootherstep, smoothstep, window01 } from './easing';
 import type { FrameParams } from './frame';
 
@@ -211,7 +211,6 @@ export class IntroPlan {
     if (narrow >= 1) copyPose(ctx.top, out.pose);
     else if (narrow > 0) lerpPose(base, ctx.top, narrow, out.pose);
     else copyPose(base, out.pose);
-    void PERSP_MIN;
     return out;
   }
 }

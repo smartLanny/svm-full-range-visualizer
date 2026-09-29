@@ -90,8 +90,6 @@ describe('intro storyboard', () => {
   it('keeps other rows invisible while G255 grows, and ends flat, orthographic, top-down', () => {
     const p = plan();
     const early = p.evaluate(1.5, makeFrameParams());
-    const grays = [...new Set([0])];
-    void grays;
     expect(early.growth!.some((g) => g > 0)).toBe(true);
     const end = p.evaluate(INTRO_DURATION, makeFrameParams());
     expect(end.heightK).toBe(0);

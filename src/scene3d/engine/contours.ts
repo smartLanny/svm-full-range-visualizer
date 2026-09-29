@@ -198,7 +198,6 @@ export function placeLabels(lines: ContourLine[], opt: PlaceOptions): ContourLab
     // Only lines long enough to read as a line on both sides of the label.
     if (line.length < hw * 9) continue;
     const wanted = line.length > hw * 40 ? 2 : 1;
-    let placedOnLine = 0;
     for (let k = 0; k < wanted; k++) {
       let best: { score: number; s: number; p: ContourPoint } | null = null;
       const nCand = 48;
@@ -263,9 +262,7 @@ export function placeLabels(lines: ContourLine[], opt: PlaceOptions): ContourLab
         u: best.s / line.length,
         lineIndex: li,
       });
-      placedOnLine++;
     }
-    void placedOnLine;
   }
   return labels;
 }
