@@ -616,7 +616,7 @@ function SweepReadout({ mode }: { mode: SliceMode }) {
 
 function InspectorStats() {
   const t = useT();
-  const metrics = ['safeShare', 'criticalShare', 'whitePass', 'typical', 'peak', 'mean'];
+  const metrics = ['safeShare', 'criticalShare', 'whitePass', 'typical', 'peak', 'mean', 'coverage'];
   return (
     <>
       <Section title={t('shell.inspector.stats.range')} icon={<Ruler size={12} />}>

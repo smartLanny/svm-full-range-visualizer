@@ -17,7 +17,7 @@ import type { Dataset } from '../types';
 import { LOW_GRAY_CLIP, SVM_CRITICAL, SVM_SAFE } from '../types';
 import { cellEdges, gridView, logNits, type GridView } from './grid';
 import { smoothSliceAtGray } from '../chart2d/slices';
-import { buildSpline, evalSpline } from '../chart2d/spline';
+import { buildCurve, evalCurve } from '../chart2d/spline';
 
 /** Luminances (measured nits) at which the gray-slice SVM is reported. */
 export const SVM_AT_NITS = [2, 10, 50, 100] as const;
@@ -166,11 +166,12 @@ export function nominalScope(
  * through a monotone cubic in log10(nits). null outside the slice's measured nits range.
  */
 export function sliceSvmAt(ds: Pick<Dataset, 'matrix'>, gray: number, nits: readonly number[]): { gray: number | null; svm: (number | null)[] } {
+  // Same path as the 2D chart's curve (chart2d/scene.ts curveOf + graySliceSvmAt).
   const slice = Number.isFinite(gray) ? smoothSliceAtGray(ds, gray) : [];
-  const spline = buildSpline(slice.map((p) => ({ x: Math.log10(p.x), y: p.svm })));
+  const curve = buildCurve(slice.map((p) => ({ x: Math.log10(p.x), y: p.svm, a: p.a, key: p.key })));
   return {
     gray: slice.length > 0 ? slice[0].gray : null,
-    svm: nits.map((n) => (spline && n > 0 ? evalSpline(spline, Math.log10(n)) : null)),
+    svm: nits.map((n) => (curve && n > 0 ? evalCurve(curve, Math.log10(n)) : null)),
   };
 }
 
