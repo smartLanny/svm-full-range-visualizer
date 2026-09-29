@@ -96,3 +96,46 @@ export function parseRawData(raw: string, name: string, correctionFactor = 1.0):
     matrix: { rows: grayRows, cols: brightnessCols, headerNits, grid },
   };
 }
+
+export interface RawTable {
+  /** Title line found directly above the header row (e.g. "小米 18 Pro Max 自适应刷新 Pro 关"); '' if none. */
+  title: string;
+  /** Text of this table only (title + header + rows), ready for parseRawData. */
+  text: string;
+}
+
+const isIntCell = (c: string) => /^-?\d+$/.test(c);
+const isNumberCell = (c: string) => Number.isFinite(parseFloat(c.replace('%', ''))) && /^-?\d/.test(c);
+
+/**
+ * Split a paste that may hold several tables (each: optional title line, a header row of
+ * brightness percents whose first cell is a label such as "亮度条百分比", then gray rows).
+ * A paste without such labelled header rows is returned unchanged as one table, so the
+ * single-table behaviour of parseRawData is preserved.
+ */
+export function splitTables(raw: string): RawTable[] {
+  const lines = raw.replace(/\r\n?/g, '\n').split('\n');
+  const cells = (l: string) => l.split('\t').map((s) => s.trim()).filter(Boolean);
+  const headers: number[] = [];
+  lines.forEach((l, i) => {
+    const c = cells(l);
+    if (c.length >= 4 && !isNumberCell(c[0]) && c.slice(1).filter(isNumberCell).length >= 3) headers.push(i);
+  });
+  if (headers.length === 0) return [{ title: '', text: raw }];
+
+  const starts: { start: number; title: string }[] = headers.map((h, k) => {
+    const floor = k > 0 ? headers[k - 1] + 1 : 0;
+    for (let i = h - 1; i >= floor; i--) {
+      const c = cells(lines[i]);
+      if (c.length === 0) continue;
+      // The nearest non-empty line above the header is the title unless it is a data row.
+      if (isIntCell(c[0]) || c.filter(isNumberCell).length >= 3) break;
+      return { start: i, title: c.join(' ') };
+    }
+    return { start: h, title: '' };
+  });
+  return starts.map((s, k) => ({
+    title: s.title,
+    text: lines.slice(k === 0 ? 0 : s.start, k + 1 < starts.length ? starts[k + 1].start : lines.length).join('\n'),
+  }));
+}

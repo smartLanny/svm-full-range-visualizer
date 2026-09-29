@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import fs from 'fs';
 import path from 'path';
 import type { SvmRecord } from '../types';
-import { parseRawData } from './parse';
+import { parseRawData, splitTables } from './parse';
 import { EXAMPLE_TSV } from './exampleTsv';
 import { deviceLabel, guessDeviceMode, modeLabel, recordLabel, toDatasetJson, toRecord, validateDataset } from './records';
 import { DEVICE_PALETTE, MODE_DASHES, recordStyles } from './colors';
@@ -100,7 +100,13 @@ describe('validateDataset', () => {
 });
 
 describe('guessDeviceMode / labels', () => {
-  it('splits at the first whitespace', () => {
+  it('splits device (brand + model words) from mode', () => {
+    expect(guessDeviceMode('小米 18 Pro Max 自适应刷新 Pro 关')).toEqual({ device: '小米 18 Pro Max', mode: '自适应刷新 Pro 关' });
+    expect(guessDeviceMode('iPhone 17 Pro Max')).toEqual({ device: 'iPhone 17 Pro Max', mode: '' });
+    expect(guessDeviceMode('华为 Mate 70 Air 低频闪 60Hz')).toEqual({ device: '华为 Mate 70 Air', mode: '低频闪 60Hz' });
+    expect(guessDeviceMode('Pixel 10 Pro LTPO 1Hz')).toEqual({ device: 'Pixel 10 Pro', mode: 'LTPO 1Hz' });
+    expect(guessDeviceMode('Galaxy S26 Ultra Standard')).toEqual({ device: 'Galaxy S26 Ultra', mode: 'Standard' });
+    expect(guessDeviceMode('iPhone17ProMax 平滑脉冲')).toEqual({ device: 'iPhone17ProMax', mode: '平滑脉冲' });
     expect(guessDeviceMode('华为Mate70Air 60Hz')).toEqual({ device: '华为Mate70Air', mode: '60Hz' });
     expect(guessDeviceMode('  小米17Ultra徕卡   DC  120Hz ')).toEqual({ device: '小米17Ultra徕卡', mode: 'DC 120Hz' });
     expect(guessDeviceMode('iPhone17ProMax')).toEqual({ device: 'iPhone17ProMax', mode: '' });
@@ -152,5 +158,30 @@ describe('recordStyles', () => {
     expect(recordStyles(all, { B: '#123456' }).get('b1')!.color).toBe('#123456');
     const many = Array.from({ length: DEVICE_PALETTE.length + 1 }, (_, i) => mk(`r${i}`, `D${i}`, ''));
     expect(recordStyles(many).get(`r${DEVICE_PALETTE.length}`)!.color).toBe(DEVICE_PALETTE[0]);
+  });
+});
+
+describe('splitTables', () => {
+  const one = EXAMPLE_TSV;
+  it('keeps a single-table paste intact (title picked up)', () => {
+    const t = splitTables(one);
+    expect(t.length).toBe(1);
+    expect(t[0].title).toBe('标准120Hz');
+    expect(parseRawData(t[0].text, 'x').matrix.rows.length).toBe(24);
+  });
+  it('splits two stacked tables and reads their titles', () => {
+    const second = EXAMPLE_TSV.replace('标准120Hz', '60Hz 模式').replace(/^(255\t)804\.15/m, '$1700.5');
+    const t = splitTables(`${one}\n${second}`);
+    expect(t.map((x) => x.title)).toEqual(['标准120Hz', '60Hz 模式']);
+    const a = parseRawData(t[0].text, t[0].title);
+    const b = parseRawData(t[1].text, t[1].title);
+    expect(a.matrix.rows.length).toBe(24);
+    expect(b.matrix.rows.length).toBe(24);
+    expect(a.matrix.headerNits[0]).toBeCloseTo(804.15, 6);
+    expect(b.matrix.headerNits[0]).toBeCloseTo(700.5, 6);
+  });
+  it('returns the raw text when no labelled header row exists', () => {
+    const raw = '100\t90\t80\n255\t1 0.1\t2 0.2\t3 0.3';
+    expect(splitTables(raw)).toEqual([{ title: '', text: raw }]);
   });
 });

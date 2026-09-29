@@ -4,15 +4,23 @@ let idCounter = 0;
 export const generateId = () =>
   `u${Date.now().toString(36)}${(idCounter++).toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 
+const CJK = /[\u3400-\u9fff]/;
+/** Tokens that start the mode part of a name: refresh rates, dimming schemes, common mode words. */
+const MODE_WORD = /^(\d+(\.\d+)?\s*hz|dc|pwm|ltpo|ltps|hdr|sdr|standard|smooth|low|flicker|adaptive|auto|eco|normal|vivid|natural|night|eye|comfort|mode|on|off)$/i;
+
 /**
- * Guess device / mode from a free-form record name: "华为Mate70Air 60Hz" -> device "华为Mate70Air",
- * mode "60Hz". Without whitespace the whole name is the device and the mode is empty.
+ * Guess device / mode from a free-form record name. The device is the first word plus the
+ * model-like words after it (digits / Latin, e.g. "18 Pro Max"); the mode starts at the first
+ * word that contains CJK, is a refresh rate ("60Hz") or a mode keyword ("DC", "LTPO").
+ *   "小米 18 Pro Max 自适应刷新 Pro 关" -> 小米 18 Pro Max | 自适应刷新 Pro 关
+ *   "华为Mate70Air 60Hz" -> 华为Mate70Air | 60Hz     "iPhone 17 Pro Max" -> iPhone 17 Pro Max | ''
  */
 export function guessDeviceMode(name: string): { device: string; mode: string } {
-  const clean = name.replace(/\s+/g, ' ').trim();
-  const idx = clean.indexOf(' ');
-  if (idx <= 0) return { device: clean, mode: '' };
-  return { device: clean.slice(0, idx), mode: clean.slice(idx + 1) };
+  const tokens = name.replace(/\s+/g, ' ').trim().split(' ').filter(Boolean);
+  if (tokens.length === 0) return { device: '', mode: '' };
+  let k = 1;
+  while (k < tokens.length && !CJK.test(tokens[k]) && !MODE_WORD.test(tokens[k])) k++;
+  return { device: tokens.slice(0, k).join(' '), mode: tokens.slice(k).join(' ') };
 }
 
 /** Structural validation for imported JSON. Throws on invalid input. */

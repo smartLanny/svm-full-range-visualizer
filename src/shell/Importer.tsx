@@ -1,7 +1,7 @@
 import React, { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertCircle, CheckCircle2, ClipboardPaste, FileJson, FileUp, Sparkles, Trash2, Upload, X } from 'lucide-react';
 import { useT, type TFunction } from '../i18n';
-import { parseRawData } from '../data/parse';
+import { parseRawData, splitTables } from '../data/parse';
 import { guessDeviceMode, toRecord } from '../data/records';
 import { EXAMPLE_TSV } from '../data/exampleTsv';
 import type { Dataset } from '../types';
@@ -45,6 +45,17 @@ function analyse(text: string, factor: number): ParseResult {
   } catch (e) {
     return { ok: false, error: (e as Error).message };
   }
+}
+
+interface TableResult {
+  title: string;
+  res: ParseResult;
+}
+
+/** Parse every table of a paste (several stacked tables are split by their title/header rows). */
+function analyseAll(text: string, factor: number): TableResult[] {
+  if (!text.trim()) return [];
+  return splitTables(text).map((tb) => ({ title: tb.title, res: analyse(tb.text, factor) }));
 }
 
 const fmtNum = (v: number) => (Math.abs(v) >= 100 ? v.toFixed(0) : Math.abs(v) >= 10 ? v.toFixed(1) : v.toFixed(2));
@@ -97,11 +108,11 @@ export function Importer() {
           size="sm"
           variant="primary"
           icon={<Upload size={13} />}
-          disabled={!paste.result?.ok}
+          disabled={paste.multi ? paste.multi.every((m) => !m.res?.ok) : !paste.result?.ok}
           onClick={() => paste.submit(t)}
           data-testid="importer-submit"
         >
-          {t('shell.importer.submit')}
+          {paste.multi ? t('shell.importer.submitN', { n: paste.multi.filter((m) => m.res?.ok).length }) : t('shell.importer.submit')}
         </Button>
       </>
     ) : (
@@ -180,7 +191,9 @@ function usePasteState() {
   const [text, setText] = useState('');
   const deferred = useDeferredValue(text);
   const deferredFactor = useDeferredValue(factor);
-  const result = useMemo(() => analyse(deferred, deferredFactor), [deferred, deferredFactor]);
+  const tables = useMemo(() => analyseAll(deferred, deferredFactor), [deferred, deferredFactor]);
+  const result: ParseResult = tables.length === 1 ? tables[0].res : null;
+  const multi = tables.length > 1 ? tables : null;
 
   const onName = (v: string) => {
     setName(v);
@@ -198,6 +211,7 @@ function usePasteState() {
     factor,
     text,
     result,
+    multi,
     metaTouched,
     setName: onName,
     setDevice: (v: string) => {
@@ -209,10 +223,17 @@ function usePasteState() {
       setMetaTouched(true);
     },
     setFactor,
-    setText,
+    setText: (v: string) => {
+      setText(v);
+      // A title line above the table ("小米 18 Pro Max 自适应刷新 Pro 关") names the record.
+      if (!name.trim()) {
+        const title = splitTables(v)[0]?.title;
+        if (title) onName(title);
+      }
+    },
     loadText: (v: string, fallbackName: string) => {
       setText(v);
-      if (!name.trim()) onName(fallbackName);
+      if (!name.trim()) onName(splitTables(v)[0]?.title || fallbackName);
     },
     reset: () => {
       setName('');
@@ -223,6 +244,24 @@ function usePasteState() {
       setText('');
     },
     submit: (t: TFunction) => {
+      const all = analyseAll(text, factor);
+      if (all.length > 1) {
+        const recs = all.flatMap((tb, i) => {
+          if (!tb.res?.ok) return [];
+          const title = tb.title || `${name.trim() || t('shell.importer.untitled', { i: i + 1 })} #${i + 1}`;
+          const g = guessDeviceMode(title);
+          const d = (metaTouched && device.trim()) || g.device || title;
+          const m = g.mode;
+          return [toRecord({ ...tb.res.ds, name: title }, 'user', { device: d, mode: m, name: m ? `${d} ${m}` : d })];
+        });
+        if (!recs.length) return;
+        const store = useAppStore.getState();
+        store.addRecords(recs);
+        store.setActive(recs[0].id);
+        toast(t('shell.importer.importedN', { n: recs.length }), 'success');
+        shellUi.closeImporter();
+        return;
+      }
       const res = analyse(text, factor);
       if (!res || !res.ok) return;
       const d = device.trim() || guessDeviceMode(name).device || res.ds.name;
@@ -263,6 +302,7 @@ function PasteTab({ state }: { state: PasteState }) {
             value={state.name}
             placeholder={t('shell.importer.namePlaceholder')}
             onChange={(e) => state.setName(e.target.value)}
+            disabled={!!state.multi}
             autoFocus
           />
         </FormRow>
@@ -276,6 +316,7 @@ function PasteTab({ state }: { state: PasteState }) {
             value={state.mode}
             placeholder={t('shell.importer.modePlaceholder')}
             onChange={(e) => state.setMode(e.target.value)}
+            disabled={!!state.multi}
           />
         </FormRow>
         <FormRow label={t('shell.importer.factor')} htmlFor={ids.factor}>
@@ -292,7 +333,7 @@ function PasteTab({ state }: { state: PasteState }) {
         </FormRow>
       </div>
       <p className="-mt-2 text-2xs text-ink-3">
-        {t('shell.importer.autoFilled')} · {t('shell.importer.factorHint')}
+        {state.multi ? t('shell.importer.multiHint') : t('shell.importer.autoFilled')} · {t('shell.importer.factorHint')}
       </p>
 
       <div className="grid min-h-0 grid-cols-[minmax(0,1fr)_240px] gap-4">
@@ -341,22 +382,23 @@ function PasteTab({ state }: { state: PasteState }) {
             data-testid="importer-preview"
             className={cn(
               'flex h-[280px] flex-col rounded-md p-3 ring-1 ring-inset',
-              !r ? 'bg-surface-1 ring-line' : r.ok ? 'bg-safe/[0.06] ring-safe/25' : 'bg-critical/[0.07] ring-critical/30',
+              state.multi ? 'bg-surface-1 ring-line' : !r ? 'bg-surface-1 ring-line' : r.ok ? 'bg-safe/[0.06] ring-safe/25' : 'bg-critical/[0.07] ring-critical/30',
             )}
           >
-            {!r && (
+            {state.multi && <MultiPreview tables={state.multi} deviceOverride={state.metaTouched ? state.device.trim() : ''} />}
+            {!state.multi && !r && (
               <div className="m-auto flex flex-col items-center gap-2 text-center text-2xs text-ink-3">
                 <ClipboardPaste size={20} className="text-ink-4" />
                 {t('shell.importer.previewEmpty')}
               </div>
             )}
-            {r && !r.ok && (
+            {!state.multi && r && !r.ok && (
               <div className="flex items-start gap-2 text-xs leading-relaxed text-red-200">
                 <AlertCircle size={15} className="mt-0.5 shrink-0 text-red-400" />
                 <span>{errorText(t, r.error)}</span>
               </div>
             )}
-            {r && r.ok && (
+            {!state.multi && r && r.ok && (
               <>
                 <div className="flex items-center gap-2 text-xs font-medium text-ink-1">
                   <CheckCircle2 size={15} className="shrink-0 text-green-400" />
@@ -388,6 +430,44 @@ function PasteTab({ state }: { state: PasteState }) {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+/** Preview for a paste holding several tables: one line per table (title → device · mode, size, status). */
+function MultiPreview({ tables, deviceOverride }: { tables: TableResult[]; deviceOverride: string }) {
+  const t = useT();
+  const okCount = tables.filter((x) => x.res?.ok).length;
+  return (
+    <div className="flex min-h-0 flex-1 flex-col" data-testid="importer-multi">
+      <div className="flex items-center gap-2 text-xs font-medium text-ink-1">
+        <CheckCircle2 size={15} className="shrink-0 text-green-400" />
+        {t('shell.importer.multiFound', { n: tables.length, ok: okCount })}
+      </div>
+      <ul className="mt-2.5 min-h-0 flex-1 space-y-1.5 overflow-y-auto pr-1">
+        {tables.map((tb, i) => {
+          const g = guessDeviceMode(tb.title);
+          const device = deviceOverride || g.device || t('shell.importer.untitled', { i: i + 1 });
+          const ok = !!tb.res?.ok;
+          return (
+            <li key={i} className={cn('rounded-md px-2.5 py-2 ring-1 ring-inset', ok ? 'bg-safe/[0.06] ring-safe/20' : 'bg-critical/[0.07] ring-critical/30')}>
+              <div className="flex items-center gap-1.5">
+                {ok ? <CheckCircle2 size={12} className="shrink-0 text-green-400" /> : <AlertCircle size={12} className="shrink-0 text-red-400" />}
+                <span className="truncate text-2xs font-medium text-ink-1" title={tb.title}>
+                  {tb.title || t('shell.importer.untitled', { i: i + 1 })}
+                </span>
+              </div>
+              <div className="mt-1 truncate text-2xs text-ink-3">
+                {device}
+                {g.mode ? ` · ${g.mode}` : ''}
+              </div>
+              <div className={cn('mt-0.5 font-mono text-2xs tabular-nums', ok ? 'text-ink-2' : 'text-red-300')}>
+                {tb.res?.ok ? t('shell.importer.size', { rows: tb.res.rows, cols: tb.res.cols }) : tb.res ? errorText(t, tb.res.error) : ''}
+              </div>
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }
