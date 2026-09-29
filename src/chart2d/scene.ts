@@ -10,7 +10,7 @@ import { ANOMALY_KINDS, exclusionSummary, type ExclusionSummary } from '../data/
 import { translate } from '../i18n';
 import { buildAxes, fmtTickNits, type Axes } from './scales';
 import { buildCurve, evalCurve, type Curve } from './spline';
-import { fmtLevel, sliceFor, slicesExtent, sweepExtent, sweepParam, SWEEP_DURATION, type CurvePoint, type Extent } from './slices';
+import { fmtLevel, settleSlice, sliceFor, slicesExtent, staticSliceFor, sweepExtent, sweepParam, SWEEP_DURATION, type CurvePoint, type Extent } from './slices';
 
 export interface ChartInputs {
   /** All records in store order (legend lists hidden ones in the interactive view). */
@@ -134,7 +134,8 @@ function memoProbe(recs: SvmRecord[], mode: SliceMode, clip: boolean, t: number 
   const hit = probeMemo.find((m) => m.key === key && sameRecs(m.recs, recs));
   if (hit) return hit.value;
   const params = t === null ? [param] : Array.from({ length: PROBE_SAMPLES + 1 }, (_, i) => sweepParam(mode, (i / PROBE_SAMPLES) * SWEEP_DURATION));
-  const frames = params.map((p) => recs.map((r) => curveOf(mode, sliceFor(r, mode, p, clip))).filter((c): c is Curve => !!c));
+  const slice = t === null ? staticSliceFor : sliceFor;
+  const frames = params.map((p) => recs.map((r) => curveOf(mode, slice(r, mode, p, clip))).filter((c): c is Curve => !!c));
   const value = { frames };
   probeMemo = [{ key, recs, value }, ...probeMemo.filter((m) => !(m.key === key && sameRecs(m.recs, recs)))].slice(0, 4);
   return value;
@@ -173,13 +174,13 @@ export function sweepProgressOf(mode: SliceMode, param: number): number {
 }
 
 /**
- * SVM read off the 2D gray-slice curve at `nits` (exactly what the chart, its tooltip and its
- * table show), or null outside the curve / in a gap / where it is fading. docs/adr/0009 asks the
- * stats' typical-luminance SVM to use the same curve as the 2D chart: this is that curve.
+ * SVM read off the static 2D gray-slice curve at `nits` (exactly what the chart, its tooltip and
+ * its table show), or null outside the curve / in a gap. docs/adr/0009 asks the stats'
+ * typical-luminance SVM to use the same curve as the 2D chart: this is that curve.
  */
 export function graySliceSvmAt(rec: SvmRecord, gray: number, nits: number): number | null {
   if (!(nits > 0)) return null;
-  const c = curveOf('gray', sliceFor(rec, 'gray', gray, false));
+  const c = curveOf('gray', staticSliceFor(rec, 'gray', gray, false));
   return c ? evalCurve(c, Math.log10(nits)) : null;
 }
 
@@ -223,9 +224,17 @@ export function buildScene(inputs: ChartInputs, opts: SceneOptions): Scene {
   const paramTo = sliceParam(inputs, opts.t);
   const paramFrom = blend ? sliceParam(inputs, blend.from) : paramTo;
   const param = blend ? mixParam(mode, paramFrom, paramTo, blend.p) : paramTo;
+  // How static the frame is (1 = a static slice: readings only, no fading ghosts; 0 = a sweep
+  // frame with its fades; in between during a glide, so the glide never pops; see settleSlice).
+  const staticW = (tt: number | null) => (tt === null ? 1 : 0);
+  const settle = blend ? staticW(blend.from) + (staticW(opts.t) - staticW(blend.from)) * blend.p : staticW(opts.t);
+
+  // the static end of a glide (for the per-point gains of settleSlice)
+  const paramStatic = blend && blend.from === null ? paramFrom : paramTo;
 
   const series: SeriesModel[] = visible.map((rec) => {
-    const points = sliceFor(rec, mode, param, clipLowGray);
+    const raw = sliceFor(rec, mode, param, clipLowGray);
+    const points = settle === 1 ? settleSlice(raw) : settle > 0 ? settleSlice(raw, settle, sliceFor(rec, mode, paramStatic, clipLowGray)) : raw;
     return {
       id: rec.id,
       rec,
@@ -245,8 +254,8 @@ export function buildScene(inputs: ChartInputs, opts: SceneOptions): Scene {
   const extentOf = (tt: number | null, prm: number): Extent | null => {
     if (axisMode === 'standard') return null;
     if (tt !== null) return memoSweepExtent(visible, mode, clipLowGray);
-    if (prm === param) return slicesExtent(series.map((s) => s.points));
-    return slicesExtent(visible.map((r) => sliceFor(r, mode, prm, clipLowGray)));
+    if (prm === param && settle === 1) return slicesExtent(series.map((s) => s.points));
+    return slicesExtent(visible.map((r) => staticSliceFor(r, mode, prm, clipLowGray)));
   };
   const extent = blend ? mixExtent(mode, extentOf(blend.from, paramFrom), extentOf(opts.t, paramTo), blend.p) : extentOf(opts.t, param);
   const axes = buildAxes(mode, axisMode, extent);
