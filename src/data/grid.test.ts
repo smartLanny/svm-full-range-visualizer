@@ -183,3 +183,29 @@ describe('fmt helpers', () => {
     expect(fmtNits(0.012)).toBe('0.012');
   });
 });
+
+describe('duplicate level columns (xiaomi18promax_adaptive_pro_on: 60% and 50% share 162.51 nits)', () => {
+  const x18 = load('xiaomi18promax_adaptive_pro_on.json');
+  const v = gridView(x18);
+  const dup = 162.51;
+  it('keeps both columns, ascending with a tie', () => {
+    const idx = v.levelNits.map((n, i) => (n === dup ? i : -1)).filter((i) => i >= 0);
+    expect(idx.length).toBe(2);
+    expect(idx[1]).toBe(idx[0] + 1);
+  });
+  it('samples, slices and diffs stay finite at and around the tied level', () => {
+    for (const n of [dup - 1, dup, dup + 1]) {
+      const s = sliceAtLevel(x18, n);
+      expect(s.length).toBe(v.grays.length);
+      s.forEach((p) => expect(Number.isFinite(p.svm)).toBe(true));
+      for (const g of [255, 200, 128, 60]) {
+        const r = sampleView(v, Math.log10(n + 1), g);
+        expect(r && Number.isFinite(r.svm)).toBe(true);
+      }
+    }
+    const d = diffRecords(iphone, x18, { clipLowGray: true, maxNits: 500 });
+    d.values.flat().forEach((x) => expect(x === null || Number.isFinite(x)).toBe(true));
+    const d2 = diffRecords(x18, iphone, { clipLowGray: true, maxNits: 500 });
+    d2.values.flat().forEach((x) => expect(x === null || Number.isFinite(x)).toBe(true));
+  });
+});

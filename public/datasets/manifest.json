@@ -1,14 +1,16 @@
 [
-  { "file": "iPhone17ProMax.json", "device": "iPhone 17 Pro Max", "mode": "标准", "modeEn": "Standard" },
-  { "file": "iPhone17ProMax_smooth.json", "device": "iPhone 17 Pro Max", "mode": "平滑脉冲", "modeEn": "Smooth pulse" },
-  { "file": "xiaomi17ultra_leica_dc_120hz.json", "device": "小米 17 Ultra 徕卡", "deviceEn": "Xiaomi 17 Ultra Leica", "mode": "DC 120Hz", "modeEn": "DC 120Hz" },
-  { "file": "xiaomi17ultra_leica_ltpo_120hz.json", "device": "小米 17 Ultra 徕卡", "deviceEn": "Xiaomi 17 Ultra Leica", "mode": "自适应刷新率 Pro 120Hz", "modeEn": "Adaptive refresh Pro 120Hz" },
-  { "file": "huawei_mate70air.json", "device": "华为 Mate 70 Air", "deviceEn": "Huawei Mate 70 Air", "mode": "标准", "modeEn": "Standard" },
-  { "file": "huawei_mate70air_60hz.json", "device": "华为 Mate 70 Air", "deviceEn": "Huawei Mate 70 Air", "mode": "60Hz", "modeEn": "60Hz" },
-  { "file": "huawei_mate70air_low_frequency.json", "device": "华为 Mate 70 Air", "deviceEn": "Huawei Mate 70 Air", "mode": "低频闪", "modeEn": "Low-flicker" },
-  { "file": "huawei_mate70air_low_frequency_60hz.json", "device": "华为 Mate 70 Air", "deviceEn": "Huawei Mate 70 Air", "mode": "低频闪 60Hz", "modeEn": "Low-flicker 60Hz" },
-  { "file": "huawei_mate80rs.json", "device": "华为 Mate 80 RS", "deviceEn": "Huawei Mate 80 RS", "mode": "标准", "modeEn": "Standard" },
-  { "file": "huawei_mate80rs_60hz.json", "device": "华为 Mate 80 RS", "deviceEn": "Huawei Mate 80 RS", "mode": "60Hz", "modeEn": "60Hz" },
-  { "file": "huawei_mate80rs_low_frequency.json", "device": "华为 Mate 80 RS", "deviceEn": "Huawei Mate 80 RS", "mode": "低频闪", "modeEn": "Low-flicker" },
-  { "file": "huawei_mate80rs_low_frequency_60hz.json", "device": "华为 Mate 80 RS", "deviceEn": "Huawei Mate 80 RS", "mode": "低频闪 60Hz", "modeEn": "Low-flicker 60Hz" }
+  {"file": "iPhone17ProMax.json", "device": "iPhone 17 Pro Max", "mode": "标准", "modeEn": "Standard"},
+  {"file": "iPhone17ProMax_smooth.json", "device": "iPhone 17 Pro Max", "mode": "平滑脉冲", "modeEn": "Smooth pulse"},
+  {"file": "xiaomi17ultra_leica_dc_120hz.json", "device": "小米 17 Ultra 徕卡", "deviceEn": "Xiaomi 17 Ultra Leica", "mode": "DC 120Hz", "modeEn": "DC 120Hz"},
+  {"file": "xiaomi17ultra_leica_ltpo_120hz.json", "device": "小米 17 Ultra 徕卡", "deviceEn": "Xiaomi 17 Ultra Leica", "mode": "自适应刷新率 Pro 120Hz", "modeEn": "Adaptive refresh Pro 120Hz"},
+  {"file": "huawei_mate70air.json", "device": "华为 Mate 70 Air", "deviceEn": "Huawei Mate 70 Air", "mode": "标准", "modeEn": "Standard"},
+  {"file": "huawei_mate70air_60hz.json", "device": "华为 Mate 70 Air", "deviceEn": "Huawei Mate 70 Air", "mode": "60Hz", "modeEn": "60Hz"},
+  {"file": "huawei_mate70air_low_frequency.json", "device": "华为 Mate 70 Air", "deviceEn": "Huawei Mate 70 Air", "mode": "低频闪", "modeEn": "Low-flicker"},
+  {"file": "huawei_mate70air_low_frequency_60hz.json", "device": "华为 Mate 70 Air", "deviceEn": "Huawei Mate 70 Air", "mode": "低频闪 60Hz", "modeEn": "Low-flicker 60Hz"},
+  {"file": "huawei_mate80rs.json", "device": "华为 Mate 80 RS", "deviceEn": "Huawei Mate 80 RS", "mode": "标准", "modeEn": "Standard"},
+  {"file": "huawei_mate80rs_60hz.json", "device": "华为 Mate 80 RS", "deviceEn": "Huawei Mate 80 RS", "mode": "60Hz", "modeEn": "60Hz"},
+  {"file": "huawei_mate80rs_low_frequency.json", "device": "华为 Mate 80 RS", "deviceEn": "Huawei Mate 80 RS", "mode": "低频闪", "modeEn": "Low-flicker"},
+  {"file": "huawei_mate80rs_low_frequency_60hz.json", "device": "华为 Mate 80 RS", "deviceEn": "Huawei Mate 80 RS", "mode": "低频闪 60Hz", "modeEn": "Low-flicker 60Hz"},
+  {"file": "xiaomi18promax_adaptive_pro_off.json", "device": "小米 18 Pro Max", "deviceEn": "Xiaomi 18 Pro Max", "mode": "自适应刷新 Pro 关", "modeEn": "Adaptive refresh Pro off"},
+  {"file": "xiaomi18promax_adaptive_pro_on.json", "device": "小米 18 Pro Max", "deviceEn": "Xiaomi 18 Pro Max", "mode": "自适应刷新 Pro 开", "modeEn": "Adaptive refresh Pro on"}
 ]
