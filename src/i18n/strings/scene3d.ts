@@ -10,6 +10,7 @@ const strings: StringsModule = {
     },
     subtitle: {
       svm: '频闪可视度 SVM · 档位亮度 × 灰阶',
+      elev: '纵向放大 ×{k}',
     },
     colorbar: {
       delta: 'ΔSVM (A−B)',
@@ -81,6 +82,7 @@ const strings: StringsModule = {
     },
     export: {
       intro: '开场动画',
+      introOnlyA: '开场动画（仅 A：{name}）',
     },
     colormaps: {
       RD_YL_BU_ENHANCED: '增强 RdYlBu（推荐）',
@@ -104,6 +106,7 @@ const strings: StringsModule = {
     },
     subtitle: {
       svm: 'Stroboscopic visibility SVM · level luminance × gray',
+      elev: 'vertical ×{k}',
     },
     colorbar: {
       delta: 'ΔSVM (A−B)',
@@ -175,6 +178,7 @@ const strings: StringsModule = {
     },
     export: {
       intro: 'Intro animation',
+      introOnlyA: 'Intro animation (A only: {name})',
     },
     colormaps: {
       RD_YL_BU_ENHANCED: 'Enhanced RdYlBu (recommended)',

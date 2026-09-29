@@ -28,7 +28,7 @@ export function TimelineBar({ timeline, chapters = [], onClose, title, className
   const fillRef = useRef<HTMLDivElement>(null);
   const thumbRef = useRef<HTMLDivElement>(null);
   const timeRef = useRef<HTMLSpanElement>(null);
-  const [hoverChapter, setHoverChapter] = useState<string | null>(null);
+  const [hoverChapter, setHoverChapter] = useState<TimelineChapter | null>(null);
   const scrub = useRef<{ wasPlaying: boolean } | null>(null);
 
   useEffect(() => {
@@ -71,17 +71,39 @@ export function TimelineBar({ timeline, chapters = [], onClose, title, className
     scrub.current = null;
   };
 
+  /** Previous / next chapter start relative to the current time (a small tolerance so repeated presses step on). */
+  const chapterStep = (dir: -1 | 1): number | null => {
+    const now = timeline.time;
+    const ts = chapters.map((c) => c.t).sort((a, b) => a - b);
+    if (dir > 0) return ts.find((x) => x > now + 0.05) ?? null;
+    for (let i = ts.length - 1; i >= 0; i--) if (ts[i] < now - 0.05) return ts[i];
+    return null;
+  };
+
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
       e.preventDefault();
       timeline.seek(timeline.time + (e.key === 'ArrowLeft' ? -1 : 1) * (e.shiftKey ? 1 : 0.1));
+    } else if ((e.key === '[' || e.key === ']') && chapters.length) {
+      e.preventDefault();
+      e.stopPropagation();
+      const to = chapterStep(e.key === '[' ? -1 : 1);
+      if (to !== null) timeline.seek(to);
     }
+  };
+
+  /** Chapter tick: a 14 px hit target that jumps to the chapter (the track does not start a scrub). */
+  const jumpTo = (c: TimelineChapter) => (e: React.PointerEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    timeline.seek(c.t);
   };
 
   const btn = 'inline-flex h-7 w-7 items-center justify-center rounded-md text-ink-2 hover:bg-surface-4 hover:text-ink-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-ring';
 
   return (
     <div
+      data-timeline-bar=""
       className={cn(
         'pointer-events-auto flex w-[min(720px,calc(100%-32px))] items-center gap-2 rounded-xl bg-surface-2/90 px-2.5 py-2 shadow-panel ring-1 ring-line backdrop-blur-md',
         className,
@@ -95,11 +117,6 @@ export function TimelineBar({ timeline, chapters = [], onClose, title, className
       </button>
       {title && <span className="hidden whitespace-nowrap text-xs font-medium text-ink-2 sm:inline">{title}</span>}
       <div className="relative flex-1 px-1.5">
-        {hoverChapter && (
-          <div className="pointer-events-none absolute -top-7 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-surface-4 px-2 py-0.5 text-2xs text-ink-1 ring-1 ring-line">
-            {hoverChapter}
-          </div>
-        )}
         <div
           ref={trackRef}
           role="slider"
@@ -119,16 +136,33 @@ export function TimelineBar({ timeline, chapters = [], onClose, title, className
           {chapters.map((c) => (
             <div
               key={`${c.t}-${c.label}`}
-              onPointerEnter={() => setHoverChapter(c.label)}
-              onPointerLeave={() => setHoverChapter(null)}
-              className="absolute top-1/2 h-2.5 w-0.5 -translate-x-1/2 -translate-y-1/2 rounded bg-ink-3/70"
+              role="button"
+              aria-label={c.label}
+              onPointerEnter={() => setHoverChapter(c)}
+              onPointerLeave={() => setHoverChapter((h) => (h === c ? null : h))}
+              onPointerDown={jumpTo(c)}
+              className="group/tick absolute top-1/2 z-[1] flex h-5 w-3.5 -translate-x-1/2 -translate-y-1/2 cursor-pointer items-center justify-center"
               style={{ left: `${(c.t / snap.duration) * 100}%` }}
-            />
+            >
+              <span className="h-2.5 w-0.5 rounded bg-ink-3/70 transition-all group-hover/tick:h-3.5 group-hover/tick:w-[3px] group-hover/tick:bg-ink-1" />
+            </div>
           ))}
           <div
             ref={thumbRef}
-            className="absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-accent bg-ink-1 shadow transition-transform group-hover:scale-110"
+            className="pointer-events-none absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-accent bg-ink-1 shadow transition-transform group-hover:scale-110"
           />
+          {hoverChapter && (
+            // Above the hovered tick (kept inside the track at the ends).
+            <div
+              className={cn(
+                'pointer-events-none absolute bottom-full mb-1.5 whitespace-nowrap rounded bg-surface-4 px-2 py-0.5 text-2xs text-ink-1 ring-1 ring-line',
+                hoverChapter.t / snap.duration < 0.12 ? '-translate-x-2' : hoverChapter.t / snap.duration > 0.88 ? '-translate-x-[calc(100%-8px)]' : '-translate-x-1/2',
+              )}
+              style={{ left: `${(hoverChapter.t / snap.duration) * 100}%` }}
+            >
+              {hoverChapter.label} · {fmt(hoverChapter.t)}
+            </div>
+          )}
         </div>
       </div>
       <span ref={timeRef} className="w-[92px] text-right font-mono text-2xs tabular-nums text-ink-3" />

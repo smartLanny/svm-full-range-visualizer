@@ -17,6 +17,9 @@ export interface Rect {
   y1: number;
 }
 
+/** Axis line color (same as the 3D axis lines). */
+const RULE_COLOR = '#4a5464';
+
 export const rectsOverlap = (a: Rect, b: Rect, pad = 0) => a.x0 < b.x1 + pad && a.x1 + pad > b.x0 && a.y0 < b.y1 + pad && a.y1 + pad > b.y0;
 
 export class Hud {
@@ -24,6 +27,11 @@ export class Hud {
   readonly camera = new THREE.OrthographicCamera(0, 1, 1, 0, -10, 10);
   private pool: THREE.Mesh[] = [];
   private used = 0;
+  /**
+   * Snap quads to whole pixels (crisp text). Off while the camera moves continuously (intro):
+   * labels then glide sub-pixel instead of stepping 1 px every other frame.
+   */
+  snap = true;
   private geo = new THREE.PlaneGeometry(1, 1);
 
   resize(w: number, h: number) {
@@ -57,9 +65,10 @@ export class Hud {
     mat.opacity = Math.min(1, opacity);
     m.visible = true;
     m.renderOrder = this.used;
+    const px = (v: number) => (this.snap ? Math.round(v) : v);
     if (rotation === 0) {
-      const left = Math.round(x);
-      const top = Math.round(yTop);
+      const left = px(x);
+      const top = px(yTop);
       m.position.set(left + w / 2, top - h / 2, 0);
       m.rotation.set(0, 0, 0);
       m.scale.set(w, h, 1);
@@ -67,10 +76,26 @@ export class Hud {
       // Rotated quads: (x, yTop) is the top-left of the ROTATED bounding box.
       const bw = Math.abs(rotation) > 1 ? h : w;
       const bh = Math.abs(rotation) > 1 ? w : h;
-      m.position.set(Math.round(x) + bw / 2, Math.round(yTop) - bh / 2, 0);
+      m.position.set(px(x) + bw / 2, px(yTop) - bh / 2, 0);
       m.rotation.set(0, 0, rotation);
       m.scale.set(w, h, 1);
     }
+  }
+
+  private solidTex: THREE.Texture | null = null;
+
+  /** Solid color rectangle (rulers / tick marks), (x, yTop) = top-left in px. */
+  rule(x: number, yTop: number, w: number, h: number, opacity: number) {
+    if (!this.solidTex) {
+      const c = document.createElement('canvas');
+      c.width = c.height = 2;
+      const ctx = c.getContext('2d')!;
+      ctx.fillStyle = RULE_COLOR;
+      ctx.fillRect(0, 0, 2, 2);
+      this.solidTex = new THREE.CanvasTexture(c);
+      this.solidTex.colorSpace = THREE.SRGBColorSpace;
+    }
+    this.quad(this.solidTex, x, yTop, Math.max(1, w), Math.max(1, h), opacity);
   }
 
   /** Text texture with its box centered at (cx, cy). Returns the rect. */
@@ -88,6 +113,8 @@ export class Hud {
   dispose() {
     for (const m of this.pool) (m.material as THREE.Material).dispose();
     this.geo.dispose();
+    this.solidTex?.dispose();
+    this.solidTex = null;
   }
 }
 

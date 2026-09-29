@@ -15,7 +15,9 @@ varying vec3 vNormalW;
 varying vec3 vPosW;
 #ifdef USE_INSTANCING
 attribute float aCapped;
+attribute float aFade;
 varying float vCapped;
+varying float vFade;
 #endif
 void main() {
   vValue = aValue;
@@ -23,6 +25,7 @@ void main() {
   #ifdef USE_INSTANCING
     local = instanceMatrix * local;
     vCapped = aCapped;
+    vFade = aFade;
   #endif
   vec4 world = modelMatrix * local;
   vPosW = world.xyz;
@@ -41,11 +44,13 @@ uniform float uCap;
 uniform float uHatch;
 uniform float uDim;
 uniform vec3 uCamPos;
+uniform vec3 uFadeColor;
 varying float vValue;
 varying vec3 vNormalW;
 varying vec3 vPosW;
 #ifdef USE_INSTANCING
 varying float vCapped;
+varying float vFade;
 #endif
 ${cmap}
 void main() {
@@ -80,6 +85,10 @@ void main() {
     float stripe = 1.0 - smoothstep(0.19 - aa, 0.19 + aa, d);
     col = mix(col, col * 0.55 + vec3(0.06), stripe * capped * uHatch * 0.35);
   }
+  #ifdef USE_INSTANCING
+    // Intro fade-in: a bar's color comes up from the plate tone (opaque, so depth stays correct).
+    col = mix(uFadeColor, col, vFade);
+  #endif
   gl_FragColor = vec4(col, uOpacity);
   #include <colorspace_fragment>
 }
@@ -96,7 +105,11 @@ export interface TerrainUniforms {
   uDim: THREE.IUniform<number>;
   uInvScaleY: THREE.IUniform<number>;
   uCamPos: THREE.IUniform<THREE.Vector3>;
+  uFadeColor: THREE.IUniform<THREE.Color>;
 }
+
+/** Base plate tone under the terrain (also the color a bar fades in from). */
+export const PLATE_COLOR = '#10151d';
 
 export type ColorSpec = { kind: 'svm'; colormap: ColormapType } | { kind: 'diff' };
 
@@ -115,6 +128,7 @@ export function makeTerrainMaterial(spec: ColorSpec, dim = 1): THREE.ShaderMater
     uDim: { value: dim },
     uInvScaleY: { value: 1 },
     uCamPos: { value: new THREE.Vector3() },
+    uFadeColor: { value: new THREE.Color(PLATE_COLOR) },
   };
   const mat = new THREE.ShaderMaterial({
     uniforms,

@@ -1,8 +1,8 @@
 /**
  * Scene model: turns records + settings into world-space cells (docs/adr/0002).
  *
- * World axes: x = log10(level nits + 1) · SX (luminance to the right), z = −gray · SZ (gray
- * increases away from the viewer / upward in top view), y = value · SY · heightScale.
+ * World axes: x = log10(level nits + 1) · SX (luminance to the right), z = −gray · SZ · depthScale
+ * (gray increases away from the viewer / upward in top view), y = value · SY · heightScale.
  * Pure data — no three.js objects — so it can be unit tested.
  */
 import type { SceneLayout, SvmRecord } from '../../types';
@@ -11,7 +11,7 @@ import { cellEdges, diffRecords, gridView, sampleView, terrainNitsTicks, type Gr
 
 /** World units per log10(nits + 1). */
 export const SX = 6;
-/** World units per gray level. */
+/** World units per gray level (depthScale 1). */
 export const SZ = 12 / 255;
 /** World units per SVM unit (before the user's height scale). */
 export const SY = 1.1;
@@ -86,6 +86,8 @@ export interface SceneModel {
   /** Max/min plotted (capped) value over all panels, for bounds. */
   plotMax: number;
   plotMin: number;
+  /** World units per gray level (SZ · depthScale). */
+  sz: number;
 }
 
 export interface ModelInput {
@@ -96,6 +98,11 @@ export interface ModelInput {
   maxNits: number | null;
   colorMax: number;
   heightCap: number;
+  /**
+   * Depth (gray axis) stretch, default 1. Portrait frames use a deeper plate so the plot (and the
+   * heatmap) fills a tall frame instead of a thin band; cells stay the same cells in every view.
+   */
+  depthScale?: number;
 }
 
 export type ModelResult = { ok: true; model: SceneModel } | { ok: false; reason: 'noRecord' | 'needB' | 'empty' | 'noOverlap' };
@@ -178,6 +185,7 @@ export function buildModel(input: ModelInput): ModelResult {
   if (!a) return { ok: false, reason: 'noRecord' };
   if (layout !== 'single' && !b) return { ok: false, reason: 'needB' };
   const opts = { clipLowGray: input.clipLowGray, maxNits: input.maxNits };
+  const sz = SZ * Math.max(0.25, input.depthScale ?? 1);
 
   if (layout === 'diff') {
     const raw = diffRecords(a, b!, opts);
@@ -189,7 +197,7 @@ export function buildModel(input: ModelInput): ModelResult {
     const bView = gridView(b!);
     const ex = extents(diff.view);
     const domain: Domain = { lx0: ex.lx0, lx1: ex.lx1, g0: ex.g0, g1: ex.g1 };
-    const { mapX, mapZ } = mappers(domain, 0);
+    const { mapX, mapZ } = mappers(domain, 0, sz);
     const panel = makePanel('D', a, diff.view, 'diff', diff.values, mapX, mapZ, 0);
     panel.other = b!;
     panel.otherValues = diff.view.points.map((row, r) =>
@@ -215,7 +223,7 @@ export function buildModel(input: ModelInput): ModelResult {
   const width = (domain.lx1 - domain.lx0) * SX;
   const panels = recs.map((rec, i) => {
     const offset = recs.length === 1 ? 0 : (i === 0 ? -1 : 1) * (width + PANEL_GAP) * 0.5;
-    const { mapX, mapZ } = mappers(domain, offset);
+    const { mapX, mapZ } = mappers(domain, offset, sz);
     const values = views[i].points.map((row) => row.map((p) => (p && Number.isFinite(p.svm) ? p.svm : null)));
     return makePanel(recs.length === 1 ? 'A' : i === 0 ? 'A' : 'B', rec, views[i], 'svm', values, mapX, mapZ, offset);
   });
@@ -242,12 +250,12 @@ export function dropEmptyDiffLines(view: GridView, values: (number | null)[][]):
   };
 }
 
-function mappers(domain: Domain, offsetX: number) {
+function mappers(domain: Domain, offsetX: number, sz: number) {
   const lxMid = (domain.lx0 + domain.lx1) / 2;
   const gMid = (domain.g0 + domain.g1) / 2;
   return {
     mapX: (lx: number) => (lx - lxMid) * SX + offsetX,
-    mapZ: (g: number) => -(g - gMid) * SZ,
+    mapZ: (g: number) => -(g - gMid) * sz,
   };
 }
 
@@ -276,6 +284,7 @@ function finish(input: ModelInput, kind: ValueKind, panels: PanelModel[], domain
     valueTicks: [],
     plotMax: 0,
     plotMin: 0,
+    sz: SZ * Math.max(0.25, input.depthScale ?? 1),
   };
   setModelHeightCap(model, input.heightCap);
   return model;

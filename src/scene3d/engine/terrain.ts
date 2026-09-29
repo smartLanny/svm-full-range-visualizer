@@ -34,6 +34,9 @@ export interface BarInfo {
   capped: boolean;
 }
 
+/** Footprint scale (x / z) of a bar at the very start of its intro fade-in. */
+const BAR_FOOTPRINT0 = 0.6;
+
 export const CONTOUR_LABEL_STYLE: TextStyle = { size: 12, weight: 600, color: '#f6f7f9', halo: 'rgba(8,10,14,0.88)', haloWidth: 2.2 };
 
 /** Contour line colors (display sRGB): dark core readable on light and mid colormap tones. */
@@ -132,6 +135,7 @@ export class PanelContent {
   readonly labelSprites: THREE.Sprite[] = [];
   valuesMesh: THREE.Mesh | null = null;
   private valuesKey = '';
+  /** null once the bars were last written fully grown (skip redundant full updates). */
   private growthKey: Float32Array | null | undefined = undefined;
   private readonly dummy = new THREE.Object3D();
   private readonly labelCache = new TextCache();
@@ -188,10 +192,14 @@ export class PanelContent {
     });
     box.setAttribute('aValue', new THREE.InstancedBufferAttribute(aValue, 1));
     box.setAttribute('aCapped', new THREE.InstancedBufferAttribute(aCapped, 1));
+    // Intro fade-in per bar (1 = fully shown): color from the plate tone to the colormap.
+    const aFade = new THREE.InstancedBufferAttribute(new Float32Array(Math.max(1, this.barInfo.length)).fill(1), 1);
+    aFade.setUsage(THREE.DynamicDrawUsage);
+    box.setAttribute('aFade', aFade);
     this.bars.frustumCulled = false;
     this.bars.renderOrder = 1;
     this.heightGroup.add(this.bars);
-    this.setGrowth(null);
+    this.setGrowth(null, null);
 
     // --- base plate ---
     const { x0, x1, z0, z1 } = panel.rect;
@@ -241,7 +249,7 @@ export class PanelContent {
       aCapped.setX(i, b.capped ? 1 : 0);
     });
     aCapped.needsUpdate = true;
-    this.setGrowth(growth, true);
+    this.setGrowth(growth, null, true);
     // Contours: same xz (they only depend on values and levels), new heights.
     this.lines = traceContours(this.grid, this.model.contourLevels, unitH);
     for (const lb of this.labels) {
@@ -285,22 +293,32 @@ export class PanelContent {
     return b.h * (growth ? growth[idx] : 1);
   }
 
-  /** Update bar instance matrices for per-bar growth (null = full). */
-  setGrowth(growth: Float32Array | null, force = false) {
-    if (!force && growth === this.growthKey && growth === null) return;
+  /**
+   * Update bar instance matrices for per-bar growth and fade-in (null = full). A fading-in bar has
+   * a smaller footprint (60 % → 100 %) and its color comes up from the plate tone (aFade), so a
+   * bar starting to grow never pops in as a full-size colored tile.
+   */
+  setGrowth(growth: Float32Array | null, fade: Float32Array | null, force = false) {
+    if (!force && growth === null && fade === null && this.growthKey === null) return;
     const d = this.dummy;
+    const aFade = this.bars.geometry.attributes.aFade as THREE.InstancedBufferAttribute;
+    const fadeArr = aFade.array as Float32Array;
     for (let i = 0; i < this.barInfo.length; i++) {
       const b = this.barInfo[i];
       const g = growth ? growth[i] : 1;
+      const f = fade ? fade[i] : 1;
       const h = b.h * g;
-      const visible = g > 1e-4;
+      const visible = g > 1e-4 || f > 1e-4;
+      const foot = visible ? BAR_FOOTPRINT0 + (1 - BAR_FOOTPRINT0) * f : 0;
       d.position.set((b.x0 + b.x1) / 2, Math.min(0, h), (b.z0 + b.z1) / 2);
-      d.scale.set(visible ? b.x1 - b.x0 : 0, Math.max(1e-4, Math.abs(h)), visible ? b.z1 - b.z0 : 0);
+      d.scale.set((b.x1 - b.x0) * foot, Math.max(1e-4, Math.abs(h)), (b.z1 - b.z0) * foot);
       d.updateMatrix();
       this.bars.setMatrixAt(i, d.matrix);
+      fadeArr[i] = f;
     }
     this.bars.instanceMatrix.needsUpdate = true;
-    this.growthKey = growth;
+    aFade.needsUpdate = true;
+    this.growthKey = growth ?? fade;
   }
 
   /**

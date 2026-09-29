@@ -10,7 +10,7 @@ import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
 import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js';
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 import { logNits } from '../../data/grid';
-import { SX, SY, SZ, type SceneModel } from './model';
+import { SX, SY, type SceneModel } from './model';
 import type { TextStyle } from './text';
 
 export type AxisId = 'lum' | 'gray' | 'value' | 'caption';
@@ -116,7 +116,7 @@ export class Axes {
         this.labels.push({ axis: 'lum', kind: 'tick', text: String(n), style: TICK_STYLE, coord: x, priority: lumPriority(n), panel: pi });
       }
       for (const g of model.grayTicks) {
-        const z = -(g - gMid) * SZ;
+        const z = -(g - gMid) * model.sz;
         if (z < z0 - 1e-6 || z > z1 + 1e-6) continue;
         grid.push(x0, 0.002, z, x1, 0.002, z);
       }
@@ -124,7 +124,7 @@ export class Axes {
       if (texts.captions[pi]) this.labels.push({ axis: 'caption', kind: 'title', text: texts.captions[pi], style: CAPTION_STYLE, coord: panelMid, priority: 5, panel: pi });
     });
     for (const g of model.grayTicks) {
-      const z = -(g - gMid) * SZ;
+      const z = -(g - gMid) * model.sz;
       if (z < b.z0 - 1e-6 || z > b.z1 + 1e-6) continue;
       grayL.push(b.x0, y, z, b.x0 - tl, y, z);
       grayR.push(b.x1, y, z, b.x1 + tl, y, z);

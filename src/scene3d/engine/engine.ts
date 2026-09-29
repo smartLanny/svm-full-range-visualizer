@@ -14,7 +14,7 @@ import { applyPose, clonePose, copyPose, fitPose, lerpPose, PERSP_TAN, poseBasis
 import { gridView, bracket } from '../../data/grid';
 import type { AnomalyKind } from '../../data/anomalies';
 import { buildModel, cellAt, setModelHeightCap, SY, type ModelResult, type PanelId, type PanelModel, type SceneModel } from './model';
-import { makeFloorMaterial, makeNoDataMaterial, makeTerrainMaterial, setTerrainColormap, type ColorSpec, type NoDataMaterial, type TerrainUniforms } from './materials';
+import { makeFloorMaterial, makeNoDataMaterial, makeTerrainMaterial, PLATE_COLOR, setTerrainColormap, type ColorSpec, type NoDataMaterial, type TerrainUniforms } from './materials';
 import { PanelContent } from './terrain';
 import { Axes, type AxisLabelSpec } from './axes';
 import { drawColorbarTexture, drawTitleTexture, Hud, type ColorbarSpec, type Rect } from './hud';
@@ -92,6 +92,7 @@ export function setDebugClock(t: number | null) {
 export class Engine {
   gl: THREE.WebGLRenderer | null = null;
   readonly scene = new THREE.Scene();
+  private readonly floorScene = new THREE.Scene();
   private readonly world = new THREE.Group();
   private readonly perspCam = new THREE.PerspectiveCamera(30, 1, 0.1, 1000);
   private readonly orthoCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 1000);
@@ -131,9 +132,12 @@ export class Engine {
 
   // static state
   preset: ViewPreset = 'perspective';
-  private camTransition: { from: CamPose; t0: number; dur: number } | null = null;
+  /** Static camera move; `clip` = it started while the plot was clipped (zoomed / panned). */
+  private camTransition: { from: CamPose; t0: number; dur: number; clip?: boolean } | null = null;
   private readonly tw = {
     heightK: new Tween(1),
+    /** Vertical exaggeration of the elevation views (front / side). */
+    elev: new Tween(1),
     values: new Tween(0),
     contours: new Tween(1),
     axes: new Tween(1),
@@ -155,6 +159,8 @@ export class Engine {
   // intro
   private intro: { tl: Timeline; plan: IntroPlan | null; planKey: string } | null = null;
   private introDriving = false;
+  /** The frame being rendered is an intro frame (on screen or exported). */
+  private introFrame = false;
 
   // export
   exporting = false;
@@ -179,7 +185,7 @@ export class Engine {
       surface: makeTerrainMaterial(spec),
       walls: makeTerrainMaterial(spec, 0.82),
       bars: makeTerrainMaterial(spec),
-      plate: new THREE.MeshBasicMaterial({ color: '#10151d', transparent: true, depthWrite: true }),
+      plate: new THREE.MeshBasicMaterial({ color: PLATE_COLOR, transparent: true, depthWrite: true }),
       noData: makeNoDataMaterial(),
     };
     this.mats.walls.side = THREE.DoubleSide;
@@ -193,7 +199,8 @@ export class Engine {
     this.floor = new THREE.Mesh(floorGeo, this.floorMat);
     this.floor.renderOrder = -1;
     this.floor.frustumCulled = false;
-    this.scene.add(this.floor);
+    // Own pass, drawn first and never clipped to the plot (its soft glow has no edge to cut).
+    this.floorScene.add(this.floor);
 
     const hoverGeo = new THREE.BufferGeometry();
     hoverGeo.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(15), 3));
@@ -232,8 +239,7 @@ export class Engine {
 
   detach() {
     this.controls.detach();
-    this.snapRT?.dispose();
-    this.snapRT = null;
+    this.disposeSnapshot();
     this.gl = null;
   }
 
@@ -248,9 +254,7 @@ export class Engine {
     this.colorKey = '';
     this.model = null;
     this.hasRendered = false;
-    this.snapRT?.dispose();
-    this.snapRT = null;
-    this.snapT0 = -1;
+    this.disposeSnapshot();
     Object.values(this.mats).forEach((m) => m.dispose());
     this.floorMat.dispose();
     this.floor.geometry.dispose();
@@ -291,19 +295,48 @@ export class Engine {
   }
 
   private onViewportChanged() {
-    this.fits.clear();
+    this.clearFits();
     this.hud.resize(this.vp.width, this.vp.height);
     if (this.intro) this.intro.planKey = '';
+    this.refreshModelForViewport();
     this.invalidate();
+  }
+
+  /**
+   * Depth stretch of the gray axis for the current frame shape: 1 for landscape / square, deeper
+   * for portrait (9:16 → 1.5) so the plate, the terrain and the heatmap fill a tall frame instead
+   * of a thin band. Quantised, so resizing only rebuilds the scene at a few thresholds.
+   */
+  private depthScale(): number {
+    const aspect = this.vp.width / Math.max(1, this.vp.height);
+    const k = Math.min(1.5, Math.max(1, 0.85 / Math.max(0.1, aspect)));
+    return Math.floor(k * 4 + 1e-6) / 4;
+  }
+
+  /**
+   * Model identity. Height cap and color max are not part of it: they only change heights /
+   * uniforms / textures and are applied in place (a slider drag never rebuilds or cross-fades).
+   */
+  private modelKeyFor(s: EngineSettings): string {
+    const layout = this.layoutOverride ?? s.layout;
+    return [layout, s.a?.id, s.b?.id, s.clipLowGray, s.maxNits, s.lang, this.depthScale()].join('|');
+  }
+
+  /** The frame shape changed the model (portrait depth): rebuild, cross-fading on screen. */
+  private refreshModelForViewport() {
+    const s = this.settings;
+    if (!s) return;
+    const key = this.modelKeyFor(s);
+    if (key === this.modelKey) return;
+    if (this.hasRendered && !this.introDriving && !this.exporting) this.captureSnapshot();
+    this.modelKey = key;
+    this.rebuildModel();
   }
 
   sync(s: EngineSettings) {
     const prev = this.settings;
     const t = now();
-    const layout = this.layoutOverride ?? s.layout;
-    // Height cap and color max are not part of the key: they only change heights / uniforms /
-    // textures and are applied in place (a slider drag never rebuilds or cross-fades the scene).
-    const modelKey = [layout, s.a?.id, s.b?.id, s.clipLowGray, s.maxNits, s.lang].join('|');
+    const modelKey = this.modelKeyFor(s);
     const recordsChanged = !prev || prev.a !== s.a || prev.b !== s.b;
     const needModel = modelKey !== this.modelKey || recordsChanged;
     const animate = !!prev && this.hasRendered && !this.introDriving && !this.exporting;
@@ -338,6 +371,10 @@ export class Engine {
     if (!prev || prev.view !== s.view) {
       if (!animate) this.tw.heightK.jump(flatTarget);
       else this.tw.heightK.set(flatTarget, t, CAM_DUR);
+      // The vertical exaggeration of front / side eases in with the same camera move.
+      const elev = this.elevFor(s.view);
+      if (!animate) this.tw.elev.jump(elev);
+      else this.tw.elev.set(elev, t, CAM_DUR);
     }
     const ov = s.overlays;
     const fade = (tw: Tween, v: number) => (animate ? tw.set(v, t, FADE_DUR) : tw.jump(v));
@@ -347,7 +384,7 @@ export class Engine {
     fade(this.tw.title, ov.title ? 1 : 0);
     fade(this.tw.colorbar, ov.colorbar ? 1 : 0);
     fade(this.tw.captions, s.layout === 'sideBySide' && ov.axes ? 1 : 0);
-    if (prev && (prev.heightScale !== s.heightScale || prev.overlays.title !== ov.title || prev.overlays.colorbar !== ov.colorbar)) this.fits.clear();
+    if (prev && (prev.heightScale !== s.heightScale || prev.overlays.title !== ov.title || prev.overlays.colorbar !== ov.colorbar)) this.clearFits();
     if (prev && prev.lang !== s.lang) this.contourKey = '';
     this.invalidate();
   }
@@ -357,14 +394,14 @@ export class Engine {
     this.preset = view;
     this.controls.reset(defaultUserView());
     if (immediate) this.camTransition = null;
-    else this.camTransition = { from, t0: now(), dur: CAM_DUR };
+    else this.camTransition = { from, t0: now(), dur: CAM_DUR, clip: !!this.clip };
     this.invalidate();
   }
 
   /** Reset zoom / pan / orbit of the current preset with a smooth move. */
   fitView() {
     if (!this.model) return;
-    this.camTransition = { from: clonePose(this.lastPose), t0: now(), dur: CAM_DUR * 0.8 };
+    this.camTransition = { from: clonePose(this.lastPose), t0: now(), dur: CAM_DUR * 0.8, clip: !!this.clip };
     this.controls.reset(defaultUserView());
     this.invalidate();
   }
@@ -394,10 +431,19 @@ export class Engine {
   private rebuildModel() {
     const s = this.settings!;
     this.clearContent();
-    const res = buildModel({ layout: this.layoutOverride ?? s.layout, a: s.a, b: s.b, clipLowGray: s.clipLowGray, maxNits: s.maxNits, colorMax: s.colorMax, heightCap: s.heightCap });
+    const res = buildModel({
+      layout: this.layoutOverride ?? s.layout,
+      a: s.a,
+      b: s.b,
+      clipLowGray: s.clipLowGray,
+      maxNits: s.maxNits,
+      colorMax: s.colorMax,
+      heightCap: s.heightCap,
+      depthScale: this.depthScale(),
+    });
     this.modelResult = res;
     this.model = res.ok ? res.model : null;
-    this.fits.clear();
+    this.clearFits();
     this.contourKey = '';
     this.valuesKey = '';
     this.hoverCell = null;
@@ -433,9 +479,9 @@ export class Engine {
     }
     this.axes = new Axes(m, this.axisTexts());
     this.world.add(this.axes.group);
-    this.fits.clear();
+    this.clearFits();
     if (this.intro) this.intro.planKey = '';
-    if (animate) this.camTransition = { from: clonePose(this.lastPose), t0: now(), dur: CAM_DUR * 0.6 };
+    if (animate) this.camTransition = { from: clonePose(this.lastPose), t0: now(), dur: CAM_DUR * 0.6, clip: !!this.clip };
   }
 
   private axisTexts() {
@@ -458,18 +504,53 @@ export class Engine {
     const m = this.model;
     if (!m) return 20;
     const b = m.bounds;
-    const hs = this.settings?.heightScale ?? 1;
+    const hs = (this.settings?.heightScale ?? 1) * Math.max(1, this.frame.elev, this.tw.elev.target);
     const tall = Math.max(8, (m.plotMax - Math.min(0, m.plotMin)) * SY * hs * 1.2);
     return Math.hypot(b.x1 - b.x0, b.z1 - b.z0, tall) * 0.6 + 4;
   }
 
   // ------------------------------------------------------------------ framing
 
-  /** Pixel insets reserved for HUD / axis labels (drawing-buffer px). */
+  private get portrait() {
+    return this.vp.width / this.vp.height < 0.85;
+  }
+
+  /**
+   * Pixel insets reserved for HUD / axis labels (drawing-buffer px). Portrait frames center the
+   * group [title, plot, colorbar] vertically: the slack a (width-limited) plot leaves is split
+   * above and below it, and the title / colorbar follow the plot instead of the frame edges.
+   */
   insets(preset: ViewPreset | 'intro-front'): Insets {
+    const ins = this.baseInsets(preset);
+    if (!this.portrait) return ins;
+    const shift = this.portraitShift();
+    return { ...ins, top: ins.top + shift, bottom: ins.bottom + shift };
+  }
+
+  /** Portrait: half the vertical slack the top-view plot leaves in its safe rect (px, ≥ 0). */
+  private portraitShift(): number {
+    if (!this.portrait || !this.model || !this.settings) return 0;
+    if (this.shiftCache !== null) return this.shiftCache;
+    const ins = this.baseInsets('top');
+    const sh = this.vp.height - ins.top - ins.bottom;
+    const fit = fitPose(this.boxPoints(true), 0, 0, 0, this.vp, ins);
+    const b = this.model.bounds;
+    const plotH = (b.z1 - b.z0) / (fit.h / this.vp.height);
+    this.shiftCache = Math.max(0, (sh - plotH) / 2);
+    return this.shiftCache;
+  }
+  private shiftCache: number | null = null;
+
+  private clearFits() {
+    this.fits.clear();
+    this.shiftCache = null;
+    this.elevCache.clear();
+  }
+
+  private baseInsets(preset: ViewPreset | 'intro-front'): Insets {
     const s = this.settings;
     const S = this.pxScale;
-    const portrait = this.vp.width / this.vp.height < 0.85;
+    const portrait = this.portrait;
     const ov = s?.overlays;
     const title = ov?.title ?? true;
     const cb = ov?.colorbar ?? true;
@@ -496,6 +577,12 @@ export class Engine {
 
   private uiInset = 0;
   private plateY = -0.012;
+  /**
+   * Plot clip rect (px, origin bottom-left) while the terrain would run past the plot's safe area
+   * (zoomed / panned): the terrain is cut there so it never runs under the title / colorbar, and
+   * the axes are pinned to its edges. null = nothing to clip.
+   */
+  private clip: Rect | null = null;
 
   /**
    * Reserve room (CSS px) at the bottom for DOM overlays so they never cover the plot or its axis
@@ -504,18 +591,18 @@ export class Engine {
   setUiInset(bottomCss: number) {
     if (bottomCss === this.uiInset) return;
     this.uiInset = bottomCss;
-    this.fits.clear();
+    this.clearFits();
     if (this.intro) this.intro.planKey = '';
     if (this.hasRendered && !this.introDriving && !this.exporting && this.model) {
-      this.camTransition = { from: clonePose(this.lastPose), t0: now(), dur: CAM_DUR * 0.7 };
+      this.camTransition = { from: clonePose(this.lastPose), t0: now(), dur: CAM_DUR * 0.7, clip: !!this.clip };
     }
     this.invalidate();
   }
 
-  private boxPoints(flat: boolean, heightOnlyRow?: number): THREE.Vector3[] {
+  private boxPoints(flat: boolean, heightOnlyRow?: number, elev = 1): THREE.Vector3[] {
     const m = this.model!;
     const s = this.settings!;
-    const scale = SY * s.heightScale;
+    const scale = SY * s.heightScale * elev;
     const b = m.bounds;
     let yMax = flat ? 0 : Math.max(0.5, m.plotMax) * scale;
     const yMin = flat ? 0 : Math.min(0, m.plotMin) * scale;
@@ -533,15 +620,51 @@ export class Engine {
     let f = this.fits.get(key);
     if (!f) {
       if (!this.model) return clonePose(this.lastPose);
-      if (preset === 'perspective') f = fitPose(this.boxPoints(false), DEFAULT_THETA, DEFAULT_PHI, PERSP_TAN, this.vp, this.insets(preset));
-      else {
+      if (preset === 'perspective') {
+        const o = this.perspOrientation(DEFAULT_THETA, DEFAULT_PHI);
+        f = fitPose(this.boxPoints(false), o.theta, o.phi, PERSP_TAN, this.vp, this.insets(preset));
+      } else {
         const o = PRESET_ORIENT[preset];
-        f = fitPose(this.boxPoints(preset === 'top'), o.theta, o.phi, 0, this.vp, this.insets(preset));
+        f = fitPose(this.boxPoints(preset === 'top', undefined, this.elevFor(preset)), o.theta, o.phi, 0, this.vp, this.insets(preset));
       }
       this.fits.set(key, f);
     }
     return f;
   }
+
+  /**
+   * Perspective orientation for the user's (theta, phi) and the frame shape: portrait frames turn
+   * the default view more frontal and steeper so the terrain uses the tall frame (the user's
+   * orbit is kept as an offset from the landscape default).
+   */
+  private perspOrientation(theta: number, phi: number): { theta: number; phi: number } {
+    const aspect = this.vp.width / Math.max(1, this.vp.height);
+    const k = smoothstep(0.85, 0.56, aspect);
+    return { theta: theta - 0.4 * k, phi: Math.min(1.5, Math.max(0.12, phi - 0.26 * k)) };
+  }
+
+  /**
+   * Vertical exaggeration of an elevation view (front / side), so the profile fills ~50–60 % of
+   * the plot height instead of a thin strip (the plate is much wider than the terrain is tall).
+   * 1 for the other views; halves only (the subtitle states it); value axes keep true values.
+   */
+  elevFor(preset: ViewPreset): number {
+    if ((preset !== 'front' && preset !== 'side') || !this.model || !this.settings) return 1;
+    const hit = this.elevCache.get(preset);
+    if (hit !== undefined) return hit;
+    const m = this.model;
+    const b = m.bounds;
+    const ins = this.insets(preset);
+    const sw = Math.max(20, this.vp.width - ins.left - ins.right);
+    const sh = Math.max(20, this.vp.height - ins.top - ins.bottom);
+    const span = preset === 'front' ? b.x1 - b.x0 : b.z1 - b.z0;
+    const tall = Math.max(1e-3, (Math.max(0.5, m.plotMax) - Math.min(0, m.plotMin)) * SY * this.settings.heightScale);
+    const raw = (0.62 * sh * span) / (sw * tall);
+    const e = raw < 1.25 ? 1 : Math.min(8, Math.floor(raw * 2) / 2);
+    this.elevCache.set(preset, e);
+    return e;
+  }
+  private readonly elevCache = new Map<ViewPreset, number>();
 
   private currentFit() {
     return this.fitFor(this.preset);
@@ -553,8 +676,9 @@ export class Engine {
     const v = this.controls.view;
     copyPose(fit, out);
     if (this.preset === 'perspective') {
-      out.theta = v.theta;
-      out.phi = v.phi;
+      const o = this.perspOrientation(v.theta, v.phi);
+      out.theta = o.theta;
+      out.phi = o.phi;
     }
     out.target.addScaledVector(v.pan, fit.h);
     out.h = fit.h * Math.exp(-v.zoom);
@@ -568,6 +692,7 @@ export class Engine {
    * of frame or over the title. Endpoints are exact.
    */
   private transitionPose(from: CamPose, to: CamPose, p: number, heightK: number, out: CamPose): CamPose {
+    // heightK here is the full vertical factor (flatten × elevation exaggeration).
     const u = easeInOutCubic(p);
     lerpPose(from, to, u, out);
     let dTheta = to.theta - from.theta;
@@ -684,11 +809,13 @@ export class Engine {
     const fp = this.frame;
     if (this.hasRendered && !this.exporting) this.captureSnapshot();
     this.tw.heightK.jump(fp.heightK);
+    this.tw.elev.jump(fp.elev);
     this.tw.values.jump(fp.valuesOpacity);
     this.tw.contours.jump(fp.contourOpacity);
     const s = this.settings!;
     const T = now();
     this.tw.heightK.set(s.view === 'top' ? 0 : 1, T, CAM_DUR);
+    this.tw.elev.set(this.elevFor(s.view), T, CAM_DUR);
     this.tw.values.set(s.overlays.values && s.view === 'top' ? 1 : 0, T, FADE_DUR);
     this.tw.contours.set(s.overlays.contours ? 1 : 0, T, FADE_DUR);
     this.controls.reset(defaultUserView());
@@ -713,7 +840,7 @@ export class Engine {
     this.lastTime = t;
     let more = false;
 
-    const driving = !!this.intro && !!this.model && (this.intro.tl.playing || this.intro.tl.time < this.intro.tl.duration - 1e-6);
+    const driving = this.introShowing();
     if (this.introDriving && !driving) {
       if (this.intro && this.intro.tl.time >= this.intro.tl.duration - 1e-6) this.onIntroEnd();
       this.leaveIntro();
@@ -721,9 +848,11 @@ export class Engine {
     this.introDriving = driving;
 
     let fp: FrameParams;
+    this.introFrame = false;
     if (driving) {
       const plan = this.ensurePlan();
       fp = plan ? plan.evaluate(this.intro!.tl.time, this.frame) : this.staticFrame(t);
+      this.introFrame = !!plan;
       more = this.intro!.tl.playing;
     } else {
       more = this.controls.update(dt) || more;
@@ -744,18 +873,24 @@ export class Engine {
     const s = this.settings;
     if (!s || !this.model) return fp;
     // camera
+    // The elevation exaggeration follows the frame (resize / export / height scale) at once; view
+    // changes animate it (sync).
+    const elev = this.elevFor(this.preset);
+    if (Math.abs(elev - this.tw.elev.target) > 1e-9) this.tw.elev.jump(elev);
+    fp.elev = this.tw.elev.value(t);
     const target = this.staticPose(fp.pose);
     fp.heightK = this.tw.heightK.value(t);
     if (this.camTransition) {
       const p = (t - this.camTransition.t0) / this.camTransition.dur;
       if (p >= 1) this.camTransition = null;
-      else this.transitionPose(this.camTransition.from, clonePose(target), p, fp.heightK, fp.pose);
+      else this.transitionPose(this.camTransition.from, clonePose(target), p, fp.heightK * fp.elev, fp.pose);
     }
     const surface = s.representation === 'surface';
     fp.surfaceOpacity = surface ? 1 : 0;
     fp.barsOpacity = surface ? 0 : 1;
     fp.onTop = s.representation;
     fp.growth = null;
+    fp.barFade = null;
     fp.valuesOpacity = this.tw.values.value(t);
     fp.contourOpacity = this.tw.contours.value(t);
     fp.contourReveal = null;
@@ -815,7 +950,7 @@ export class Engine {
     // terrain heights
     // Flat = heights scaled to ~0 (not exactly: the normal transform needs an invertible scale).
     const k = Math.max(1e-6, fp.heightK);
-    const sy = k * s.heightScale;
+    const sy = k * s.heightScale * fp.elev;
     const colorScale = m.kind === 'diff' ? 1 / Math.max(1e-6, m.colorMax) : 4 / Math.max(1e-6, m.colorMax);
     for (const mat of [this.mats.surface, this.mats.walls, this.mats.bars]) {
       const u = mat.uniforms;
@@ -867,7 +1002,7 @@ export class Engine {
       pc.walls.renderOrder = surfTop ? 3 : 1;
       pc.bars.renderOrder = surfTop ? 1 : 3;
       pc.bars.visible = barsOn;
-      if (barsOn) pc.setGrowth(i === 0 ? fp.growth : null);
+      if (barsOn) pc.setGrowth(i === 0 ? fp.growth : null, i === 0 ? fp.barFade : null);
       pc.plate.position.y = plateY;
       if (pc.noData) pc.noData.position.y = plateY + 0.002;
       // contours
@@ -958,6 +1093,44 @@ export class Engine {
     this.scene.background = null;
   }
 
+  /**
+   * See `clip`. Active when the terrain box leaves the current preset's safe rect. Orthographic
+   * views clip to that rect (its gutters carry the pinned axes, like a chart's plot area);
+   * perspective only keeps the terrain off the HUD blocks (title band, colorbar), a camera crop.
+   */
+  private plotClip(fp: FrameParams, hudBlocks: { title: Rect | null; colorbar: Rect | null }): Rect | null {
+    if (!this.model || !this.settings || this.introFrame) return null;
+    // Only the user's zoom / pan (or a camera move leaving it) clips: preset changes and other
+    // transitions may overshoot the safe rect for a moment and must not show a hard cut.
+    const v = this.controls.view;
+    const userFramed = v.zoom > 1e-3 || v.pan.lengthSq() > 1e-10 || !!this.camTransition?.clip;
+    if (!userFramed) return null;
+    const W = this.vp.width;
+    const H = this.vp.height;
+    const ins = this.insets(this.preset);
+    const safe: Rect = { x0: ins.left, y0: ins.bottom, x1: W - ins.right, y1: H - ins.top };
+    if (safe.x1 - safe.x0 < 20 || safe.y1 - safe.y0 < 20) return null;
+    const tol = 2 * this.pxScale;
+    const pts = this.boxPoints(false, undefined, fp.elev);
+    let out = false;
+    for (const p of pts) {
+      p.y *= fp.heightK;
+      const q = this.project(p);
+      if (!q.ok || q.x < safe.x0 - tol || q.x > safe.x1 + tol || q.y < safe.y0 - tol || q.y > safe.y1 + tol) out = true;
+    }
+    if (!out) return null;
+    if (fp.pose.persp <= 0) return safe;
+    const gap = 10 * this.pxScale;
+    const r: Rect = { x0: 0, y0: 0, x1: W, y1: H };
+    if (hudBlocks.title) r.y1 = Math.min(r.y1, hudBlocks.title.y0 - gap);
+    const cb = hudBlocks.colorbar;
+    if (cb) {
+      if (this.portrait) r.y0 = Math.max(r.y0, cb.y1 + gap);
+      else r.x1 = Math.min(r.x1, cb.x0 - gap);
+    }
+    return r.x1 - r.x0 > 20 && r.y1 - r.y0 > 20 ? r : safe;
+  }
+
   private valueAxisCorner(): THREE.Vector3 {
     const ax = this.axes!;
     let best = ax.corners[0];
@@ -987,7 +1160,11 @@ export class Engine {
     if (s && this.model) {
       this.apply(fp);
       this.layoutHud(fp);
+      gl.render(this.floorScene, this.activeCam);
+      const clip = this.clip;
+      if (clip) this.setScissor(target, clip);
       gl.render(this.scene, this.activeCam);
+      if (clip) this.setScissor(target, null);
       gl.clearDepth();
       gl.render(this.hud.scene, this.hud.camera);
     }
@@ -1007,6 +1184,23 @@ export class Engine {
     gl.setRenderTarget(null);
     this.hasRendered = true;
     if (++this.frameCount % 240 === 0) this.text.sweep();
+  }
+
+  /** Scissor (px, origin bottom-left) for the canvas or a render target; null = off. */
+  private setScissor(target: THREE.WebGLRenderTarget | null, r: Rect | null) {
+    const gl = this.gl!;
+    if (target) {
+      target.scissorTest = !!r;
+      if (r) target.scissor.set(Math.floor(r.x0), Math.floor(r.y0), Math.ceil(r.x1 - r.x0), Math.ceil(r.y1 - r.y0));
+      gl.setRenderTarget(target);
+      return;
+    }
+    gl.setScissorTest(!!r);
+    if (r) {
+      // The canvas scissor is given in CSS px (the renderer multiplies by its pixel ratio).
+      const k = 1 / gl.getPixelRatio();
+      gl.setScissor(Math.floor(r.x0) * k, Math.floor(r.y0) * k, Math.ceil(r.x1 - r.x0) * k, Math.ceil(r.y1 - r.y0) * k);
+    }
   }
 
   /** Freeze the current image; it fades out over the next frames (hides discontinuities). */
@@ -1033,13 +1227,17 @@ export class Engine {
     const clip = s.clipLowGray ? ` · ${t('common.lowGrayClipped')}` : '';
     if (m.layout === 'diff') {
       const p = m.panels[0];
+      const e = this.introFrame ? 1 : this.elevFor(s.view);
       return {
         title: t('scene3d.title.diff'),
-        subtitle: `A: ${recordLabel(p.record, s.lang)}  ·  B: ${recordLabel(p.other!, s.lang)}`,
+        subtitle: `A: ${recordLabel(p.record, s.lang)}  ·  B: ${recordLabel(p.other!, s.lang)}${e > 1 ? `  ·  ${t('scene3d.subtitle.elev', { k: Number(e.toFixed(1)) })}` : ''}`,
       };
     }
-    if (m.layout === 'sideBySide') return { title: t('scene3d.title.sideBySide'), subtitle: `${t('scene3d.subtitle.svm')}${clip}` };
-    return { title: recordLabel(m.panels[0].record, s.lang), subtitle: `${t('scene3d.subtitle.svm')}${clip}` };
+    // Front / side views are drawn with a vertical exaggeration: say so (value axis stays true).
+    const e = this.introFrame ? 1 : this.elevFor(s.view);
+    const elev = e > 1 ? ` · ${t('scene3d.subtitle.elev', { k: Number(e.toFixed(1)) })}` : '';
+    if (m.layout === 'sideBySide') return { title: t('scene3d.title.sideBySide'), subtitle: `${t('scene3d.subtitle.svm')}${clip}${elev}` };
+    return { title: recordLabel(m.panels[0].record, s.lang), subtitle: `${t('scene3d.subtitle.svm')}${clip}${elev}` };
   }
 
   private layoutHud(fp: FrameParams) {
@@ -1049,8 +1247,11 @@ export class Engine {
     const W = this.vp.width;
     const H = this.vp.height;
     const margin = HUD_MARGIN * S;
+    hud.snap = !this.introFrame;
     hud.begin();
     const occupied: Rect[] = [];
+    let titleRect: Rect | null = null;
+    let colorbarRect: Rect | null = null;
 
     // title
     if (fp.hud.title > 0.003) {
@@ -1062,8 +1263,11 @@ export class Engine {
         this.titleTex = { key, tt: drawTitleTexture(spec, S, maxW, s.background) };
       }
       const tt = this.titleTex.tt;
-      hud.quad(tt.texture, margin - tt.inset, H - margin + tt.inset, tt.w, tt.h, fp.hud.title);
-      occupied.push({ x0: margin, y0: H - margin - tt.h + 2 * tt.inset, x1: margin + tt.w - 2 * tt.inset, y1: H - margin });
+      // Portrait: the title sits right above the (vertically centered) plot, not at the frame top.
+      const top = H - margin - this.portraitShift();
+      hud.quad(tt.texture, margin - tt.inset, top + tt.inset, tt.w, tt.h, fp.hud.title);
+      titleRect = { x0: margin, y0: top - tt.h + 2 * tt.inset, x1: margin + tt.w - 2 * tt.inset, y1: top };
+      occupied.push(titleRect);
     }
 
     // colorbar
@@ -1075,20 +1279,23 @@ export class Engine {
       let x: number;
       let yTop: number;
       if (portrait) {
-        // Portrait: right under the (top-view) plot and its axis labels, not at the frame edge.
+        // Portrait: right under the (top-view) plot and its luminance axis labels, not at the
+        // frame edge — the same spot in every view, so it does not move with the camera.
         x = (W - tt.w) / 2;
         const plotBottom = this.fitPlotBottom();
-        yTop = Math.max(margin + tt.h, Math.min(ins.bottom + tt.h, plotBottom - 64 * S));
+        yTop = Math.max(margin + tt.h, plotBottom - 64 * S + tt.inset);
       } else {
         x = W - margin - tt.w;
         const mid = (ins.bottom + (H - ins.top)) / 2;
         yTop = Math.min(H - margin - 4 * S, mid + tt.h / 2);
       }
       hud.quad(tt.texture, x, yTop, tt.w, tt.h, fp.hud.colorbar);
-      occupied.push({ x0: x + tt.inset, y0: yTop - tt.h + tt.inset, x1: x + tt.w - tt.inset, y1: yTop - tt.inset });
+      colorbarRect = { x0: x + tt.inset, y0: yTop - tt.h + tt.inset, x1: x + tt.w - tt.inset, y1: yTop - tt.inset };
+      occupied.push(colorbarRect);
     }
 
-    // axis labels
+    // plot clip (zoomed / panned), then the axis labels that depend on it
+    this.clip = this.plotClip(fp, { title: titleRect, colorbar: colorbarRect });
     if (this.axes) this.layoutAxisLabels(fp, occupied);
     hud.end();
   }
@@ -1175,7 +1382,7 @@ export class Engine {
     const ax = this.axes!;
     const s = this.settings!;
     const S = this.pxScale;
-    const sy = Math.max(1e-4, fp.heightK) * s.heightScale;
+    const sy = Math.max(1e-4, fp.heightK) * s.heightScale * fp.elev;
     const m = this.model!;
     const hud = this.hud;
     const corner = this.valueAxisCorner();
@@ -1219,6 +1426,8 @@ export class Engine {
       rot: number;
     }
     const placed: Placed[] = [];
+    const clip = this.clip;
+    const rulers = new Map<string, { d: { x: number; y: number }; alpha: number; ticks: { x: number; y: number; alpha: number }[] }>();
     const tickExtent: Record<string, number> = {};
     const gap = 7 * S;
     const specs = [...ax.labels].sort((p, q) => p.priority - q.priority);
@@ -1277,6 +1486,28 @@ export class Engine {
         const d = dirFor(spec);
         const a = this.project(anchorW);
         if (!a.ok) continue;
+        // Plot clipped (zoomed / panned): in orthographic views the axes are pinned to the clip
+        // edges (screen rulers) and ticks outside the visible range fade out; elsewhere a label
+        // whose anchor left the plot area hides (it would sit over the title / colorbar).
+        if (clip && spec.axis !== 'caption') {
+          const cx = Math.min(clip.x1, Math.max(clip.x0, a.x));
+          const cy = Math.min(clip.y1, Math.max(clip.y0, a.y));
+          const dx = cx - a.x;
+          const dy = cy - a.y;
+          if (Math.abs(dx) + Math.abs(dy) > 0.5) {
+            if (!(fp.pose.persp <= 0 && spec.axis !== 'value' && (Math.abs(d.x) > 0.95 || Math.abs(d.y) > 0.95))) continue;
+            const across = Math.abs(dx * d.y - dy * d.x);
+            if (spec.kind === 'tick') alpha *= 1 - smoothstep(0, 8 * S, across);
+            if (alpha <= 0.003) continue;
+            a.x = cx;
+            a.y = cy;
+            const key = `${spec.axis}${spec.panel}`;
+            const r = rulers.get(key) ?? { d, alpha: 0, ticks: [] as { x: number; y: number; alpha: number }[] };
+            r.alpha = Math.max(r.alpha, pass === 'title' ? alpha : alphaOf(spec));
+            if (spec.kind === 'tick') r.ticks.push({ x: cx, y: cy, alpha });
+            rulers.set(key, r);
+          }
+        }
         const key = `${spec.axis}${spec.panel}`;
         let rot = 0;
         let w = tt.w;
@@ -1307,6 +1538,23 @@ export class Engine {
         alpha *= clearance(rect);
         if (alpha <= 0.003) continue;
         placed.push({ tt, rect, alpha, rot });
+      }
+    }
+    // Screen rulers along the clip edges carrying pinned axes (+ their tick marks).
+    if (clip) {
+      const lw = Math.max(1, Math.round(1.25 * S));
+      const tl = Math.round(5 * S);
+      for (const r of rulers.values()) {
+        const a = r.alpha * 0.95;
+        if (Math.abs(r.d.x) > 0.95) {
+          const x = r.d.x < 0 ? clip.x0 - lw : clip.x1;
+          hud.rule(x, clip.y1, lw, clip.y1 - clip.y0, a);
+          for (const t of r.ticks) hud.rule(r.d.x < 0 ? x - tl : x + lw, t.y + lw / 2, tl, lw, t.alpha * 0.95);
+        } else {
+          const y = r.d.y < 0 ? clip.y0 : clip.y1 + lw;
+          hud.rule(clip.x0, y, clip.x1 - clip.x0, lw, a);
+          for (const t of r.ticks) hud.rule(t.x - lw / 2, r.d.y < 0 ? y - lw : y + tl, lw, tl, t.alpha * 0.95);
+        }
       }
     }
     for (const p of placed) hud.quad(p.tt.texture, p.rect.x0, p.rect.y1, p.tt.w, p.tt.h, p.alpha, p.rot);
@@ -1350,7 +1598,7 @@ export class Engine {
   private labelVisibility(anchor: THREE.Vector3, rect: Rect, fp: FrameParams): number {
     if (fp.heightK < 0.01 || !this.model) return 1;
     const s = this.settings!;
-    const sy = fp.heightK * s.heightScale;
+    const sy = fp.heightK * s.heightScale * fp.elev;
     const m = this.model;
     const b = m.bounds;
     const yMax = Math.max(0.01, m.plotMax * SY * sy);
@@ -1424,7 +1672,7 @@ export class Engine {
     const m = this.model;
     if (!m) return 1;
     const s = this.settings!;
-    const sy = fp.heightK * s.heightScale;
+    const sy = fp.heightK * s.heightScale * fp.elev;
     const b = m.bounds;
     const yMax = Math.max(0.01, m.plotMax * SY * sy);
     const cam = this.activeCam;
@@ -1488,6 +1736,13 @@ export class Engine {
 
   pick(ndcX: number, ndcY: number): HoverInfo | null {
     if (!this.model || this.introDriving || this.exporting) return this.setHover(null);
+    // Terrain cut away by the plot clip is not shown: nothing to pick there.
+    const clip = this.clip;
+    if (clip) {
+      const px = ((ndcX + 1) / 2) * this.vp.width;
+      const py = ((ndcY + 1) / 2) * this.vp.height;
+      if (px < clip.x0 || px > clip.x1 || py < clip.y0 || py > clip.y1) return this.setHover(null);
+    }
     const s = this.settings!;
     this.raycaster.setFromCamera(new THREE.Vector2(ndcX, ndcY), this.activeCam);
     this.world.updateMatrixWorld(true);
@@ -1556,7 +1811,8 @@ export class Engine {
   private updateHoverOutline() {
     const cell = this.hoverCell;
     const hv = this.hover;
-    if (!cell || this.introDriving || !this.panels[cell.panel]) {
+    // Never in intro frames or exports (the outline follows the pointer, it is not content).
+    if (!cell || this.introFrame || this.exporting || !this.panels[cell.panel]) {
       hv.visible = false;
       return;
     }
@@ -1609,14 +1865,29 @@ export class Engine {
     this.snapT0 = -1;
     const t = now() + 100;
     Object.values(this.tw).forEach((tw) => tw.jump(tw.value(t)));
+    this.disposeSnapshot();
   }
 
-  /** Render one export frame synchronously; t = intro time or null (static). */
+  /** The intro is on screen (playing, paused or scrubbed before its end). */
+  private introShowing(): boolean {
+    const tl = this.intro?.tl;
+    return !!tl && !!this.model && (tl.playing || tl.time < tl.duration - 1e-6);
+  }
+
+  /**
+   * Render one export frame synchronously; t = intro time (video) or null = exactly what is on
+   * screen: the static view, or the intro frame at the current timeline time while the intro is
+   * open (paused / scrubbed) — never the static view behind it.
+   */
   renderExport(t: number | null): void {
     if (!this.gl || !this.settings) return;
     let fp: FrameParams;
-    if (t === null) fp = this.staticFrame(now());
-    else {
+    this.introFrame = false;
+    if (t === null) {
+      const plan = this.introShowing() ? this.ensurePlan() : null;
+      fp = plan ? plan.evaluate(Math.min(INTRO_DURATION, Math.max(0, this.intro!.tl.time)), this.frame) : this.staticFrame(now());
+      this.introFrame = !!plan;
+    } else {
       if (this.settings.layout !== 'single' && this.layoutOverride !== 'single') {
         this.layoutOverride = 'single';
         this.sync(this.settings);
@@ -1624,28 +1895,59 @@ export class Engine {
       if (!this.intro) this.intro = { tl: null as unknown as Timeline, plan: null, planKey: '' };
       const plan = this.ensurePlan();
       fp = plan ? plan.evaluate(Math.min(INTRO_DURATION, Math.max(0, t)), this.frame) : this.staticFrame(now());
+      this.introFrame = !!plan;
     }
     this.render(fp, null, false);
+    this.introFrame = false;
   }
 
   endExport(restoreIntro: Timeline | null) {
     const gl = this.gl;
     const saved = this.exportSaved;
-    this.exporting = false;
     this.exportSaved = null;
-    if (this.layoutOverride) {
-      this.layoutOverride = null;
-      if (this.settings) this.sync(this.settings);
+    // Restore the on-screen size FIRST, while `exporting` is still set: the model rebuilds below
+    // (layout override of an intro video, portrait depth of the export frame) then happen at the
+    // screen viewport and never capture a cross-fade snapshot of an export-sized frame (it would
+    // be stretched over the view).
+    if (gl && saved) {
+      gl.setPixelRatio(saved.dpr);
+      gl.setSize(saved.cssW, saved.cssH, true);
+      this.vp = saved.vp;
+      this.cssW = saved.cssW;
+      this.cssH = saved.cssH;
+      this.pxScale = saved.pxScale;
     }
+    this.layoutOverride = null;
     if (this.intro && !this.intro.tl) this.intro = restoreIntro ? { tl: restoreIntro, plan: null, planKey: '' } : null;
-    if (!gl || !saved) return;
-    gl.setPixelRatio(saved.dpr);
-    gl.setSize(saved.cssW, saved.cssH, true);
-    this.vp = saved.vp;
-    this.cssW = saved.cssW;
-    this.cssH = saved.cssH;
-    this.pxScale = saved.pxScale;
+    if (this.settings) this.sync(this.settings);
     this.onViewportChanged();
+    this.exporting = false;
+    // Free the export-sized render targets; the next frame is drawn fresh at screen size.
+    this.disposeSnapshot();
+    this.invalidate();
+  }
+
+  /** Drop the cross-fade snapshot and its (MSAA) render target. */
+  private disposeSnapshot() {
+    this.snapRT?.dispose();
+    this.snapRT = null;
+    this.snapT0 = -1;
+  }
+
+  /** On-screen drawing-buffer size (device px), also while an export has resized the canvas. */
+  screenSize(): Viewport {
+    const vp = this.exportSaved?.vp ?? this.vp;
+    return { width: vp.width, height: vp.height };
+  }
+
+  /**
+   * File name of the intro video: the intro always shows record A alone (single layout, also when
+   * side-by-side / difference is on screen), so the name is A's, never "A_vs_B".
+   */
+  introExportName(): string {
+    const s = this.settings;
+    if (!s?.a) return 'svm-3d';
+    return `${recordLabel(s.a, s.lang)}_${translate(s.lang, 'scene3d.export.intro')}`;
   }
 
   /** Label / info for export file names. */

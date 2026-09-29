@@ -10,12 +10,22 @@ export interface FrameParams {
   pose: CamPose;
   /** Height factor 0 (flat) .. 1 (full). */
   heightK: number;
+  /**
+   * Vertical exaggeration of the elevation views (front / side): heights are drawn × elev so the
+   * profile fills the frame; 1 in the other views. Value axes keep true values.
+   */
+  elev: number;
   barsOpacity: number;
   surfaceOpacity: number;
   /** Which representation is drawn on top while both are visible (the incoming one). */
   onTop: 'bars' | 'surface';
   /** Per-bar growth (0..1) for the first panel, in bar instance order; null = fully grown. */
   growth: Float32Array | null;
+  /**
+   * Per-bar fade-in (0..1) for the first panel, same order: footprint 60 % → 100 % and color
+   * plate → colormap, so a bar never pops in. null = fully faded in.
+   */
+  barFade: Float32Array | null;
   valuesOpacity: number;
   contourOpacity: number;
   /** Draw-on progress per contour level index (null = fully drawn). */
@@ -33,10 +43,12 @@ export function makeFrameParams(): FrameParams {
   return {
     pose: { target: new THREE.Vector3(), theta: 0, phi: 1, h: 10, persp: 0.3 },
     heightK: 1,
+    elev: 1,
     barsOpacity: 0,
     surfaceOpacity: 1,
     onTop: 'surface',
     growth: null,
+    barFade: null,
     valuesOpacity: 0,
     contourOpacity: 0,
     contourReveal: null,
