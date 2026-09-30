@@ -19,9 +19,11 @@ interface Props {
 
 /**
  * Mini heatmap (Canvas2D): gray up, level luminance (log) right, cells exactly as in the 3D top
- * view, with the same width : depth as every 3D heatmap (its height follows the card's width). Cells without a valid value (missing or excluded) get a neutral grey hatch, never a
- * colour (never drawn as 0); area outside the record's measured range stays flat background.
- * Stepped 0.4 / 1.0 contours follow cell borders. Redraws only when inputs or the size change (no animation loop).
+ * view, with the same width : depth as every 3D heatmap (its height follows the card's width).
+ * Cells without a valid value (missing or excluded) get a neutral grey hatch, never a colour
+ * (never drawn as 0); area outside the record's measured range stays flat background. Stepped
+ * 0.4 / 1.0 contours follow cell borders. Redraws only when inputs or the size change (no
+ * animation loop).
  */
 export function Thumbnail({ rec, clipLowGray, maxNits, colormap, colorMax, sliceGray, extent }: Props) {
   const t = useT();

@@ -480,9 +480,9 @@ export class Engine {
 
   /**
    * Nominal frame insets and cell bands (px) of a candidate grid, for choosing the grid before the
-   * model exists: a typical title / colorbar / axis band, the floating
-   * controls, and the caption band the panels' captions would need in cells of that width (one
-   * line, or two when a caption does not fit).
+   * model exists: a typical title / colorbar / axis band, the floating controls, and the caption
+   * band the panels' captions would need in cells of that width (one line, or two when a caption
+   * does not fit).
    */
   private gridMetrics(n: number, g: GridShape, s: EngineSettings | null): GridMetrics {
     const S = this.pxScale;
@@ -2661,8 +2661,8 @@ export class Engine {
       this.pxScale = saved.pxScale;
     }
     // From here on the metrics are the screen's (the room kept for the floating controls decides
-    // the side-by-side grid): rebuilding with export metrics would leave a model
-    // that differs from the one on screen before the export. `restoring` keeps it all instant.
+    // the side-by-side grid): rebuilding with export metrics would leave a model that differs from
+    // the one on screen before the export. `restoring` keeps it all instant.
     this.exporting = false;
     this.restoring = true;
     try {
