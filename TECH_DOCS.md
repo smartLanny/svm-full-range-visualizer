@@ -32,7 +32,9 @@ src/
   colormaps.ts        SVM 色谱（JS 与 GLSL 两份，同一组色标）
   data/               与界面无关的数值核心（有单元测试）
     grid.ts           GridView、单元格边界、双线性采样、截面、差值、刻度与格式化
-    anomalies.ts      异常值检测 / 剔除 / 还原（ADR 0012）
+    denoise.ts        降噪：检测 + 显示时处理 processRecord（ADR 0012 补充），displayNotes 按显示的矩阵找回说明
+    denoiseText.ts    降噪说明的白话文案（提示、徽标、导入预览共用）
+    anomalies.ts      旧版破坏性剔除（已被降噪取代；应用只用其中的 restoreExcluded 还原旧文件）
     parse.ts          Excel/TSV 粘贴解析、多表拆分
     records.ts        JSON 校验、Dataset → SvmRecord、导出 JSON、显示名
     bundled.ts        内置记录加载（网页版 fetch，离线版内嵌）
@@ -80,7 +82,7 @@ release/              单文件离线版（构建产物，已提交）、icon.ic
 
 - `matrix.rows`：灰阶；`matrix.cols`：亮度档位百分比；`matrix.headerNits`：每个档位在最高灰阶下的实测亮度（档位亮度）；`matrix.grid[行][列]`：测量点或 `null`。
 - `data`：有效测量点的扁平列表（兼容 v1 文件）。加载时由 `validateDataset()` 从 `matrix.grid` 重新生成，文件里的 `data` 不参与计算。
-- `excluded`：被剔除的原始测量点及原因（ADR 0012）。
+- `excluded`（旧格式）：旧版“剔除”挪出的原始测量点。加载时由 `rawDataset()` 放回网格，记录在内存和本地保存中永远是原始读数。
 
 所有视图都通过 `data/grid.ts` 的 **GridView** 读数据：`gridView(record, { clipLowGray, maxNits })` 把矩阵整理成两个方向都**升序**的视图（灰阶升序、档位亮度升序），应用低灰阶裁剪（默认隐藏 G < 15，ADR 0004）和档位亮度上限（默认 500 nits），并去掉一个有效格都没有的行和列。结果按“矩阵对象 + 选项”缓存在 `WeakMap` 里。缺失值始终是 `null`，从不当作 0。
 
@@ -125,12 +127,14 @@ release/              单文件离线版（构建产物，已提交）、icon.ic
 
 `Timeline` 是一个时钟：`time`（秒）、播放 / 暂停 / 拖动 / 调速（0.5×–2×）/ 循环。视图在自己的渲染循环里读取 `timeline.time` 并据此求值画面；React 只订阅粗粒度变化（播放状态、结束等）。打开动画的视图用 `useRegisterActiveTimeline()` 登记为“当前动画”，空格、←/→、R 等全局快捷键作用于它。
 
-### 3.8 导入与异常值
+### 3.8 导入与降噪
 
 - 粘贴 / 拖放 / 选择 TSV、TXT：`parse.splitTables()` 把一次粘贴拆成多张表，`parseRawData()` 逐张解析（表头为亮度百分比，每列是“nits、SVM”两格或一格；可设亮度校正系数）。无法解析的格为 `null`。
 - JSON：`records.validateDataset()` 校验矩阵形状；缺少 `headerNits` 时从最高灰阶行重建。v1 导出的文件可以直接导入。
-- 异常筛查（ADR 0012）：没有 `excluded` 字段的导入数据用 `detectAnomalies()` 检测，导入器按原因显示数量；勾选“剔除明显异常值（推荐）”（默认开启）时由 `excludeAnomalies()` 把这些格设为 `null`，原始值和原因写入 `record.excluded`，`restoreExcluded()` 可原样还原。规则依次为：低于噪声底、重复列 / 行、陈旧读数（median polish 拟合亮度规律）、SVM 尖峰。
-- 界面对剔除的呈现统一用 `exclusionSummary()` 和 `common.exclusion.*` 文案：记录面板显示“有效 / 名义”格数和“已剔除 N”徽标，统计页显示覆盖率，3D 中缺失格用中性斜纹表示，2D 图例在有剔除的记录后加标记；缺失格之间从不连线。
+- 导入的记录始终是**原始读数**（带 `excluded` 的旧 JSON 由 `rawDataset()` 还原）。导入器的预览用 `shell/screening.ts` 的 `screenDataset()`（即 `denoiseSummary()`）列出降噪将处理的格子，没有需要勾选的选项。
+- **降噪**（ADR 0012 补充）：`data/denoise.ts` 的 `processRecord(record, { denoise })` 是唯一的处理步骤，纯函数、按“记录 + 选项”缓存。设置 `denoise`（默认开）决定视图拿到什么：`store/appStore.ts` 的 `displayOf()` / `processedOf()`（非 React）和 `store/hooks.ts` 的 `useDisplayRecords()` / `useProcessed()`。3D（`Scene3DView.readSettings` 把 A、B、C–F 换成显示记录）、2D（`Chart2DView` 的 `ChartInputs.records`）、统计（`StatsView`）和它们的导出都用显示记录，所以同一开关对所有视图和导出一致。
+- 显示记录的说明用 `displayNotes(record)` 按**显示的矩阵对象**找回（`noteGrid[行][列]`、`noteAt(gray, %)`、`levelNoteAt(%)`、`summary`），原始记录返回 `null`。3D 提示用 `scene3d/engine/cellNotes.ts`（差值图同时给出 A 的格和 B 被重采样用到的格），2D 用 `chart2d/denoiseMarks.ts` 把截面点映射回格子（`pointCells` / `pointNotes` / `gapNotes`，曲线节点带 `keys`，`curveSpanAt()` 找十字线下的曲线段或空缺），文案统一用 `data/denoiseText.ts`（`common.denoise.*`）。
+- 呈现：无有效数据的格与缺失格一样用中性斜纹（3D、热力图、缩略图），2D 曲线在此断开（点线示意）。插值补全的格：俯视图中在采样点画小空心圆（`materials.makeInterpMaterial`，只在地形压平时淡入，数值表显示时让开，格子小于约 11 px 时不画），2D 静态截面上画空心点（扫描动画中不画），数据表中为斜体虚线下划线；悬停任一被处理的格子都显示“做了什么 / 原因 / 插值来源或亮度估算方式 / 原始读数”。记录面板显示“降噪 N 格”徽标，统计页显示统计范围内的“降噪 N 格”并在 TSV 中给出插值补全 / 无有效数据 / 亮度估算三列；覆盖率把实测格和插值格都算作有效。
 
 ## 4. 导出（`src/export`，ADR 0010）
 
@@ -176,7 +180,7 @@ npm run build:standalone  # 单文件离线版 → release/SVM-Visualizer.html
 
 - `VITE_STANDALONE` 为真时，`data/bundled.ts` 改从 `bundledEmbedded.ts`（`import.meta.glob`）读取内嵌的数据集；`publicDir` 关闭，favicon 改为内联 data URI，不链接网页版 manifest（file:// 下会报错）。
 - vite-plugin-singlefile 把全部 JS、CSS、字体内联进一个 HTML。
-- 体积优化（`vite.config.ts` 的 `standaloneTrim`）：只内联 Inter 的 woff2 字体（能运行本应用的浏览器都支持 woff2）；数据集只内嵌 `matrix`、`excluded` 和元数据，扁平的 `data` 列表在加载时重建。
+- 体积优化（`vite.config.ts` 的 `standaloneTrim`）：只内联 Inter 的 woff2 字体（能运行本应用的浏览器都支持 woff2）；数据集只内嵌 `matrix`、`excluded`（旧格式，加载时还原）和元数据，扁平的 `data` 列表在加载时重建。
 - `scripts/finalize-standalone.mjs`：检查没有任何外部或本地文件引用（`<script src>`、`<link href>`、`url(http…)`、`@import`）、全部内置数据集都已内嵌，写入构建输入指纹 `<meta name="svm-build-inputs">` 和版本号 `<meta name="svm-version">`，输出到 `release/SVM-Visualizer.html`（`--out <文件>` 可改输出位置）。
 - **防止离线版过期**：指纹是 `src/`、`public/`、`index.html`、`vite.config.ts`、Tailwind / PostCSS 配置和 `package-lock.json`（只取已解析的依赖）的 SHA-256（`scripts/build-inputs.mjs`；不含测试文件，换行统一为 LF）。`src/export/releaseFreshness.test.ts` 重新计算并与文件里的指纹比较，不一致时 `npm test` 失败并提示 “run `npm run build:standalone`”。改了源码就要重新生成并提交离线版。`npm run check:release` 只跑这一项；确定稍后会统一重建时，可用 `SVM_SKIP_RELEASE_CHECK=1` 跳过。
 - `scripts/verify-standalone.mjs`：用 Playwright 以 file:// 打开离线版，检查指纹、无报错、无网络请求、内置记录数量、WebCodecs 可用、设置经 IndexedDB 跨刷新保存、IndexedDB 被禁用时仍能启动。
@@ -190,7 +194,7 @@ npm run typecheck   # tsc --noEmit
 npm test            # vitest：src/**/*.test.ts
 ```
 
-单元测试覆盖：网格与插值（`data/grid.test.ts`）、异常检测（`data/anomalies.test.ts`）、记录解析（`data/records.test.ts`）、统计（`data/stats.test.ts`、`stats/model.test.ts`）、统计页导出的排版与文件名（`stats/export.test.ts`）、2D 截面与样条（`chart2d/chart2d.test.ts`）、3D 模型与开场动画（`scene3d/engine/model.test.ts`、`intro.test.ts`）、导出尺寸 / 帧时间 / 编码参数 / 文件名（`export/presets.test.ts`、`export/exportNames.test.ts`）、离线版是否过期（`export/releaseFreshness.test.ts`）。
+单元测试覆盖：网格与插值（`data/grid.test.ts`）、降噪（`data/denoise.test.ts`：检测、插值规则、未标记的格与原始读数完全相同等属性测试；`data/denoiseView.test.ts`：显示记录的说明、全部内置记录每条说明的中英文案、3D 提示的格子说明；`chart2d/denoiseMarks.test.ts`：截面点与格子的对应）、旧版剔除（`data/anomalies.test.ts`）、记录解析（`data/records.test.ts`）、统计（`data/stats.test.ts`、`stats/model.test.ts`）、统计页导出的排版与文件名（`stats/export.test.ts`）、2D 截面与样条（`chart2d/chart2d.test.ts`）、3D 模型与开场动画（`scene3d/engine/model.test.ts`、`intro.test.ts`）、导出尺寸 / 帧时间 / 编码参数 / 文件名（`export/presets.test.ts`、`export/exportNames.test.ts`）、离线版是否过期（`export/releaseFreshness.test.ts`）。
 
 浏览器端检查（需要 Playwright，用 `PW_MODULE` 指向其 `index.mjs`）：
 
@@ -202,10 +206,10 @@ npm test            # vitest：src/**/*.test.ts
 
 ## 7. 添加内置数据
 
-1. 在应用里粘贴 Excel/TSV 或导入 JSON，检查预览、亮度校正和异常筛查结果，然后在记录面板中导出 JSON。
+1. 在应用里粘贴 Excel/TSV 或导入 JSON，检查预览、亮度校正和降噪预览，然后在记录面板中导出 JSON（导出的是原始读数）。
 2. 把文件放进 `public/datasets/`（文件名区分大小写）。
 3. 在 `public/datasets/manifest.json` **末尾**追加一条：`file`、`device`、`mode`，可选 `deviceEn`、`modeEn`。追加到末尾能保证已有机型的颜色不变。同一台设备的不同模式请使用完全相同的 `device`，这样 2D 图中它们同色、不同线型。
-4. 在 [`DATASETS.md`](DATASETS.md) 中写明设备、刷新率、调制模式、覆盖范围、测量条件，以及剔除过哪些点。
+4. 在 [`DATASETS.md`](DATASETS.md) 中写明设备、刷新率、调制模式、覆盖范围、测量条件，以及降噪会处理哪些格子（表格里的一行）。
 5. 运行 `npm test`；再运行 `npm run build:standalone` 并提交新的 `release/SVM-Visualizer.html`（否则 `releaseFreshness` 测试会失败）。
 
 ## 8. 界面文案
