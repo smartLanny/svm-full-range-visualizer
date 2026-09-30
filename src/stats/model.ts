@@ -5,6 +5,7 @@
 import type { Lang, SvmRecord } from '../types';
 import { deviceLabel, modeLabel, recordLabel } from '../data/records';
 import { computeRecordStats, SVM_AT_NITS, type RecordStats, type StatsOptions } from '../data/stats';
+import { SCENARIO_IDS, usedMean, type ScenarioGrade, type ScenarioId } from '../data/scenarios';
 import { fmtNits } from '../data/grid';
 import type { TFunction } from '../i18n';
 
@@ -15,7 +16,13 @@ export interface StatsRow {
   stats: RecordStats;
 }
 
-export type MetricKey = 'safe' | 'mid' | 'critical' | 'fullWhite' | 'peak' | 'mean' | 'at0' | 'at1' | 'at2' | 'at3' | 'coverage';
+/** Columns of the scenario reference (docs/adr/0009 addendum): the composite, then per scenario. */
+export const SCENARIO_METRIC: Record<ScenarioId, 'scNight' | 'scIndoor' | 'scOutdoor'> = { night: 'scNight', indoor: 'scIndoor', outdoor: 'scOutdoor' };
+export type ScenarioMetricKey = 'scenario' | (typeof SCENARIO_METRIC)[ScenarioId];
+export const SCENARIO_METRIC_KEYS: ScenarioMetricKey[] = ['scenario', ...SCENARIO_IDS.map((id) => SCENARIO_METRIC[id])];
+export const isScenarioMetric = (k: MetricKey): k is ScenarioMetricKey => (SCENARIO_METRIC_KEYS as MetricKey[]).includes(k);
+
+export type MetricKey = 'safe' | 'mid' | 'critical' | 'fullWhite' | 'peak' | 'mean' | 'at0' | 'at1' | 'at2' | 'at3' | 'coverage' | ScenarioMetricKey;
 export type SortKey = 'order' | 'name' | MetricKey;
 export type SortDir = 'asc' | 'desc';
 
@@ -37,6 +44,10 @@ export const METRICS: MetricColumn[] = [
   { key: 'mean', better: 'lower', step: 0.01, value: (s) => s.meanSvm },
   ...SVM_AT_NITS.map((_, i): MetricColumn => ({ key: `at${i}` as MetricKey, better: 'lower', step: 0.01, value: (s) => s.svmAt[i]?.svm ?? null })),
   { key: 'coverage', better: null, step: 0.001, value: (s) => s.coverageShare },
+  // Scenario reference: lower is better. A scenario left out of the composite (too little data)
+  // has no value in its column.
+  { key: 'scenario', better: 'lower', step: 0.01, value: (s) => s.scenario.composite },
+  ...SCENARIO_IDS.map((id): MetricColumn => ({ key: SCENARIO_METRIC[id], better: 'lower', step: 0.01, value: (s) => usedMean(s.scenario, id) })),
 ];
 
 export const metricByKey = (k: MetricKey) => METRICS.find((m) => m.key === k)!;
@@ -73,12 +84,12 @@ export function sortRows(rows: StatsRow[], key: SortKey, dir: SortDir, lang: Lan
 
 /**
  * Best value per ranked column among the rows (only when at least two rows have a value, and
- * not all equal — a "best" among identical values means nothing).
+ * not all equal — a "best" among identical values means nothing). `keys`: only these columns.
  */
-export function bestValues(rows: StatsRow[]): Partial<Record<MetricKey, number>> {
+export function bestValues(rows: StatsRow[], keys?: readonly MetricKey[]): Partial<Record<MetricKey, number>> {
   const out: Partial<Record<MetricKey, number>> = {};
   for (const m of METRICS) {
-    if (!m.better) continue;
+    if (!m.better || (keys && !keys.includes(m.key))) continue;
     const vals = rows.map((r) => m.value(r.stats)).filter((v): v is number => v !== null);
     if (vals.length < 2) continue;
     const best = m.better === 'higher' ? Math.max(...vals) : Math.min(...vals);
@@ -112,7 +123,20 @@ export function median(vals: number[]): number | null {
   return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2;
 }
 
-/** Best values over the comparable rows, plus which rows are left out for low coverage. */
+/**
+ * A row's scenario composite is not comparable when its weights were renormalised (a scenario
+ * had too little data): it averages other scenarios than the rows it would be compared with.
+ */
+export const scenarioRenormalised = (s: RecordStats) => s.scenario.composite !== null && s.scenario.dropped.length > 0;
+
+/**
+ * Best values over the comparable rows, plus which rows are left out for low coverage.
+ *
+ * The scenario reference has its own rule (docs/adr/0009 addendum): its ranges do not depend on
+ * the scope, so the scope coverage does not apply to its columns; instead a composite with
+ * renormalised weights is left out of the composite column's ranking, and a scenario without
+ * enough data simply has no value.
+ */
 export function rankRows(rows: StatsRow[]): Ranking {
   const medianCoverage = median(rows.map((r) => r.stats.coverageShare).filter((v): v is number => v !== null));
   const low = new Set<string>();
@@ -122,7 +146,20 @@ export function rankRows(rows: StatsRow[]): Ranking {
       if (c !== null && c < COVERAGE_MIN_RATIO * medianCoverage - 1e-12) low.add(r.rec.id);
     }
   }
-  return { best: bestValues(rows.filter((r) => !low.has(r.rec.id))), low, medianCoverage };
+  const scopeKeys = METRICS.map((m) => m.key).filter((k) => !isScenarioMetric(k));
+  const best = bestValues(
+    rows.filter((r) => !low.has(r.rec.id)),
+    scopeKeys,
+  );
+  Object.assign(
+    best,
+    bestValues(rows, SCENARIO_METRIC_KEYS.slice(1)),
+    bestValues(
+      rows.filter((r) => !scenarioRenormalised(r.stats)),
+      ['scenario'],
+    ),
+  );
+  return { best, low, medianCoverage };
 }
 
 /** 'higher' / 'lower' comparison at display resolution: v is at least as good as b. */
@@ -140,7 +177,8 @@ function atLeastAsGood(key: MetricKey, v: number, b: number): boolean {
  */
 export function markOf(rank: Ranking, key: MetricKey, row: StatsRow, v: number | null): 'best' | 'caveat' | null {
   if (v === null || !Number.isFinite(v)) return null;
-  if (!rank.low.has(row.rec.id)) return isBest(rank.best, key, v) ? 'best' : null;
+  const excluded = isScenarioMetric(key) ? key === 'scenario' && scenarioRenormalised(row.stats) : rank.low.has(row.rec.id);
+  if (!excluded) return isBest(rank.best, key, v) ? 'best' : null;
   const b = rank.best[key];
   return b !== undefined && atLeastAsGood(key, v, b) ? 'caveat' : null;
 }
@@ -169,6 +207,17 @@ export function band(v: number): 'safe' | 'mid' | 'critical' {
 
 export const BAND_COLORS = { safe: '#22c55e', mid: '#f59e0b', critical: '#ef4444' } as const;
 
+/**
+ * Colours of the scenario grades: the band colours for 无感 / 轻微 / 可见 (same thresholds 0.4 / 1.0)
+ * and a magenta for 强烈 (≥ 3.0, tailwind `strong`), beyond the red of the critical band.
+ */
+export const GRADE_COLORS: Record<ScenarioGrade, string> = {
+  imperceptible: BAND_COLORS.safe,
+  slight: BAND_COLORS.mid,
+  visible: BAND_COLORS.critical,
+  strong: '#d946ef',
+};
+
 // ---- TSV -------------------------------------------------------------------------------
 
 const num = (v: number | null | undefined, digits: number) => (v === null || v === undefined || !Number.isFinite(v) ? '' : v.toFixed(digits));
@@ -193,6 +242,8 @@ export function toTsv(rows: StatsRow[], t: TFunction, lang: Lang): string {
     t('stats.col.interpolated'),
     t('stats.col.noData'),
     t('stats.col.lumEstimated'),
+    t('stats.col.scenario'),
+    ...SCENARIO_IDS.map((id) => t(`stats.col.${SCENARIO_METRIC[id]}`)),
   ];
   const clean = (s: string) => s.replace(/[\t\r\n]+/g, ' ');
   const lines = rows.map(({ rec, stats: s }) =>
@@ -214,6 +265,8 @@ export function toTsv(rows: StatsRow[], t: TFunction, lang: Lang): string {
       String(s.denoise.interpolated),
       String(s.denoise.noData),
       String(s.denoise.lumEstimated),
+      num(s.scenario.composite, 3),
+      ...SCENARIO_IDS.map((id) => num(usedMean(s.scenario, id), 3)),
     ].join('\t'),
   );
   return [header.join('\t'), ...lines].join('\n');

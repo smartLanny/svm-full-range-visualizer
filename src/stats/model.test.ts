@@ -1,8 +1,30 @@
 import { describe, expect, it } from 'vitest';
 import type { SvmRecord } from '../types';
 import type { RecordStats } from '../data/stats';
-import { bestValues, defaultDir, isBest, markOf, median, rankRows, sortRows, toTsv, type StatsRow } from './model';
+import type { ScenarioReference } from '../data/scenarios';
+import { bestValues, defaultDir, isBest, markOf, median, metricByKey, rankRows, sortRows, toTsv, type StatsRow } from './model';
 import { translate } from '../i18n';
+
+/** Scenario reference fixture: means per scenario (null = no data -> dropped, weights renormalised). */
+const scen = (night: number | null, indoor: number | null, outdoor: number | null): ScenarioReference => {
+  const w = { night: 0.3, indoor: 0.5, outdoor: 0.2 };
+  const means = { night, indoor, outdoor };
+  const ids = ['night', 'indoor', 'outdoor'] as const;
+  const wsum = ids.reduce((a, id) => a + (means[id] === null ? 0 : w[id]), 0);
+  const scenarios = ids.map((id) => ({
+    id,
+    mean: means[id],
+    coverage: means[id] === null ? 0 : 1,
+    used: means[id] !== null,
+    weight: w[id],
+    effectiveWeight: means[id] === null || !wsum ? 0 : w[id] / wsum,
+  }));
+  return {
+    composite: wsum ? scenarios.reduce((a, x) => a + (x.mean ?? 0) * x.effectiveWeight, 0) : null,
+    scenarios,
+    dropped: ids.filter((id) => means[id] === null),
+  };
+};
 
 const stats = (p: Partial<RecordStats>): RecordStats => ({
   cellCount: 10,
@@ -20,6 +42,7 @@ const stats = (p: Partial<RecordStats>): RecordStats => ({
   coverageShare: 1,
   denoise: { interpolated: 0, noData: 0, lumEstimated: 0 },
   validExtent: { grayMin: 15, grayMax: 255, levelMin: 2, levelMax: 500 },
+  scenario: scen(1, 0.5, 0.2),
   ...p,
 });
 const rec = (id: string, device: string, mode = '') => ({ id, device, mode }) as unknown as SvmRecord;
@@ -116,5 +139,53 @@ describe('toTsv', () => {
     expect(tsv[2].split('\t')[1]).toBe('y z');
     expect(tsv[1].split('\t')[2]).toBe('40.0');
     expect(tsv[1].split('\t')[5]).toBe(''); // fullWhite null
+  });
+});
+
+describe('scenario reference columns (docs/adr/0009 addendum)', () => {
+  const mk = (id: string, order: number, scenario: ScenarioReference, p: Partial<RecordStats> = {}): StatsRow => ({ rec: rec(id, id), order, stats: stats({ scenario, ...p }) });
+  const r = [
+    mk('a', 0, scen(1.2, 0.6, 0.3)), // 0.36 + 0.3 + 0.06 = 0.72
+    mk('b', 1, scen(0.5, 0.2, 0.1)), // 0.15 + 0.1 + 0.02 = 0.27
+    mk('c', 2, scen(0.3, 0.1, null)), // renormalised: (0.09 + 0.05) / 0.8 = 0.175
+    mk('d', 3, scen(null, null, null)), // no composite
+  ];
+
+  it('sorts by the composite, lower first by default, missing last', () => {
+    expect(defaultDir('scenario')).toBe('asc');
+    expect(defaultDir('scOutdoor')).toBe('asc');
+    expect(metricByKey('scenario').better).toBe('lower');
+    expect(sortRows(r, 'scenario', 'asc', 'zh').map((x) => x.rec.id)).toEqual(['c', 'b', 'a', 'd']);
+    expect(sortRows(r, 'scenario', 'desc', 'zh').map((x) => x.rec.id)).toEqual(['a', 'b', 'c', 'd']);
+    expect(sortRows(r, 'scOutdoor', 'asc', 'zh').map((x) => x.rec.id)).toEqual(['b', 'a', 'c', 'd']);
+  });
+
+  it('a renormalised composite is not ranked (caveat instead of best); per-scenario columns are', () => {
+    const rank = rankRows(r);
+    expect(rank.best.scenario).toBeCloseTo(0.27, 9);
+    expect(markOf(rank, 'scenario', r[1], r[1].stats.scenario.composite)).toBe('best');
+    expect(markOf(rank, 'scenario', r[2], r[2].stats.scenario.composite)).toBe('caveat');
+    expect(rank.best.scNight).toBe(0.3);
+    expect(markOf(rank, 'scNight', r[2], 0.3)).toBe('best');
+  });
+
+  it('the scope coverage rule does not apply to the scenario columns', () => {
+    const low = [mk('a', 0, scen(1.2, 0.6, 0.3)), mk('b', 1, scen(1, 1, 1)), mk('c', 2, scen(0.1, 0.1, 0.1), { coverageShare: 0.5 })];
+    const rank = rankRows(low);
+    expect([...rank.low]).toEqual(['c']);
+    expect(markOf(rank, 'scenario', low[2], low[2].stats.scenario.composite)).toBe('best');
+  });
+
+  it('TSV: composite + the three scenario means as the last columns (missing = empty)', () => {
+    const t = (k: string, v?: Record<string, string | number>) => translate('zh', k, v);
+    const tsv = toTsv(r, t, 'zh').split('\n');
+    const head = tsv[0].split('\t');
+    expect(head.slice(-4)).toEqual(['场景加权 SVM（参考）', '夜间 SVM（参考）', '室内 SVM（参考）', '户外 SVM（参考）']);
+    expect(tsv[1].split('\t').slice(-4)).toEqual(['0.720', '1.200', '0.600', '0.300']);
+    expect(tsv[3].split('\t').slice(-4)).toEqual(['0.175', '0.300', '0.100', '']);
+    expect(tsv[4].split('\t').slice(-4)).toEqual(['', '', '', '']);
+    tsv.forEach((l) => expect(l.split('\t').length).toBe(head.length));
+    const en = toTsv(r, (k, v) => translate('en', k, v), 'en').split('\n')[0].split('\t');
+    expect(en.slice(-4)).toEqual(['Scenario SVM (ref.)', 'Night SVM (ref.)', 'Indoor SVM (ref.)', 'Outdoor SVM (ref.)']);
   });
 });
