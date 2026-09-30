@@ -1,5 +1,6 @@
 import { loadBundledRecords } from '../data/bundled';
 import { validateDataset } from '../data/records';
+import { rawDataset } from '../data/denoise';
 import { ColormapType, type SvmRecord } from '../types';
 import { cleanExtras, DEFAULT_SETTINGS, useAppStore, type Overlays, type RecordPrefs, type Settings } from './appStore';
 import { applyBundledEdit, loadPersisted, setBundledManifest, startAutoSave } from './persistence';
@@ -27,6 +28,7 @@ const SETTING_CHECKS: { [K in keyof Settings]: Check } = {
   lang: oneOf('zh', 'en'),
   tab: oneOf('scene3d', 'chart2d', 'stats'),
   clipLowGray: isBool,
+  denoise: isBool,
   maxNits: (v) => v === null || (typeof v === 'number' && Number.isFinite(v) && v > 0),
   representation: oneOf('surface', 'bars'),
   view: oneOf('perspective', 'top', 'front', 'side'),
@@ -71,7 +73,8 @@ export function sanitizeSettings(saved: unknown): Partial<Settings> {
 
 /**
  * Stored user records, validated like an import (structure, numeric cells, at least one valid
- * cell). Invalid ones are dropped so one bad record can never blank the app.
+ * cell). Invalid ones are dropped so one bad record can never blank the app. Records are kept
+ * RAW: points a former version removed destructively (`excluded`) are put back (docs/adr/0012).
  */
 export function sanitizeUserRecords(saved: unknown): { records: SvmRecord[]; dropped: number } {
   if (!Array.isArray(saved)) return { records: [], dropped: 0 };
@@ -80,7 +83,7 @@ export function sanitizeUserRecords(saved: unknown): { records: SvmRecord[]; dro
   const seen = new Set<string>();
   for (const r of saved as Partial<SvmRecord>[]) {
     try {
-      const ds = validateDataset(r);
+      const ds = rawDataset(validateDataset(r));
       const id = r && typeof r.id === 'string' ? r.id : '';
       if (!id || seen.has(id) || id.startsWith('bundled:')) throw new Error('INVALID_ID');
       seen.add(id);

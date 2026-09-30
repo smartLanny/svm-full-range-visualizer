@@ -9,6 +9,7 @@ import { buildAxes, logAxisTicks } from './scales';
 import { buildScene, graySliceSvmAt, type ChartInputs } from './scene';
 import { recordStyles } from '../data/colors';
 import { buildTable, tableToTsv } from './table';
+import { processRecord } from '../data/denoise';
 
 const load = (f: string) => JSON.parse(fs.readFileSync(path.resolve(__dirname, '../../public/datasets', f), 'utf8')) as Dataset;
 const asRec = (ds: Dataset, id: string, device: string, mode: string): SvmRecord => ({ ...ds, id, device, mode, source: 'bundled' });
@@ -265,12 +266,27 @@ describe('scene: overlays, exclusions, title slot, sweep glide', () => {
     presenting: false,
     presentBlack: false,
   };
-  it('marks records with excluded points in the legend and series', () => {
-    const sc = buildScene(base, { t: null, interactive: true });
-    const rows = sc.legend.flatMap((g) => g.rows);
-    expect(rows.find((r) => r.id === 'x')!.excluded).toBe(true);
-    expect(rows.find((r) => r.id === 'a')!.excluded).toBe(false);
-    expect(sc.series.find((s) => s.id === 'x')!.exclusion!.total).toBeGreaterThan(100);
+  it('series of a denoised record carry its summary and hollow marks at interpolated points (static frames only)', () => {
+    // Mate 80 RS 标准: G96 / 27 % and G96 / 80 % are repeated readings filled by interpolation.
+    const m80 = processRecord(records0('huawei_mate80rs.json', 'm', 'Mate 80 RS', 'std'), { denoise: true }).record;
+    const recs2 = [iphone, m80];
+    const inp: ChartInputs = { ...base, records: recs2, styles: recordStyles(recs2), sliceGray: 96 };
+    const sc = buildScene(inp, { t: null, interactive: true });
+    const se = sc.series.find((s) => s.id === 'm')!;
+    expect(se.denoise!.interpolated).toBeGreaterThan(0);
+    expect(se.hollow.length).toBe(2);
+    expect(se.hollow.every((h) => h.a === 1)).toBe(true);
+    // a raw record has no summary and no marks; the legend has no '*' marker any more
+    expect(sc.series.find((s) => s.id === 'a')!.denoise).toBeNull();
+    expect(sc.series.find((s) => s.id === 'a')!.hollow).toEqual([]);
+    // sweep frames stay clean
+    expect(buildScene(inp, { t: 4, interactive: false }).series.every((s) => s.hollow.length === 0)).toBe(true);
+    // the table marks the values read off the interpolated readings and explains the gaps
+    const tb = buildTable(sc);
+    const row = tb.rows.find((r) => r.id === 'm')!;
+    expect(row.notes.some((n) => n?.interpolated)).toBe(true);
+    expect(tb.rows.find((r) => r.id === 'a')!.notes.every((n) => n === null)).toBe(true);
+    expect(tableToTsv(tb, { record: 'r', unit: 'nits' })).not.toContain('*');
   });
   it('honours overlays.title / overlays.colorbar (H)', () => {
     const sc = buildScene({ ...base, showTitle: false, showLegend: false }, { t: null, interactive: false });

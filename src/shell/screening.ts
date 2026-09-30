@@ -1,62 +1,41 @@
-import { ANOMALY_KINDS, detectAnomalies, excludeAnomalies, type Anomaly, type AnomalyKind } from '../data/anomalies';
+import { denoiseSummary, DENOISE_KINDS, type DenoiseKind, type DenoiseSummary } from '../data/denoise';
 import type { Dataset } from '../types';
-import type { TFunction } from '../i18n';
 
 /**
- * Import screening (docs/adr/0012, contract C7): pasted / dropped tables and JSON without an
- * `excluded` field are checked for obvious anomalies; the importer offers to exclude them
- * (default on). Excluded raw values are kept in `record.excluded`.
+ * Import preview of the denoise (docs/adr/0012 addendum, contract C7). Records are imported RAW:
+ * nothing is removed or rewritten. The importer shows what the view-time denoise will do with a
+ * table (the same processing every record gets), so the user knows before importing.
  */
 export interface Screening {
-  anomalies: Anomaly[];
-  byReason: Partial<Record<AnomalyKind, number>>;
+  summary: DenoiseSummary;
 }
 
-/** Screen a parsed dataset. null = not screened (it already carries an `excluded` field). */
-export function screenDataset(ds: Pick<Dataset, 'matrix' | 'excluded'>): Screening | null {
-  if (ds.excluded !== undefined) return null;
-  let anomalies: Anomaly[];
+/** What the denoise will do with a parsed dataset (null if the check fails). */
+export function screenDataset(ds: Dataset): Screening | null {
   try {
-    anomalies = detectAnomalies(ds);
+    return { summary: denoiseSummary(ds) };
   } catch (e) {
-    console.warn('Anomaly screening failed:', e);
-    anomalies = [];
+    console.warn('Denoise preview failed:', e);
+    return null;
   }
-  return { anomalies, byReason: countByReason(anomalies.map((a) => a.kind)) };
 }
 
-export function countByReason(kinds: string[]): Partial<Record<AnomalyKind, number>> {
-  const out: Partial<Record<AnomalyKind, number>> = {};
-  for (const k of kinds) out[k as AnomalyKind] = (out[k as AnomalyKind] ?? 0) + 1;
+export type SummaryTotals = Pick<DenoiseSummary, 'touched' | 'interpolated' | 'noData' | 'lumEstimated' | 'levelsEstimated' | 'byKind'>;
+
+/** Totals over several previews (several tables / files). */
+export function mergeSummaries(list: (Screening | null | undefined)[]): SummaryTotals {
+  const out: SummaryTotals = { touched: 0, interpolated: 0, noData: 0, lumEstimated: 0, levelsEstimated: 0, byKind: {} };
+  for (const s of list) {
+    if (!s) continue;
+    const m = s.summary;
+    out.touched += m.touched;
+    out.interpolated += m.interpolated;
+    out.noData += m.noData;
+    out.lumEstimated += m.lumEstimated;
+    out.levelsEstimated += m.levelsEstimated;
+    for (const k of DENOISE_KINDS) if (m.byKind[k]) out.byKind[k as DenoiseKind] = (out.byKind[k] ?? 0) + m.byKind[k]!;
+  }
   return out;
-}
-
-/** Apply a screening: flagged cells become missing, raw values go to `excluded`. */
-export function applyScreening<T extends Dataset>(ds: T, s: Screening | null | undefined, exclude: boolean): T {
-  if (!exclude || !s || !s.anomalies.length) return ds;
-  return excludeAnomalies(ds, s.anomalies);
-}
-
-export function mergeByReason(list: (Partial<Record<AnomalyKind, number>> | null | undefined)[]): { total: number; byReason: Partial<Record<AnomalyKind, number>> } {
-  const byReason: Partial<Record<AnomalyKind, number>> = {};
-  let total = 0;
-  for (const m of list) {
-    if (!m) continue;
-    for (const [k, n] of Object.entries(m) as [AnomalyKind, number][]) {
-      byReason[k] = (byReason[k] ?? 0) + n;
-      total += n;
-    }
-  }
-  return { total, byReason };
-}
-
-/** "低于噪声底 165 · 陈旧读数 8" in ANOMALY_KINDS order (unknown reasons last, untranslated). */
-export function reasonsText(t: TFunction, byReason: Partial<Record<string, number>>, sep = ' · '): string {
-  const known = ANOMALY_KINDS.filter((k) => byReason[k]).map((k) => `${t(`common.exclusion.reasons.${k}`)} ${byReason[k]}`);
-  const other = Object.keys(byReason)
-    .filter((k) => !(ANOMALY_KINDS as string[]).includes(k) && byReason[k])
-    .map((k) => `${k} ${byReason[k]}`);
-  return [...known, ...other].join(sep);
 }
 
 export interface DatasetRanges {
@@ -81,9 +60,9 @@ const span = (vs: number[]): [number, number] | null => {
 };
 
 /**
- * Importer preview ranges of what will actually be imported (finding N13): computed from the
- * valid grid cells, so with the exclusion on they describe the screened dataset, not the raw
- * table (a −0.05 nits cell with a raw SVM of 62.8 does not widen the SVM range once excluded).
+ * Importer preview ranges of what will be shown (finding N13): computed from the valid grid
+ * cells, so with the denoise on they describe the denoised dataset, not the raw table (a
+ * −0.05 nits cell with a raw SVM of 62.8 does not widen the SVM range once the denoise hides it).
  */
 export function datasetRanges(ds: Pick<Dataset, 'matrix'>): DatasetRanges {
   const { rows, headerNits, grid } = ds.matrix;

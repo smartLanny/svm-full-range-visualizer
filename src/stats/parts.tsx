@@ -1,9 +1,10 @@
 import React from 'react';
-import { TriangleAlert } from 'lucide-react';
+import { Sparkles, TriangleAlert } from 'lucide-react';
 import type { SvmRecord } from '../types';
 import type { RecordStyle } from '../data/colors';
 import type { RecordStats } from '../data/stats';
-import { ANOMALY_KINDS, exclusionSummary } from '../data/anomalies';
+import { displayNotes } from '../data/denoise';
+import { countParts, kindParts } from '../data/denoiseText';
 import { useT, type TFunction } from '../i18n';
 import { cn } from '../ui';
 import { band, BAND_COLORS, fmtPct, type Ranking } from './model';
@@ -91,40 +92,43 @@ export function SvmValue({ v, className, digits = 2 }: { v: number | null; class
   );
 }
 
-/** Tooltip text of a record's exclusions (docs/adr/0012): title, per-reason counts, scope, note. */
-export function exclusionTooltip(rec: SvmRecord, stats: RecordStats, t: TFunction): string | null {
-  const sum = exclusionSummary(rec);
+/** Cells the denoise changed inside the stats scope (docs/adr/0012 addendum). */
+export const denoisedInScope = (stats: RecordStats) => stats.denoise.interpolated + stats.denoise.noData + stats.denoise.lumEstimated;
+
+/**
+ * Tooltip of a record's denoise badge: counts inside the scope ("降噪：插值补全 2 格，无有效数据 9 格"),
+ * what the denoise found in the whole record, the coverage rule and where the raw readings are.
+ */
+export function denoiseTooltip(rec: SvmRecord, stats: RecordStats, t: TFunction): string | null {
+  const sum = displayNotes(rec)?.summary;
   if (!sum) return null;
-  const lines = [t('common.exclusion.title', { n: sum.total })];
-  for (const k of ANOMALY_KINDS) {
-    const n = sum.byReason[k];
-    if (n) lines.push(`  · ${t(`common.exclusion.reasons.${k}`)}: ${n}`);
-  }
-  // Reasons outside the known kinds (older / hand-edited files) are still counted.
-  const other = sum.total - ANOMALY_KINDS.reduce((a, k) => a + (sum.byReason[k] ?? 0), 0);
-  if (other > 0) lines.push(`  · ?: ${other}`);
-  lines.push(stats.excludedInScope > 0 ? t('stats.exclusion.inScope', { n: stats.excludedInScope }) : t('stats.exclusion.none'));
-  lines.push(t('common.exclusion.coverage', { valid: sum.valid, nominal: sum.nominal }));
-  lines.push('', t('common.exclusion.detail'));
-  return lines.join('\n');
+  return [
+    t('stats.denoise.inScope', { parts: countParts(stats.denoise, t).join('，') || t('stats.denoise.none') }),
+    t('stats.denoise.record', { parts: countParts(sum, t).join('，') }),
+    kindParts(sum.byKind, t).join(' · '),
+    t('stats.denoise.coverage'),
+    '',
+    t('common.denoise.detail'),
+  ].join('\n');
 }
 
-/** Warning badge '已剔除 N' for records with excluded anomalies; nothing otherwise. */
-export function ExclusionBadge({ rec, stats, className }: { rec: SvmRecord; stats: RecordStats; className?: string }) {
+/** Calm badge '降噪 N 格' (cells the denoise changed inside the scope); nothing when none. */
+export function DenoiseBadge({ rec, stats, className }: { rec: SvmRecord; stats: RecordStats; className?: string }) {
   const t = useT();
-  const sum = exclusionSummary(rec);
-  if (!sum) return null;
+  const n = denoisedInScope(stats);
+  if (!n) return null;
   return (
     <span
       className={cn(
         'inline-flex shrink-0 cursor-help items-center gap-1 whitespace-nowrap rounded px-1.5 py-px text-2xs font-medium leading-4',
-        'bg-amber-500/15 text-amber-300 ring-1 ring-inset ring-amber-400/25',
+        'bg-surface-4 text-ink-2 ring-1 ring-inset ring-line-strong',
         className,
       )}
-      title={exclusionTooltip(rec, stats, t) ?? undefined}
+      title={denoiseTooltip(rec, stats, t) ?? undefined}
+      data-testid="stats-denoise-badge"
     >
-      <TriangleAlert size={10} className="shrink-0" aria-hidden />
-      {t('common.exclusion.badge', { n: sum.total })}
+      <Sparkles size={10} className="shrink-0 text-sky-300/90" aria-hidden />
+      {t('common.denoise.badge', { n })}
     </span>
   );
 }
@@ -147,7 +151,7 @@ export function CaveatMark({ title, className }: { title: string; className?: st
 /** Coverage value (valid area share) with the valid / nominal cell count; amber + marker when low. */
 export function CoverageValue({ stats, caveat, className, sub = true }: { stats: RecordStats; caveat: string | null; className?: string; sub?: boolean }) {
   const t = useT();
-  const title = [t('stats.metric.coverageHint'), t('common.exclusion.coverage', { valid: stats.cellCount, nominal: stats.nominalCount }), caveat]
+  const title = [t('stats.metric.coverageHint'), t('common.denoise.coverage', { valid: stats.cellCount, nominal: stats.nominalCount }), caveat]
     .filter(Boolean)
     .join('\n\n');
   return (
@@ -156,7 +160,7 @@ export function CoverageValue({ stats, caveat, className, sub = true }: { stats:
         {caveat && <TriangleAlert size={11} className="shrink-0" aria-hidden />}
         {fmtPct(stats.coverageShare)}
       </span>
-      {sub && <span className="text-2xs text-ink-3">{t('common.exclusion.coverage', { valid: stats.cellCount, nominal: stats.nominalCount })}</span>}
+      {sub && <span className="text-2xs text-ink-3">{t('common.denoise.coverage', { valid: stats.cellCount, nominal: stats.nominalCount })}</span>}
     </span>
   );
 }

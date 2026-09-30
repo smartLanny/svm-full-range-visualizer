@@ -9,6 +9,8 @@ import { statsContentOf, statsContents, statsFileName } from './exportContents';
 import { cardHeight, type StatsExportInput } from './exportRender';
 import { thumbExtent } from './heatmap';
 import { buildRows, rankRows, sortRows } from './model';
+import { denoisedInScope } from './parts';
+import { processRecord, rawDataset } from '../data/denoise';
 
 /** Fake text measure: CJK = 1 em, everything else 0.55 em. */
 const CJK = /[⺀-鿿＀-￯]/;
@@ -108,7 +110,8 @@ describe('table fit', () => {
 
 const dir = path.resolve(__dirname, '../../public/datasets');
 const files = fs.readdirSync(dir).filter((f) => f.endsWith('.json') && f !== 'manifest.json');
-const records = files.map((f, i) => toRecord(JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8')) as Dataset, 'bundled', { id: `r${i}` }));
+// As the stats page shows them: raw records processed by the denoise (docs/adr/0012 addendum).
+const records = files.map((f, i) => processRecord(rawDataset(toRecord(JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8')) as Dataset, 'bundled', { id: `r${i}` })), { denoise: true }).record);
 const opts = { clipLowGray: true, maxNits: 500, sliceGray: 127 };
 const rows = sortRows(buildRows(records, opts), 'order', 'asc', 'zh');
 const input = (p: Partial<StatsExportInput> = {}): StatsExportInput => ({
@@ -129,10 +132,11 @@ const input = (p: Partial<StatsExportInput> = {}): StatsExportInput => ({
 });
 
 describe('stats card layout (single pass: measure = draw)', () => {
-  it('is taller when narrow (legend wraps) and with an exclusion badge that does not fit the mode line', () => {
+  it('is taller when narrow (legend wraps) and with a denoise badge that does not fit the mode line', () => {
     const inp = input();
-    const plain = rows.findIndex((r) => !r.rec.excluded?.length);
+    const plain = rows.findIndex((r) => denoisedInScope(r.stats) === 0);
     expect(plain).toBeGreaterThanOrEqual(0);
+    expect(rows.some((r) => denoisedInScope(r.stats) > 0)).toBe(true);
     const narrow = cardHeight(inp, plain, CARD_MIN_W, measure);
     const wide = cardHeight(inp, plain, CARD_MAX_W, measure);
     expect(narrow).toBeGreaterThanOrEqual(wide);

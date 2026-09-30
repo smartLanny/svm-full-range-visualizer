@@ -5,8 +5,10 @@
  */
 import { fmtNits, fmtSvm } from '../data/grid';
 import type { RenderResult } from './render';
-import type { Scene } from './scene';
-import { translate } from '../i18n';
+import type { Scene, SeriesModel } from './scene';
+import { translate, type TFunction } from '../i18n';
+import { noteLines } from '../data/denoiseText';
+import { gapNotes, pointNotes } from './denoiseMarks';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
@@ -15,6 +17,21 @@ interface RowEls {
   line: SVGLineElement;
   value: HTMLSpanElement;
   label: HTMLSpanElement;
+  /** Denoise note of the reading under the crosshair (docs/adr/0012 addendum). */
+  sub: HTMLDivElement;
+}
+
+/**
+ * What the denoise did to the reading the crosshair is on (a node within snapping distance), in
+ * plain words: action and reason, then the raw reading / interpolation source; null otherwise.
+ */
+function nodeNote(scene: Scene, se: SeriesModel, key: number | undefined, t: TFunction): string | null {
+  if (key === undefined) return null;
+  const notes = pointNotes(se.rec, scene.mode, scene.param, scene.clipLowGray, key);
+  if (!notes.length) return null;
+  const main = notes.reduce((a, b) => (b.w > a.w ? b : a)).note;
+  const l = noteLines(main, t);
+  return [`${l.action} · ${l.reason}`, l.source, l.raw].filter(Boolean).join('\n');
 }
 
 export class ChartTooltip {
@@ -42,7 +59,10 @@ export class ChartTooltip {
     let r = this.rows[i];
     if (r) return r;
     const root = document.createElement('div');
-    root.className = 'flex items-center gap-2 whitespace-nowrap';
+    const main = document.createElement('div');
+    main.className = 'flex items-center gap-2 whitespace-nowrap';
+    const sub = document.createElement('div');
+    sub.className = 'mt-0.5 whitespace-pre-line pl-[26px] text-2xs leading-snug text-ink-3';
     const svg = document.createElementNS(SVG_NS, 'svg');
     svg.setAttribute('width', '18');
     svg.setAttribute('height', '6');
@@ -59,15 +79,16 @@ export class ChartTooltip {
     value.className = 'w-9 text-xs font-semibold tabular-nums text-ink-1';
     const label = document.createElement('span');
     label.className = 'text-2xs text-ink-2';
-    root.append(svg, value, label);
-    r = { root, line, value, label };
+    main.append(svg, value, label);
+    root.append(main, sub);
+    r = { root, line, value, label, sub };
     this.rows[i] = r;
     return r;
   }
 
   update(res: RenderResult, scene: Scene, hostW: number, hostH: number) {
     const hv = res.hover;
-    if (!hv || hv.values.length === 0) {
+    if (!hv || hv.values.length + hv.gaps.length === 0) {
       this.hide();
       return;
     }
@@ -76,17 +97,31 @@ export class ChartTooltip {
       scene.mode === 'gray' ? translate(scene.lang, 'chart2d.tooltip.nits', { v: fmtNits(x) }) : translate(scene.lang, 'chart2d.tooltip.gray', { v: Math.round(x) });
     const vals = [...hv.values].sort((a, b) => b.svm - a.svm);
     const byId = new Map(scene.series.map((s) => [s.id, s]));
-    vals.forEach((v, i) => {
-      const se = byId.get(v.id);
-      if (!se) return;
+    const t: TFunction = (k, v) => translate(scene.lang, k, v);
+    const setRow = (i: number, se: SeriesModel, value: string, sub: string | null) => {
       const r = this.row(i);
       r.line.setAttribute('stroke', se.style.color);
       r.line.setAttribute('stroke-dasharray', se.style.dash.length ? se.style.dash.map((d) => d * 0.6).join(' ') : 'none');
-      r.value.textContent = fmtSvm(v.svm);
-      r.label.textContent = se.exclusion ? `${se.label} *` : se.label;
+      r.value.textContent = value;
+      r.label.textContent = se.label;
+      r.sub.textContent = sub ?? '';
+      r.sub.style.display = sub ? '' : 'none';
       if (r.root.parentNode !== this.list || this.list.children[i] !== r.root) this.list.insertBefore(r.root, this.list.children[i] ?? null);
-    });
-    while (this.list.children.length > vals.length) this.list.lastElementChild!.remove();
+    };
+    let n = 0;
+    for (const v of vals) {
+      const se = byId.get(v.id);
+      if (se) setRow(n++, se, fmtSvm(v.svm), nodeNote(scene, se, v.node, t));
+    }
+    // Records with a gap under the crosshair: no valid data there, and why (denoise notes).
+    for (const g of hv.gaps) {
+      const se = byId.get(g.id);
+      if (!se) continue;
+      const notes = gapNotes(se.rec, scene.mode, scene.param, scene.clipLowGray, g.keys[0], g.keys[1]);
+      const why = notes.length ? noteLines(notes[0], t).reason : null;
+      setRow(n++, se, '—', [t('common.noValidData'), why].filter(Boolean).join(' · '));
+    }
+    while (this.list.children.length > n) this.list.lastElementChild!.remove();
 
     if (!this.shown) {
       this.shown = true;

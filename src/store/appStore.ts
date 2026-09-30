@@ -1,6 +1,8 @@
 import { create } from 'zustand';
+import { processRecord, type ProcessedRecord } from '../data/denoise';
 import type {
   AxisMode,
+  Dataset,
   Lang,
   LightingMode,
   MainTab,
@@ -34,6 +36,12 @@ export interface Settings {
   clipLowGray: boolean;
   /** Level-luminance cap for 3D / stats; null = show all columns. */
   maxNits: number | null;
+  /**
+   * 降噪 (docs/adr/0012 addendum): views show every record through processRecord — black-level
+   * readings, SVM spikes and repeated readings filled by short-gap interpolation or shown as no
+   * data, unreliable luminance estimated. Off: raw values everywhere. Records always stay raw.
+   */
+  denoise: boolean;
 
   // 3D terrain
   representation: Representation;
@@ -76,6 +84,7 @@ export const DEFAULT_SETTINGS: Settings = {
   tab: 'scene3d',
   clipLowGray: true,
   maxNits: DEFAULT_MAX_NITS,
+  denoise: true,
   representation: 'surface',
   view: 'perspective',
   layout: 'single',
@@ -381,6 +390,20 @@ export const useAppStore = create<AppState>()((set, get) => ({
 
 /** Non-React access (render loops, canvas drawing). */
 export const getAppState = () => useAppStore.getState();
+
+/**
+ * A record as processed under the current denoise setting (docs/adr/0012 addendum): `.record`
+ * is what views, stats and exports display; notes / summary explain what was changed. Memoised
+ * per record + setting (same inputs → the same object). Non-React callers; React: useProcessed.
+ */
+export function processedOf<T extends Dataset>(rec: T, s: Pick<AppState, 'denoise'> = getAppState()): ProcessedRecord<T> {
+  return processRecord(rec, { denoise: s.denoise });
+}
+
+/** The record the views display under the current denoise setting (see processedOf). */
+export function displayOf<T extends Dataset>(rec: T, s: Pick<AppState, 'denoise'> = getAppState()): T {
+  return processRecord(rec, { denoise: s.denoise }).record;
+}
 
 /** Records visible in the 2D chart / stats (not hidden), in record order. */
 export const selectVisibleRecords = (s: AppState) => s.records.filter((r) => !s.hiddenIds.includes(r.id));

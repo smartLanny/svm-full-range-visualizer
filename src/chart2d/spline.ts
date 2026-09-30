@@ -146,7 +146,7 @@ export interface CurveNode {
   key: number;
 }
 
-/** Dotted connection across a gap (missing / excluded samples) between two opaque nodes. */
+/** Dotted connection across a gap (missing / no-data samples) between two opaque nodes. */
 export interface Bridge {
   i0: number;
   i1: number;
@@ -180,6 +180,8 @@ export interface Curve {
   /** Opacity of the dot drawn for a node without any drawn segment. */
   dot: Float64Array;
   bridges: Bridge[];
+  /** Key (measured column / row) of each node. */
+  keys: Int32Array;
 }
 
 /** Weight of |Δy| in the chord parameter: s ≈ x for ordinary curves, > 0 for equal x. */
@@ -231,7 +233,7 @@ function blendedSlopes(ss: Float64Array, vs: Float64Array, seg: Float64Array): F
  * - segment opacity = min of its two nodes, or 0 across a gap (a key missing in between);
  * - tangents blend with the neighbouring segments' opacity (blendedSlopes);
  * - between two opaque nodes with a gap (or fading nodes) in between, a dotted bridge fades in
- *   as the nodes in between fade out. It is never solid: an excluded sample is not bridged
+ *   as the nodes in between fade out. It is never solid: a sample without data is not bridged
  *   silently.
  * With every node opaque and no gap this is the ordinary monotone spline.
  */
@@ -272,7 +274,7 @@ export function buildCurve(nodes: CurveNode[]): Curve | null {
       bridges.push({ i0: i, i1: j, mx0, my0, mx1, my1, alpha });
     }
   }
-  return { xs, ys, ss, mx, my, a, seg, dot, bridges };
+  return { xs, ys, ss, mx, my, a, seg, dot, bridges, keys: Int32Array.from(pts, (p) => p.key) };
 }
 
 export type Bezier = [number, number, number, number, number, number, number, number];
@@ -326,6 +328,25 @@ export function evalCurve(c: Curve, x: number): number | null {
       else hi = mid;
     }
     return bezierAt(b, (lo + hi) / 2)[1];
+  }
+  return null;
+}
+
+/**
+ * Where x falls on a curve: the drawn segment (nodes i, i + 1; the one evalCurve reads), the
+ * single node of a one-point curve, or a gap between two drawn nodes (the keys missing there are
+ * the samples without data); null outside the curve.
+ */
+export function curveSpanAt(c: Curve, x: number): { nodes: number[]; gap: boolean } | null {
+  const n = c.xs.length;
+  const inside = (i: number, j: number) => x >= Math.min(c.xs[i], c.xs[j]) - 1e-12 && x <= Math.max(c.xs[i], c.xs[j]) + 1e-12;
+  if (n === 1) return c.a[0] >= 0.5 && Math.abs(x - c.xs[0]) < 1e-9 ? { nodes: [0], gap: false } : null;
+  for (let i = n - 2; i >= 0; i--) if (c.seg[i] >= 0.5 && inside(i, i + 1)) return { nodes: [i, i + 1], gap: false };
+  for (let i = 0; i < n - 1; i++) {
+    if (c.a[i] < 0.5) continue;
+    let j = i + 1;
+    while (j < n && c.a[j] < 0.5) j++;
+    if (j < n && c.keys[j] - c.keys[i] > 1 && inside(i, j)) return { nodes: [i, j], gap: true };
   }
   return null;
 }

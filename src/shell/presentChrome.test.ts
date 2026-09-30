@@ -4,7 +4,8 @@ import { useAppStore } from '../store/appStore';
 import { TOAST_BOTTOM, toastBottom } from '../ui/Toast';
 import { tableTextToResults } from './fileImport';
 import { HINT_MARGIN, HINT_TITLE_HALF, hintPlacement } from './presentLayout';
-import { applyScreening, datasetRanges } from './screening';
+import { datasetRanges } from './screening';
+import { processRecord } from '../data/denoise';
 import { toggleLabels } from './useGlobalShortcuts';
 import type { StageRect } from './uiStore';
 
@@ -81,11 +82,11 @@ describe('toast stack placement (N22)', () => {
   });
 });
 
-describe('importer preview ranges after exclusion (N13)', () => {
+describe('importer preview ranges with the denoise (N13)', () => {
   const [r] = tableTextToResults(EXAMPLE_TSV, 'a.tsv', 'a');
   const raw = r.record!;
-  const clean = applyScreening(raw, r.screening, true);
-  it('ranges describe the valid cells of the dataset that will be imported', () => {
+  const clean = processRecord(raw, { denoise: true }).record;
+  it('ranges describe the valid cells of the dataset as it will be shown', () => {
     const a = datasetRanges(raw);
     const b = datasetRanges(clean);
     expect(a.points).toBe(raw.data.length);
@@ -93,7 +94,7 @@ describe('importer preview ranges after exclusion (N13)', () => {
     const svm = (ds: typeof raw) => ds.data.map((p) => p.svm);
     expect(b.svm).toEqual([Math.min(...svm(clean)), Math.max(...svm(clean))]);
     expect(a.svm).toEqual([Math.min(...svm(raw)), Math.max(...svm(raw))]);
-    // nothing excluded widens the imported range
+    // the denoise never widens the shown range
     expect(b.svm![0]).toBeGreaterThanOrEqual(a.svm![0]);
     expect(b.svm![1]).toBeLessThanOrEqual(a.svm![1]);
   });

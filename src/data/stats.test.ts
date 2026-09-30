@@ -3,8 +3,9 @@ import fs from 'fs';
 import path from 'path';
 import type { Dataset, DataPoint, SvmRecord } from '../types';
 import { gridView, sliceAtGray } from './grid';
-import { cellAreas, computeRecordStats, interpolateAtNits, nominalScope, safeFromNits, SVM_AT_NITS, type StatsOptions } from './stats';
-import { detectAnomalies, excludeAnomalies } from './anomalies';
+import { cellAreas, computeRecordStats, denoiseInScope, interpolateAtNits, nominalScope, safeFromNits, SVM_AT_NITS, type StatsOptions } from './stats';
+import { processRecord, rawDataset } from './denoise';
+import { validateDataset } from './records';
 import { recordStyles } from './colors';
 import { buildScene, type ChartInputs } from '../chart2d/scene';
 import { buildTable } from '../chart2d/table';
@@ -209,26 +210,28 @@ describe('coverage (valid area / nominal area of the scope)', () => {
     expect(s.coverageShare).toBeCloseTo(1, 9);
   });
 
-  it('counts excluded points in scope (bundled 18 Pro Max records)', () => {
+  it('RecordStats.denoise: the displayed record\'s own counts inside the scope (bundled 18 Pro Max records)', () => {
     for (const f of ['xiaomi18promax_adaptive_pro_off.json', 'xiaomi18promax_adaptive_pro_on.json']) {
-      const ds = load(f);
-      expect(ds.excluded?.length).toBeGreaterThan(0);
-      const all = computeRecordStats(ds, ALL);
-      expect(all.excludedInScope).toBe(ds.excluded!.length);
-      const def = computeRecordStats(ds, DEFAULT);
-      expect(def.excludedInScope).toBeGreaterThan(0);
-      expect(def.excludedInScope).toBeLessThan(ds.excluded!.length);
+      const raw = rawDataset(load(f));
+      expect(computeRecordStats(raw, ALL).denoise).toEqual({ interpolated: 0, noData: 0, lumEstimated: 0 });
+      const on = processRecord(raw, { denoise: true });
+      const all = computeRecordStats(on.record, ALL);
+      expect(all.denoise).toEqual({ interpolated: on.summary.interpolated, noData: on.summary.noData, lumEstimated: on.summary.lumEstimated });
+      const def = computeRecordStats(on.record, DEFAULT);
+      expect(def.denoise.noData).toBeGreaterThan(0);
+      expect(def.denoise.noData).toBeLessThan(all.denoise.noData);
       expect(def.coverageShare!).toBeLessThan(0.95);
     }
   });
 
-  it('excluding anomalies lowers coverage and leaves the other stats well-defined', () => {
-    const raw = load('iPhone17ProMax.json');
-    const before = computeRecordStats(raw, DEFAULT);
-    const cleaned = excludeAnomalies(raw, detectAnomalies(raw));
-    const after = computeRecordStats(cleaned, DEFAULT);
+  it('cells the denoise shows as no data lower coverage by exactly those cells and leave the other stats well-defined', () => {
+    const raw = rawDataset(load('iPhone17ProMax.json'));
+    const before = computeRecordStats(raw, ALL);
+    const on = processRecord(raw, { denoise: true });
+    const after = computeRecordStats(on.record, ALL);
     expect(after.coverageShare!).toBeLessThanOrEqual(before.coverageShare! + 1e-12);
-    expect(after.cellCount + after.excludedInScope).toBe(before.cellCount);
+    expect(after.cellCount + after.denoise.noData).toBe(before.cellCount);
+    expect(after.meanSvm).not.toBeNull();
   });
 });
 
@@ -374,5 +377,38 @@ describe('computeRecordStats — bundled records', () => {
     const clipped = computeRecordStats(iphone, DEFAULT);
     expect(clipped.peak!.svm).toBeLessThanOrEqual(all.peak!.svm);
     expect(clipped.cellCount).toBeLessThan(all.cellCount);
+  });
+});
+
+describe('stats on denoised records (docs/adr/0012 addendum)', () => {
+  const rawOf = (f: string) => rawDataset(validateDataset(load(f)));
+  const scope = { clipLowGray: true, maxNits: 500 as number | null, sliceGray: 127 };
+
+  it('denoiseInScope counts the processed cells inside the clip / cap; nothing with denoise off', () => {
+    const raw = rawOf('iPhone18ProMax.json');
+    const on = processRecord(raw, { denoise: true });
+    const inScope = denoiseInScope(on, scope);
+    const all = denoiseInScope(on, { clipLowGray: false, maxNits: null });
+    expect(all).toEqual({ interpolated: on.summary.interpolated, noData: on.summary.noData, lumEstimated: on.summary.lumEstimated });
+    expect(inScope.noData).toBeLessThan(all.noData);
+    expect(inScope.lumEstimated).toBeGreaterThan(20);
+    expect(denoiseInScope(processRecord(raw, { denoise: false }), scope)).toEqual({ interpolated: 0, noData: 0, lumEstimated: 0 });
+  });
+
+  it('coverage counts measured + interpolated cells; no-data cells lower it', () => {
+    const raw = rawOf('huawei_mate80rs.json');
+    const on = processRecord(raw, { denoise: true });
+    const s = computeRecordStats(on.record, { ...scope, clipLowGray: false, maxNits: null });
+    const nominal = raw.matrix.rows.length * raw.matrix.cols.length;
+    expect(s.nominalCount).toBe(nominal);
+    expect(s.cellCount).toBe(nominal - on.summary.noData);
+    expect(s.coverageShare!).toBeLessThan(1);
+    expect(computeRecordStats(raw, { ...scope, clipLowGray: false, maxNits: null }).coverageShare).toBe(1);
+  });
+
+  it('a spike removed by the denoise no longer sets the peak (Xiaomi 17 Ultra DC, 22.73 at G21 / 0 %)', () => {
+    const raw = rawOf('xiaomi17ultra_leica_dc_120hz.json');
+    expect(computeRecordStats(raw, scope).peak!.svm).toBeCloseTo(22.725, 3);
+    expect(computeRecordStats(processRecord(raw, { denoise: true }).record, scope).peak!.svm).toBeLessThan(6);
   });
 });

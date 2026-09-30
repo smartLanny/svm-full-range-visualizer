@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ArrowDownWideNarrow, ArrowUpNarrowWide, BarChart3, ChevronRight, ClipboardCopy, LayoutGrid, Table2, TriangleAlert } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
-import { useRecordStyles, useVisibleRecords } from '../store/hooks';
+import { useDisplayRecords, useRecordStyles, useVisibleRecords } from '../store/hooks';
 import { LOW_GRAY_CLIP } from '../types';
 import { useT } from '../i18n';
 import { Button, IconButton, Segmented, Select, Switch, cn, toast } from '../ui';
@@ -56,7 +56,9 @@ async function ensureFonts(): Promise<void> {
 /** Summary stats (docs/adr/0009): cards and a sortable table over the visible records. */
 export default function StatsView() {
   const t = useT();
-  const records = useVisibleRecords();
+  // Stats, thumbnails and exports use the records as displayed: processed by the denoise
+  // (docs/adr/0012 addendum); coverage counts measured + interpolated cells.
+  const records = useDisplayRecords(useVisibleRecords());
   const styles = useRecordStyles();
   const lang = useAppStore((s) => s.lang);
   const clipLowGray = useAppStore((s) => s.clipLowGray);

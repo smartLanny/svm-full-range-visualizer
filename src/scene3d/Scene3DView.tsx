@@ -1,7 +1,7 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { Box, Hash, Maximize2, Minus, Plus } from 'lucide-react';
-import { getAppState, selectActiveRecord, selectCompareExtras, selectCompareRecord, useAppStore, type AppState } from '../store/appStore';
+import { displayOf, getAppState, selectActiveRecord, selectCompareExtras, selectCompareRecord, useAppStore, type AppState } from '../store/appStore';
 import { getT, useT } from '../i18n';
 import { IconButton, Segmented } from '../ui';
 import { cn } from '../ui/cn';
@@ -9,7 +9,7 @@ import { TimelineBar } from '../timeline/TimelineBar';
 import { useRegisterActiveTimeline, useTimeline, useTimelineSnapshot } from '../timeline/timeline';
 import { getExportTarget, registerExportTarget, safeFileName } from '../export/registry';
 import { recordLabel } from '../data/records';
-import type { ViewPreset } from '../types';
+import type { SvmRecord, ViewPreset } from '../types';
 import { Engine, setDebugClock, type EngineSettings, type HoverInfo } from './engine/engine';
 import { INTRO_CHAPTERS, INTRO_DURATION } from './engine/intro';
 import type { ModelResult } from './engine/model';
@@ -21,13 +21,18 @@ const BG = '#07090d';
 const UI_INSET_TIMELINE = 60;
 const UI_INSET_CONTROLS = 34;
 
+/** The record the engine draws: processed under the denoise setting (docs/adr/0012 addendum). */
+const shown = <T extends SvmRecord | null>(rec: T, st: AppState): T => (rec ? displayOf(rec, st) : rec);
+
 function readSettings(st: AppState): EngineSettings {
   return {
     lang: st.lang,
-    a: selectActiveRecord(st),
-    b: selectCompareRecord(st),
+    // Every panel (A, B, C–F, the difference map, the intro) draws the denoised records; the
+    // processed record keeps its id, and is the same object while the inputs are.
+    a: shown(selectActiveRecord(st), st),
+    b: shown(selectCompareRecord(st), st),
     // Side-by-side panels C–F (the engine ignores them in the other layouts).
-    extras: selectCompareExtras(st),
+    extras: selectCompareExtras(st).map((r) => displayOf(r, st)),
     clipLowGray: st.clipLowGray,
     maxNits: st.maxNits,
     representation: st.representation,
@@ -51,6 +56,7 @@ const RELEVANT: (keyof AppState)[] = [
   'activeId',
   'compareId',
   'compareExtraIds',
+  'denoise',
   'clipLowGray',
   'maxNits',
   'representation',
@@ -77,6 +83,7 @@ function structuralChange(st: AppState, prev: AppState): boolean {
     st.representation !== prev.representation ||
     st.view !== prev.view ||
     selectActiveRecord(st) !== selectActiveRecord(prev) ||
+    st.denoise !== prev.denoise ||
     st.clipLowGray !== prev.clipLowGray ||
     st.maxNits !== prev.maxNits ||
     st.heightCap !== prev.heightCap

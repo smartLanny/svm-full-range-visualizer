@@ -3,15 +3,55 @@
  * without hovering). Values are read off the same splines the chart draws.
  */
 import type { SliceMode } from '../types';
-import { curveXRange, evalCurve } from './spline';
-import type { Scene } from './scene';
+import { curveSpanAt, curveXRange, evalCurve } from './spline';
+import type { Scene, SeriesModel } from './scene';
 import { fmtTickNits } from './scales';
+import type { CellNote } from '../data/denoise';
+import { gapNotes, interpolatedShare, pointNotes } from './denoiseMarks';
+
+/** What the denoise did to the readings behind a table value (docs/adr/0012 addendum). */
+export interface ValueNote {
+  /** The value is read off a curve piece that uses an interpolated reading. */
+  interpolated: boolean;
+  /** The notes of the readings behind the value (or of the missing readings in a gap). */
+  notes: CellNote[];
+}
 
 export interface TableModel {
   mode: SliceMode;
   /** Column sample x in data units (nits or gray). */
   xs: number[];
-  rows: { id: string; label: string; color: string; dash: number[]; values: (number | null)[]; excluded: number }[];
+  rows: {
+    id: string;
+    label: string;
+    color: string;
+    dash: number[];
+    values: (number | null)[];
+    /** Per value: the denoise notes behind it, or null (measured readings only / raw record). */
+    notes: (ValueNote | null)[];
+    /** What the denoise did to the record (legend tooltip), or null. */
+    denoise: SeriesModel['denoise'];
+  }[];
+}
+
+/** Denoise notes behind the value of a series at axis position u (the curve piece's nodes, or a gap). */
+function valueNote(scene: Scene, se: SeriesModel, u: number): ValueNote | null {
+  if (!se.curve || !se.denoise) return null;
+  const span = curveSpanAt(se.curve, u);
+  if (!span) return null;
+  const keys = span.nodes.map((i) => se.curve!.keys[i]);
+  if (span.gap) {
+    const notes = gapNotes(se.rec, scene.mode, scene.param, scene.clipLowGray, keys[0], keys[1]);
+    return notes.length ? { interpolated: false, notes } : null;
+  }
+  const notes: CellNote[] = [];
+  let interpolated = false;
+  for (const k of keys) {
+    const wn = pointNotes(se.rec, scene.mode, scene.param, scene.clipLowGray, k);
+    if (interpolatedShare(wn) > 0.01) interpolated = true;
+    for (const { note } of wn) if (!notes.includes(note)) notes.push(note);
+  }
+  return notes.length ? { interpolated, notes } : null;
 }
 
 /** 1-2-5 samples for the gray slice (nits) inside the union of the curves' ranges. */
@@ -48,13 +88,15 @@ function graySamples(scene: Scene): number[] {
 
 export function buildTable(scene: Scene): TableModel {
   const xs = scene.mode === 'gray' ? nitsSamples(scene) : graySamples(scene);
+  const ux = (x: number) => (scene.mode === 'gray' ? Math.log10(x) : x);
   const rows = scene.series.map((se) => ({
     id: se.id,
     label: se.label,
     color: se.style.color,
     dash: se.style.dash,
-    values: xs.map((x) => (se.curve ? evalCurve(se.curve, scene.mode === 'gray' ? Math.log10(x) : x) : null)),
-    excluded: se.exclusion?.total ?? 0,
+    values: xs.map((x) => (se.curve ? evalCurve(se.curve, ux(x)) : null)),
+    notes: xs.map((x) => valueNote(scene, se, ux(x))),
+    denoise: se.denoise,
   }));
   return { mode: scene.mode, xs, rows };
 }
@@ -66,6 +108,6 @@ export function columnLabel(mode: SliceMode, x: number): string {
 export function tableToTsv(model: TableModel, headers: { record: string; unit: string }): string {
   const head = [headers.record, ...model.xs.map((x) => (model.mode === 'gray' ? `${fmtTickNits(x)} ${headers.unit}` : `G${Math.round(x)}`))];
   const lines = [head.join('\t')];
-  for (const r of model.rows) lines.push([r.label + (r.excluded ? ' *' : ''), ...r.values.map((v) => (v === null ? '' : v.toFixed(3)))].join('\t'));
+  for (const r of model.rows) lines.push([r.label, ...r.values.map((v) => (v === null ? '' : v.toFixed(3)))].join('\t'));
   return lines.join('\n');
 }

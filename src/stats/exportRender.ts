@@ -1,7 +1,7 @@
 /**
  * Canvas2D renderer of the stats page exports (docs/adr/0010, addendum "stats page"): the cards
  * grid and the table, redrawn offline at any size from the same view model as the screen
- * (sorted rows, "best" marks, coverage caveats, exclusion badges, record keys, heatmap
+ * (sorted rows, "best" marks, coverage caveats, denoise badges, record keys, heatmap
  * thumbnails via heatmap.ts). The on-screen design is replicated in "design px" (the CSS px of
  * StatsCard / StatsTable) and scaled into the export: the cards are laid out on a grid chosen
  * for the export's aspect (exportLayout.ts), the page title and scope line on top.
@@ -15,7 +15,6 @@ import type { ColormapType, Lang } from '../types';
 import type { RecordStyle } from '../data/colors';
 import { deviceLabel, modeLabel } from '../data/records';
 import { fmtNits, gridView, type GridView } from '../data/grid';
-import { exclusionSummary } from '../data/anomalies';
 import { SVM_AT_NITS } from '../data/stats';
 import { translate, type TFunction } from '../i18n';
 import { FONT_STACK } from '../chart2d/render';
@@ -99,6 +98,7 @@ export const C = {
   amberBg: 'rgba(245,158,11,0.15)',
   amberRing: 'rgba(251,191,36,0.25)',
   red300: '#fca5a5',
+  sky: 'rgba(125,211,252,0.9)',
 } as const;
 
 const fontOf = (weight: number, size: number) => `${weight} ${size}px ${FONT_STACK}`;
@@ -111,6 +111,12 @@ const ICONS = {
   up: ['m5 12 7-7 7 7', 'M12 19V5'],
   down: ['M12 5v14', 'm19 12-7 7-7-7'],
   chart: ['M3 3v16a2 2 0 0 0 2 2h16', 'M18 17V9', 'M13 17V5', 'M8 17v-3'],
+  sparkles: [
+    'M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z',
+    'M20 2v4',
+    'M22 4h-4',
+    'M6 20a2 2 0 1 1-4 0a2 2 0 1 1 4 0',
+  ],
 } as const;
 type IconName = keyof typeof ICONS;
 let iconPaths: Record<IconName, Path2D[]> | null = null;
@@ -284,16 +290,23 @@ function recordKey(p: Pen, x: number, y: number, style: RecordStyle | undefined)
   p.line(x + 18, y + 6, x + 40, y + 6, color, 2, dash.map((d) => d * 0.6), dash.length ? 'butt' : 'round');
 }
 
-/** Width of the exclusion badge "⚠ 已剔除 N" (px-1.5, icon 10, gap 1). */
+/** Width of the denoise badge "✦ 降噪 N 格" (px-1.5, icon 10, gap 1). */
 const badgeWidth = (p: Pen, label: string) => 6 + 10 + 4 + p.m(label, 10, 500) + 6;
 
-/** Exclusion badge, 18 tall at (x, y). Returns its width. */
-function exclusionBadge(p: Pen, label: string, x: number, y: number): number {
+/** Label of a row's denoise badge (DenoiseBadge: cells the denoise changed in scope), or null. */
+const denoiseBadgeLabel = (t: TFunction, row: StatsRow) => {
+  const d = row.stats.denoise;
+  const n = d.interpolated + d.noData + d.lumEstimated;
+  return n ? t('common.denoise.badge', { n }) : null;
+};
+
+/** Denoise badge (calm: neutral chip, sky icon), 18 tall at (x, y). Returns its width. */
+function denoiseBadge(p: Pen, label: string, x: number, y: number): number {
   const w = badgeWidth(p, label);
-  p.fill(x, y, w, 18, C.amberBg, 4);
-  p.ring(x, y, w, 18, 4, C.amberRing);
-  p.icon('warn', x + 6, y + 4, 10, C.amber);
-  p.text(label, x + 20, y + 1, 16, 10, 500, C.amber);
+  p.fill(x, y, w, 18, C.s4, 4);
+  p.ring(x, y, w, 18, 4, C.lineStrong);
+  p.icon('sparkles', x + 6, y + 4, 10, C.sky);
+  p.text(label, x + 20, y + 1, 16, 10, 500, C.ink2);
   return w;
 }
 
@@ -366,18 +379,17 @@ function cardPass(p: Pen, e: Env, row: StatsRow, cw: number, h: number | null): 
   let y = 14 + names.length * 20;
   const mode = modeLabel(rec, e.lang);
   const modes = mode ? wrapText(mode, textW, 2, 12, 400, p.m) : [''];
-  const sum = exclusionSummary(rec);
-  const badge = sum ? t('common.exclusion.badge', { n: sum.total }) : null;
+  const badge = denoiseBadgeLabel(t, row);
   const modeW = mode ? p.m(modes[0], 12, 400) : p.m(' ', 12, 400);
   if (badge && modes.length === 1 && modeW + 6 + badgeWidth(p, badge) <= textW) {
     p.text(modes[0], 66, y + 1, 16, 12, 400, C.ink3);
-    exclusionBadge(p, badge, 66 + modeW + 6, y);
+    denoiseBadge(p, badge, 66 + modeW + 6, y);
     y += 18;
   } else {
     modes.forEach((l, i) => p.text(l, 66, y + i * 16, 16, 12, 400, C.ink3));
     y += modes.length * 16;
     if (badge) {
-      exclusionBadge(p, badge, 66, y + 4);
+      denoiseBadge(p, badge, 66, y + 4);
       y += 22;
     }
   }
@@ -673,7 +685,7 @@ function cellOf(p: Pen, e: Env, row: StatsRow, col: Col): { w: number; h: number
   if (key === 'coverage') {
     const cav = caveatOf(e, row);
     const val = fmtPct(s.coverageShare);
-    const sub = t('common.exclusion.coverage', { valid: s.cellCount, nominal: s.nominalCount });
+    const sub = t('common.denoise.coverage', { valid: s.cellCount, nominal: s.nominalCount });
     const vw = (cav ? 15 : 0) + p.m(val, 12, 400);
     const w = Math.max(vw, p.m(sub, 10, 400));
     return {
@@ -702,13 +714,12 @@ function cellOf(p: Pen, e: Env, row: StatsRow, col: Col): { w: number; h: number
   };
 }
 
-/** Record cell: key, device (truncated), mode + exclusion badge + caveat mark. */
+/** Record cell: key, device (truncated), mode + denoise badge + caveat mark. */
 function recordCell(p: Pen, e: Env, row: StatsRow, width: number | null, x: number, midY: number): { w: number; h: number } {
   const { rec } = row;
   const device = deviceLabel(rec, e.lang);
   const mode = modeLabel(rec, e.lang);
-  const sum = exclusionSummary(rec);
-  const badge = sum ? e.t('common.exclusion.badge', { n: sum.total }) : null;
+  const badge = denoiseBadgeLabel(e.t, row);
   const cav = caveatOf(e, row);
   const extra = (badge ? 6 + badgeWidth(p, badge) : 0) + (cav ? 6 + 11 : 0);
   const line2 = !!mode || !!badge || cav;
@@ -728,7 +739,7 @@ function recordCell(p: Pen, e: Env, row: StatsRow, width: number | null, x: numb
         const m = ellipsize(mode, mw, 10, 400, p.m);
         lx += p.text(m, lx, ly + (lh - 14) / 2, 14, 10, 400, C.ink3) + 6;
       }
-      if (badge) lx += exclusionBadge(p, badge, lx, ly) + 6;
+      if (badge) lx += denoiseBadge(p, badge, lx, ly) + 6;
       if (cav) p.icon('warn', lx, ly + (lh - 11) / 2, 11, C.amber);
     }
   }

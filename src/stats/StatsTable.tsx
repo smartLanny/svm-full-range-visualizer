@@ -8,7 +8,7 @@ import { SVM_AT_NITS } from '../data/stats';
 import { useT } from '../i18n';
 import { IconButton, cn } from '../ui';
 import { fmtNitsOrDash, fmtPct, markOf, metricByKey, type MetricKey, type Ranking, type SortDir, type SortKey, type StatsRow } from './model';
-import { CaveatMark, caveatText, CoverageValue, ExclusionBadge, RecordKey, ShareBar, SvmValue } from './parts';
+import { CaveatMark, caveatText, CoverageValue, DenoiseBadge, denoisedInScope, RecordKey, ShareBar, SvmValue } from './parts';
 
 interface Props {
   rows: StatsRow[];
@@ -173,14 +173,14 @@ export function StatsTable({ rows, styles, lang, rank, scrolledX, sortKey, sortD
                     <RecordKey style={styles.get(rec.id)} />
                     <div className="min-w-0">
                       <div className="truncate font-medium text-ink-1">{deviceLabel(rec, lang)}</div>
-                      {(!!mode || !!caveat || !!rec.excluded?.length) && (
+                      {(!!mode || !!caveat || denoisedInScope(s) > 0) && (
                         <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5">
                           {mode && (
                             <span className="max-w-full truncate text-2xs text-ink-3" title={mode}>
                               {mode}
                             </span>
                           )}
-                          <ExclusionBadge rec={rec} stats={s} />
+                          <DenoiseBadge rec={rec} stats={s} />
                           {caveat && <CaveatMark title={caveat} />}
                         </div>
                       )}

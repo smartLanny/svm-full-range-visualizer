@@ -134,7 +134,7 @@ export function hasNoDataCells(view: GridView): boolean {
 
 /**
  * Draw the heatmap of `view` into a W×H px context: gray up, level luminance (log) right, cells
- * exactly as in the 3D top view; missing / excluded cells hatched (never drawn as 0), area outside
+ * exactly as in the 3D top view; missing / no-data cells hatched (never drawn as 0), area outside
  * the record's measured range flat background; stepped 0.4 / 1.0 contours along cell borders and
  * the current gray slice as a dashed accent line.
  */
@@ -157,7 +157,7 @@ export function drawHeatmap(ctx: CanvasRenderingContext2D, view: GridView, o: Dr
     for (let c = 0; c < view.x.length; c++) {
       const p = view.points[r][c];
       if (!p || !Number.isFinite(p.svm)) {
-        // Missing / excluded cell inside the measured grid: neutral hatch (never drawn as a value).
+        // Missing / no-data cell inside the measured grid: neutral hatch (never drawn as a value).
         ctx.fillStyle = noData;
         ctx.fillRect(xe[c], ge[r + 1], xe[c + 1] - xe[c], ge[r] - ge[r + 1]);
         continue;

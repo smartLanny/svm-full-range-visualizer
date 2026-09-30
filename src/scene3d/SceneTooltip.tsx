@@ -4,11 +4,21 @@ import { useAppStore } from '../store/appStore';
 import { colormapCss, divergingCss } from '../colormaps';
 import { fmtNits, fmtSvm } from '../data/grid';
 import type { SceneLayout } from '../types';
-import type { HoverInfo } from './engine/engine';
+import { levelNoteText, noteLines } from '../data/denoiseText';
+import { cn } from '../ui/cn';
+import type { DenoiseAction } from '../data/denoise';
+import type { HoverInfo, HoverNote } from './engine/engine';
 
 /** Swatch of the "no data" floor (same hatch as the 3D view and its legend chip). */
 const NO_DATA_SWATCH: React.CSSProperties = {
   background: 'repeating-linear-gradient(45deg, #5b6576 0 1px, #0d1117 1px 4px)',
+};
+
+/** Calm tones of the denoise actions: filled (sky), no data (neutral), luminance estimated (amber). */
+const ACTION_TONE: Record<DenoiseAction, string> = {
+  interpolated: 'text-sky-300',
+  noData: 'text-ink-1',
+  lumEstimated: 'text-amber-200/90',
 };
 
 /** Cursor-following DOM tooltip (not part of exports). Positioned by the parent via style.transform. */
@@ -33,10 +43,27 @@ export const SceneTooltip = forwardRef<HTMLDivElement, { info: HoverInfo | null;
       </span>
     </div>
   );
-  const missingText = (m: NonNullable<HoverInfo['missing']>) => {
-    const txt = m.reason ? t('common.exclusion.excludedCell', { reason: t(`common.exclusion.reasons.${m.reason}`) }) : t('common.exclusion.missingCell');
-    return m.who ? `${m.who}: ${txt}` : txt;
+  /** What the denoise did (docs/adr/0012 addendum): action, reason, source, raw reading. */
+  const noteBlock = (h: HoverNote, i: number) => {
+    const l = noteLines(h.note, t);
+    return (
+      <div key={i} className="space-y-0.5 text-2xs leading-snug" data-testid="scene3d-tooltip-note">
+        <div className={cn('font-medium', ACTION_TONE[h.note.action])}>
+          {h.who ? `${h.who} · ` : ''}
+          {l.action}
+        </div>
+        <div className="text-ink-2">{l.reason}</div>
+        {l.also && <div className="text-ink-2">{l.also}</div>}
+        {l.source && <div className="text-ink-3">{l.source}</div>}
+        <div className="font-mono tabular-nums text-ink-3">{l.raw}</div>
+      </div>
+    );
   };
+  const estimated = (info: HoverInfo) => {
+    const own = info.notes?.find((n) => n.who !== 'B')?.note;
+    return !!own && (own.action === 'lumEstimated' || (own.action === 'interpolated' && own.value?.nits !== own.raw.nits));
+  };
+  const missingText = (m: NonNullable<HoverInfo['missing']>) => (m.who ? `${m.who}: ${t('common.noValidData')}` : t('common.noValidData'));
   return (
     <div
       ref={ref}
@@ -53,8 +80,8 @@ export const SceneTooltip = forwardRef<HTMLDivElement, { info: HoverInfo | null;
           <div className="space-y-0.5">
             {row(t('scene3d.tooltip.gray'), `G${Math.round(info.gray)}`)}
             {row(t('scene3d.tooltip.brightness'), `${Math.round(info.percent * 10) / 10}%`)}
-            {row(t('scene3d.tooltip.levelLuminance'), `${fmtNits(info.levelNits)} nits`)}
-            {info.nits !== null && row(t('scene3d.tooltip.measured'), `${fmtNits(info.nits)} nits`)}
+            {row(t('scene3d.tooltip.levelLuminance'), `${fmtNits(info.levelNits)} nits${info.level ? ` (${t('common.denoise.estimated')})` : ''}`)}
+            {info.nits !== null && row(t('scene3d.tooltip.measured'), `${fmtNits(info.nits)} nits${estimated(info) ? ` (${t('common.denoise.estimated')})` : ''}`)}
           </div>
           <div className="mt-1.5 space-y-0.5 border-t border-line pt-1.5">
             {info.kind === 'diff' && (
@@ -66,12 +93,7 @@ export const SceneTooltip = forwardRef<HTMLDivElement, { info: HoverInfo | null;
             {info.value === null ? (
               <>
                 {valueRow(info.kind === 'diff' ? t('scene3d.tooltip.delta') : t('scene3d.tooltip.svm'), '—', NO_DATA_SWATCH)}
-                <div className="text-right text-2xs text-ink-2">{info.missing ? missingText(info.missing) : t('common.exclusion.missingCell')}</div>
-                {info.missing?.raw && (
-                  <div className="text-right text-2xs text-ink-3">
-                    {t('scene3d.tooltip.raw')}: {fmtNits(info.missing.raw.nits)} nits · SVM {fmtSvm(info.missing.raw.svm)}
-                  </div>
-                )}
+                {(info.missing || !info.notes?.length) && <div className="text-right text-2xs text-ink-2">{missingText(info.missing ?? {})}</div>}
               </>
             ) : info.kind === 'diff' ? (
               <>
@@ -83,6 +105,16 @@ export const SceneTooltip = forwardRef<HTMLDivElement, { info: HoverInfo | null;
             )}
             {info.capped && <div className="text-right text-2xs text-ink-3">{t('scene3d.tooltip.capped')}</div>}
           </div>
+          {(info.notes?.length || info.level) && (
+            <div className="mt-1.5 max-w-[280px] space-y-1.5 border-t border-line pt-1.5">
+              {info.notes?.map(noteBlock)}
+              {info.level && (
+                <div className="text-2xs leading-snug text-ink-2" data-testid="scene3d-tooltip-level">
+                  {levelNoteText(info.level, t)}
+                </div>
+              )}
+            </div>
+          )}
         </>
       )}
     </div>

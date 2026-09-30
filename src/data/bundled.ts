@@ -1,5 +1,6 @@
 import type { Dataset, SvmRecord } from '../types';
 import { toRecord, validateDataset } from './records';
+import { rawDataset } from './denoise';
 
 export interface ManifestEntry {
   file: string;
@@ -11,8 +12,9 @@ export interface ManifestEntry {
 
 const bundledId = (file: string) => `bundled:${file}`;
 
+/** Records are kept RAW: points a bundled file stores in `excluded` go back into the grid (docs/adr/0012). */
 function entryToRecord(entry: ManifestEntry, json: unknown): SvmRecord {
-  const ds: Dataset = validateDataset(json);
+  const ds: Dataset = rawDataset(validateDataset(json));
   return toRecord(ds, 'bundled', {
     id: bundledId(entry.file),
     device: entry.device,

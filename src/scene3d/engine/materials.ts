@@ -222,3 +222,56 @@ export function makeFloorMaterial(): THREE.ShaderMaterial {
     depthWrite: false,
   });
 }
+
+export type InterpMaterial = THREE.ShaderMaterial & {
+  uniforms: { uOpacity: { value: number }; uPx: { value: number }; uColor: { value: THREE.Color }; uCasing: { value: THREE.Color } };
+};
+
+/**
+ * Marker of cells the denoise filled by interpolation (docs/adr/0012 addendum): a small hollow
+ * ring at the cell's sample point (top view) — the same "hollow = interpolated" mark as the 2D
+ * chart's points — light with a faint dark casing so it reads on light and dark cells alike,
+ * without covering the cell's color. Quads carry a local 0..1 coordinate (aUv); sizes are in
+ * device px via fwidth. Cells too small for the ring show nothing.
+ */
+export function makeInterpMaterial(): InterpMaterial {
+  const mat = new THREE.ShaderMaterial({
+    uniforms: {
+      uOpacity: { value: 1 },
+      uPx: { value: 1 },
+      uColor: { value: new THREE.Color('#f4f7fb') },
+      uCasing: { value: new THREE.Color('#0b0e14') },
+    },
+    vertexShader: /* glsl */ `
+      attribute vec2 aUv;
+      varying vec2 vUv;
+      void main() {
+        vUv = aUv;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }`,
+    fragmentShader: /* glsl */ `
+      uniform float uOpacity;
+      uniform float uPx;
+      uniform vec3 uColor;
+      uniform vec3 uCasing;
+      varying vec2 vUv;
+      void main() {
+        vec2 fw = max(fwidth(vUv), vec2(1e-6));
+        vec2 size = 1.0 / fw;                  // cell size in device px
+        if (min(size.x, size.y) < 11.0 * uPx) discard;
+        float d = length((vUv - 0.5) * size);  // device px from the sample point
+        float R = 3.4 * uPx;
+        float hw = 0.6 * uPx;
+        float ring = 1.0 - smoothstep(hw, hw + 1.0, abs(d - R));
+        float cas = (1.0 - smoothstep(hw + 1.1 * uPx, hw + 1.1 * uPx + 1.0, abs(d - R))) * step(R, d) * 0.45;
+        float a = max(ring, cas);
+        if (a < 0.01) discard;
+        gl_FragColor = vec4(mix(uCasing, uColor, ring / max(a, 1e-4)), a * uOpacity);
+        #include <colorspace_fragment>
+      }`,
+    transparent: true,
+    depthTest: false,
+    depthWrite: false,
+  });
+  return mat as InterpMaterial;
+}

@@ -6,7 +6,9 @@ import type { AxisMode, Lang, SliceMode, SvmRecord } from '../types';
 import type { RecordStyle } from '../data/colors';
 import { deviceOrder } from '../data/colors';
 import { deviceLabel, modeLabel, recordLabel } from '../data/records';
-import { ANOMALY_KINDS, exclusionSummary, type ExclusionSummary } from '../data/anomalies';
+import { displayNotes, type DenoiseSummary } from '../data/denoise';
+import { summaryText } from '../data/denoiseText';
+import { interpolatedShare, pointNotes } from './denoiseMarks';
 import { translate } from '../i18n';
 import { buildAxes, fmtTickNits, tickLevel, xDomain, yDomain, X_COUNT, Y_COUNT, type AxisMotion, type Axes } from './scales';
 import { buildCurve, evalCurve, type Curve } from './spline';
@@ -14,7 +16,10 @@ import { fmtLevel, settleSlice, sliceFor, slicesExtent, staticSliceFor, sweepPar
 import { GLIDE_SAMPLES, glideTrack, holdSmooth, levelTrack, seriesAt, sweepTrack, trackAt, TRACK_DT, TRACK_HOLD, type RangeTrack, type URange } from './axisTrack';
 
 export interface ChartInputs {
-  /** All records in store order (legend lists hidden ones in the interactive view). */
+  /**
+   * All records in store order (legend lists hidden ones in the interactive view), as displayed:
+   * processed under the denoise setting (docs/adr/0012 addendum, store displayOf).
+   */
   records: SvmRecord[];
   hiddenIds: string[];
   styles: Map<string, RecordStyle>;
@@ -41,8 +46,13 @@ export interface SeriesModel {
   points: CurvePoint[];
   /** Curve in axis units (x: log10 nits or gray; y: SVM). */
   curve: Curve | null;
-  /** Anomalous points excluded from this record (docs/adr/0012), or null. */
-  exclusion: ExclusionSummary | null;
+  /** What the denoise did to this record (docs/adr/0012 addendum), or null (raw / untouched). */
+  denoise: DenoiseSummary | null;
+  /**
+   * Points made (partly) of cells the denoise filled by interpolation, in axis units, drawn as
+   * hollow rings. Static frames only (`a` fades with the glide into a sweep): sweeps stay clean.
+   */
+  hollow: { x: number; y: number; a: number }[];
 }
 
 export interface LegendRow {
@@ -50,8 +60,6 @@ export interface LegendRow {
   label: string;
   style: RecordStyle;
   hidden: boolean;
-  /** The record has excluded anomalous points: a '*' marker follows the label. */
-  excluded: boolean;
 }
 
 export interface LegendGroup {
@@ -131,6 +139,8 @@ export interface Scene {
   refLabels: { safe: string; critical: string };
   emptyText: string;
   lang: Lang;
+  /** Low-gray clip of the brightness slice (tooltips / table map points back to cells). */
+  clipLowGray: boolean;
 }
 
 export const CHART_BG = '#0b0e14';
@@ -335,11 +345,21 @@ export function graySliceSvmAt(rec: SvmRecord, gray: number, nits: number): numb
   return c ? evalCurve(c, Math.log10(nits)) : null;
 }
 
-/** Explanation of a record's '*' marker (legend / table tooltip): count, reasons, coverage. */
-export function exclusionText(lang: Lang, sum: ExclusionSummary): string {
-  const tr = (k: string, v?: Record<string, string | number>) => translate(lang, k, v);
-  const reasons = ANOMALY_KINDS.filter((k) => sum.byReason[k]).map((k) => `${tr(`common.exclusion.reasons.${k}`)} ${sum.byReason[k]}`);
-  return [`* ${tr('common.exclusion.title', { n: sum.total })}`, reasons.join(' · '), tr('common.exclusion.coverage', { valid: sum.valid, nominal: sum.nominal }), tr('chart2d.exclusion.gaps')].join('\n');
+/** What the denoise did to a record (legend / table tooltip): counts, problems, coverage. */
+export function denoiseText(lang: Lang, sum: DenoiseSummary): string {
+  return summaryText(sum, (k, v) => translate(lang, k, v));
+}
+
+/** Hollow markers of the points made of interpolated cells (static frames, see SeriesModel). */
+function hollowMarks(rec: SvmRecord, mode: SliceMode, param: number, clip: boolean, points: CurvePoint[], settle: number): SeriesModel['hollow'] {
+  if (!(settle > 0) || !displayNotes(rec)) return [];
+  const out: SeriesModel['hollow'] = [];
+  for (const p of points) {
+    const share = interpolatedShare(pointNotes(rec, mode, param, clip, p.key));
+    const a = p.a * settle * share;
+    if (a > 0.01) out.push({ x: toAxisX(mode, p.x), y: p.svm, a });
+  }
+  return out;
 }
 
 /** Title value text for a slice parameter. */
@@ -406,7 +426,8 @@ export function buildScene(inputs: ChartInputs, opts: SceneOptions): Scene {
       label: recordLabel(rec, lang),
       points,
       curve: curveOf(mode, points),
-      exclusion: exclusionSummary(rec),
+      denoise: displayNotes(rec)?.summary ?? null,
+      hollow: hollowMarks(rec, mode, param, clipLowGray, points, settle),
     };
   });
 
@@ -514,7 +535,6 @@ export function buildScene(inputs: ChartInputs, opts: SceneOptions): Scene {
       label: modeLabel(r, lang) || deviceLabel(r, lang),
       style: inputs.styles.get(r.id) ?? { color: '#9aa4b2', dash: [], modeIndex: 0 },
       hidden: hidden.has(r.id),
-      excluded: !!r.excluded?.length,
     }));
     legend.push({
       device,
@@ -564,5 +584,6 @@ export function buildScene(inputs: ChartInputs, opts: SceneOptions): Scene {
     refLabels: { safe: tr('common.safeLine'), critical: tr('common.criticalLine') },
     emptyText: tr('chart2d.empty.canvas'),
     lang,
+    clipLowGray,
   };
 }

@@ -18,7 +18,7 @@ const stats = (p: Partial<RecordStats>): RecordStats => ({
   sliceGray: 127,
   nominalCount: 10,
   coverageShare: 1,
-  excludedInScope: 0,
+  denoise: { interpolated: 0, noData: 0, lumEstimated: 0 },
   validExtent: { grayMin: 15, grayMax: 255, levelMin: 2, levelMax: 500 },
   ...p,
 });
