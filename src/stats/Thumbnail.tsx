@@ -3,7 +3,7 @@ import type { ColormapType, SvmRecord } from '../types';
 import { cellEdges, fmtNits, gridView } from '../data/grid';
 import { ANOMALY_KINDS, type AnomalyKind } from '../data/anomalies';
 import { useT } from '../i18n';
-import { drawHeatmap, HATCH_CSS, hasNoDataCells, THUMB_HEIGHT as HEIGHT, thumbGrayLabels, thumbTicks, type ThumbExtent } from './heatmap';
+import { drawHeatmap, HATCH_CSS, hasNoDataCells, thumbGrayLabels, thumbHeight, thumbTicks, type ThumbExtent } from './heatmap';
 
 export { thumbExtent, type ThumbExtent } from './heatmap';
 
@@ -19,7 +19,7 @@ interface Props {
 
 /**
  * Mini heatmap (Canvas2D): gray up, level luminance (log) right, cells exactly as in the 3D top
- * view. Cells without a valid value (missing or excluded) get a neutral grey hatch, never a
+ * view, with the same width : depth as every 3D heatmap (its height follows the card's width). Cells without a valid value (missing or excluded) get a neutral grey hatch, never a
  * colour (never drawn as 0); area outside the record's measured range stays flat background.
  * Stepped 0.4 / 1.0 contours follow cell borders. Redraws only when inputs or the size change (no animation loop).
  */
@@ -28,6 +28,8 @@ export function Thumbnail({ rec, clipLowGray, maxNits, colormap, colorMax, slice
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [width, setWidth] = useState(0);
+  // The plate aspect of every heatmap (the 3D top view's too): the height follows the width.
+  const height = thumbHeight(width);
   const [hover, setHover] = useState<{ x: number; text: string } | null>(null);
   const view = useMemo(() => gridView(rec, { clipLowGray, maxNits }), [rec, clipLowGray, maxNits]);
   const noData = useMemo(() => hasNoDataCells(view), [view]);
@@ -47,11 +49,11 @@ export function Thumbnail({ rec, clipLowGray, maxNits, colormap, colorMax, slice
     if (!canvas || width <= 0) return; // hidden (0-size) container: nothing to draw
     const dpr = Math.min(3, window.devicePixelRatio || 1);
     canvas.width = Math.round(width * dpr);
-    canvas.height = Math.round(HEIGHT * dpr);
+    canvas.height = Math.round(height * dpr);
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     drawHeatmap(ctx, view, { W: canvas.width, H: canvas.height, dpr, colormap, colorMax, sliceGray, extent });
-  }, [view, width, colormap, colorMax, sliceGray, extent]);
+  }, [view, width, height, colormap, colorMax, sliceGray, extent]);
 
   const ticks = useMemo(() => thumbTicks(width, extent), [width, extent]);
 
@@ -80,7 +82,7 @@ export function Thumbnail({ rec, clipLowGray, maxNits, colormap, colorMax, slice
     setHover({ x: e.clientX - rect.left, text });
   };
 
-  const grayLabels = thumbGrayLabels(extent, sliceGray);
+  const grayLabels = thumbGrayLabels(extent, sliceGray, height);
 
   return (
     <div>
@@ -108,7 +110,7 @@ export function Thumbnail({ rec, clipLowGray, maxNits, colormap, colorMax, slice
         </span>
       </div>
       <div className="flex gap-2">
-        <div className="relative w-7 shrink-0 text-right text-2xs tabular-nums text-ink-3" style={{ height: HEIGHT }}>
+        <div className="relative w-7 shrink-0 text-right text-2xs tabular-nums text-ink-3" style={{ height }}>
           {grayLabels.map(({ g, top, accent }) => (
             <span key={`${g}-${accent ? 's' : ''}`} className={accent ? 'absolute right-0 font-medium text-accent-hover' : 'absolute right-0'} style={{ top }}>
               G{g}
@@ -116,7 +118,7 @@ export function Thumbnail({ rec, clipLowGray, maxNits, colormap, colorMax, slice
           ))}
         </div>
         <div className="min-w-0 flex-1">
-          <div ref={wrapRef} className="relative overflow-hidden rounded-md ring-1 ring-inset ring-line" style={{ height: HEIGHT }}>
+          <div ref={wrapRef} className="relative overflow-hidden rounded-md ring-1 ring-inset ring-line" style={{ height }}>
             <canvas ref={canvasRef} className="block h-full w-full cursor-crosshair" onMouseMove={onMove} onMouseLeave={() => setHover(null)} />
             {hover && (
               <div

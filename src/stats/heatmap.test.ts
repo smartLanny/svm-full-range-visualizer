@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { logNits } from '../data/grid';
-import { THUMB_HEIGHT, thumbGrayLabels, thumbTicks, type ThumbExtent } from './heatmap';
+import { PLATE_ASPECT } from '../scene3d/engine/plate';
+import { THUMB_DEFAULT_HEIGHT, thumbGrayLabels, thumbHeight, thumbTicks, type ThumbExtent } from './heatmap';
 
 const extent: ThumbExtent = { x0: logNits(0.5), x1: logNits(600), g0: 10, g1: 255, grayMin: 15, grayMax: 255 };
 
@@ -19,7 +20,8 @@ describe('thumbnail ticks and gray labels (shared by the card on screen and the 
   });
 
   it('gray labels: top / bottom gray and the slice (accent), clamped inside the heatmap', () => {
-    const labels = thumbGrayLabels(extent, 127);
+    const H = thumbHeight(250);
+    const labels = thumbGrayLabels(extent, 127, H);
     expect(labels.map((l) => [l.g, !!l.accent])).toEqual([
       [255, false],
       [15, false],
@@ -27,11 +29,23 @@ describe('thumbnail ticks and gray labels (shared by the card on screen and the 
     ]);
     for (const l of labels) {
       expect(l.top).toBeGreaterThanOrEqual(-1);
-      expect(l.top).toBeLessThanOrEqual(THUMB_HEIGHT - 12);
+      expect(l.top).toBeLessThanOrEqual(H - 12);
     }
+    // the slice label sits at its gray (label centred on the line)
+    expect(labels[2].top).toBeCloseTo(((255 - 127) / (255 - 10)) * H - 7, 9);
     // the slice hides a neighbour closer than 14 px
-    expect(thumbGrayLabels(extent, 250).map((l) => l.g)).toEqual([15, 250]);
+    expect(thumbGrayLabels(extent, 250, H).map((l) => l.g)).toEqual([15, 250]);
     // no slice in range: only top / bottom
-    expect(thumbGrayLabels(extent, null).map((l) => l.g)).toEqual([255, 15]);
+    expect(thumbGrayLabels(extent, null, H).map((l) => l.g)).toEqual([255, 15]);
+  });
+
+  it('heatmap height: the plate aspect of the 3D heatmaps at every card width (never a flat strip)', () => {
+    // Heatmap widths of cards 296–460 px wide (export) and 310–640 px (screen): card − 32 − 36.
+    for (const w of [228, 242, 260, 300, 392, 572]) {
+      const h = thumbHeight(w);
+      expect(Math.abs(w / h - PLATE_ASPECT)).toBeLessThan(0.02);
+    }
+    expect(thumbHeight(0)).toBe(THUMB_DEFAULT_HEIGHT);
+    expect(THUMB_DEFAULT_HEIGHT).toBe(Math.round(242 / PLATE_ASPECT));
   });
 });

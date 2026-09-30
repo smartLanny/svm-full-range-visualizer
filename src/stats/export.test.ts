@@ -7,7 +7,7 @@ import { recordStyles } from '../data/colors';
 import { CARD_MAX_W, CARD_MIN_W, chooseCardGrid, ellipsize, fitTable, pageFrame, wrapText, type Measure } from './exportLayout';
 import { statsContentOf, statsContents, statsFileName } from './exportContents';
 import { cardHeight, type StatsExportInput } from './exportRender';
-import { thumbExtent } from './heatmap';
+import { thumbExtent, thumbHeight } from './heatmap';
 import { buildRows, rankRows, sortRows } from './model';
 
 /** Fake text measure: CJK = 1 em, everything else 0.55 em. */
@@ -135,14 +135,18 @@ describe('stats card layout (single pass: measure = draw)', () => {
     expect(plain).toBeGreaterThanOrEqual(0);
     const narrow = cardHeight(inp, plain, CARD_MIN_W, measure);
     const wide = cardHeight(inp, plain, CARD_MAX_W, measure);
-    expect(narrow).toBeGreaterThanOrEqual(wide);
+    // The heatmap keeps the plate aspect (its height follows the card width, card − 32 − 36 px);
+    // everything else is at least as tall in a narrow card.
+    const heat = (cw: number) => thumbHeight(cw - 32 - 36);
+    expect(narrow - heat(CARD_MIN_W)).toBeGreaterThanOrEqual(wide - heat(CARD_MAX_W));
+    expect(wide).toBeGreaterThan(narrow);
     for (let i = 0; i < rows.length; i++) {
       const h = cardHeight(inp, i, 318, measure);
       expect(h).toBeGreaterThan(450);
       expect(h).toBeLessThan(700);
     }
     // without thumbnails (no extent) the card is shorter by the heatmap block
-    expect(cardHeight(input({ extent: null }), plain, 318, measure)).toBeLessThan(cardHeight(inp, plain, 318, measure) - 128);
+    expect(cardHeight(input({ extent: null }), plain, 318, measure)).toBeLessThan(cardHeight(inp, plain, 318, measure) - heat(318));
   });
 
   it('a two-line device name adds one line', () => {
