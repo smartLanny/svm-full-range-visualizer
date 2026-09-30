@@ -272,6 +272,15 @@ export class Engine {
   private exportRestore: { preset: ViewPreset; view: UserView } | null = null;
   /** The model was rebuilt while exporting (React is told once, after the export). */
   private exportRebuilt = false;
+  /**
+   * endExport() is putting the screen state back: layout / metrics are the screen's again (not the
+   * export frame's), but nothing animates or cross-fades — the view returns exactly as it was.
+   */
+  private restoring = false;
+  /** No cross-fades, camera moves or React notifications (export frames and their restore). */
+  private get quiet() {
+    return this.exporting || this.restoring;
+  }
 
   hoverCell: { panel: number; r: number; c: number } | null = null;
   /** Export of the intro while another layout is shown renders a single-layout model. */
@@ -558,7 +567,7 @@ export class Engine {
     if (!s) return;
     const key = this.modelKeyFor(s);
     if (key === this.modelKey) return;
-    if (this.hasRendered && !this.introDriving && !this.exporting) this.captureSnapshot();
+    if (this.hasRendered && !this.introDriving && !this.quiet) this.captureSnapshot();
     this.modelKey = key;
     this.rebuildModel();
   }
@@ -574,7 +583,7 @@ export class Engine {
     const recordsChanged =
       !prev || prev.a !== s.a || prev.b !== s.b || ((this.layoutOverride ?? s.layout) === 'sideBySide' && !sameRecords(prev.extras, s.extras));
     const needModel = modelKey !== this.modelKey || recordsChanged;
-    const animate = !!prev && this.hasRendered && !this.introDriving && !this.exporting;
+    const animate = !!prev && this.hasRendered && !this.introDriving && !this.quiet;
     const visualChange =
       !!prev &&
       (needModel || prev.representation !== s.representation || prev.colormap !== s.colormap || prev.lighting !== s.lighting || prev.lang !== s.lang);
@@ -732,7 +741,7 @@ export class Engine {
     }
     // Exports rebuild offscreen (layout overrides, export-size depth): the React overlay (empty
     // state, tooltip) must not follow them — it is told once, after the export (endExport).
-    if (this.exporting) this.exportRebuilt = true;
+    if (this.quiet) this.exportRebuilt = true;
     else this.onModel(res);
   }
 
@@ -896,7 +905,7 @@ export class Engine {
     if (this.intro) this.intro.planKey = '';
     // The room left for the plots can change the side-by-side grid (and so the plate depth).
     this.refreshModelForViewport();
-    if (this.hasRendered && !this.introDriving && !this.exporting && this.model) {
+    if (this.hasRendered && !this.introDriving && !this.quiet && this.model) {
       this.camTransition = { from: clonePose(this.lastPose), t0: now(), dur: CAM_DUR * 0.7, clip: !!this.clip };
     }
     this.invalidate();
@@ -1129,7 +1138,7 @@ export class Engine {
   /** Switch from intro-driven frames to static ones without a visible jump. */
   private leaveIntro() {
     const fp = this.frame;
-    if (this.hasRendered && !this.exporting) this.captureSnapshot();
+    if (this.hasRendered && !this.quiet) this.captureSnapshot();
     this.tw.heightK.jump(fp.heightK);
     this.tw.elev.jump(fp.elev);
     this.tw.values.jump(fp.valuesOpacity);
@@ -1706,7 +1715,7 @@ export class Engine {
    */
   private captureSnapshot(dur = SNAP_DUR, ease: (p: number) => number = easeInOutCubic) {
     const gl = this.gl;
-    if (!gl || !this.settings || !this.model || this.exporting || !this.lastFrameOnScreen) return;
+    if (!gl || !this.settings || !this.model || this.quiet || !this.lastFrameOnScreen) return;
     // Several changes before the next frame: the snapshot already holds the last presented frame
     // (the longer fade wins; nothing has faded yet).
     if (this.snapT0 >= 0 && this.snapOf === this.presented) {
@@ -2656,10 +2665,10 @@ export class Engine {
     const gl = this.gl;
     const saved = this.exportSaved;
     this.exportSaved = null;
-    // Restore the on-screen size FIRST, while `exporting` is still set: the model rebuilds below
-    // (layout override of an intro video, portrait depth of the export frame) then happen at the
-    // screen viewport and never capture a cross-fade snapshot of an export-sized frame (it would
-    // be stretched over the view).
+    // Restore the on-screen size FIRST: the model rebuilds below (layout override of an intro video,
+    // export scene, portrait depth of the export frame) then happen at the screen viewport, and
+    // (`restoring`) never capture a cross-fade snapshot of an export-sized frame (it would be
+    // stretched over the view) nor start a camera move.
     if (gl && saved) {
       gl.setPixelRatio(saved.dpr);
       gl.setSize(saved.cssW, saved.cssH, true);
@@ -2668,23 +2677,30 @@ export class Engine {
       this.cssH = saved.cssH;
       this.pxScale = saved.pxScale;
     }
-    this.layoutOverride = null;
-    if (this.intro && !this.intro.tl) this.intro = restoreIntro ? { tl: restoreIntro, plan: null, planKey: '' } : null;
-    // Remove the export scene: back to the screen's settings (while still `exporting`: no
-    // cross-fade, no animated camera move), then the user's own camera.
-    const screen = this.exportScene ? this.screenSettings : this.settings;
-    this.exportScene = null;
-    this.screenSettings = null;
-    if (screen) this.sync(screen);
-    const restore = this.exportRestore;
-    this.exportRestore = null;
-    if (restore) {
-      this.preset = restore.preset;
-      this.controls.reset(restore.view);
-      this.camTransition = null;
-    }
-    this.onViewportChanged();
+    // From here on the metrics are the screen's (the room kept for the floating controls decides
+    // the side-by-side grid and plate depth): rebuilding with export metrics would leave a model
+    // that differs from the one on screen before the export. `restoring` keeps it all instant.
     this.exporting = false;
+    this.restoring = true;
+    try {
+      this.layoutOverride = null;
+      if (this.intro && !this.intro.tl) this.intro = restoreIntro ? { tl: restoreIntro, plan: null, planKey: '' } : null;
+      // Remove the export scene: back to the screen's settings, then the user's own camera.
+      const screen = this.exportScene ? this.screenSettings : this.settings;
+      this.exportScene = null;
+      this.screenSettings = null;
+      if (screen) this.sync(screen);
+      const restore = this.exportRestore;
+      this.exportRestore = null;
+      if (restore) {
+        this.preset = restore.preset;
+        this.controls.reset(restore.view);
+      }
+      this.onViewportChanged();
+      this.camTransition = null;
+    } finally {
+      this.restoring = false;
+    }
     // Free the export-sized render targets; the next frame is drawn fresh at screen size.
     this.disposeSnapshot();
     // The model was rebuilt offscreen (and back): the React overlay learns the screen's result.

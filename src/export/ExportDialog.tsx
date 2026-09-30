@@ -185,6 +185,7 @@ function ContentList({ contents, selected, onSelect }: { contents: ExportContent
             aria-checked={sel}
             data-testid={`export-content-${c.id}`}
             data-kind={c.kind}
+            data-current={c.current ? '' : undefined}
             title={c.detail ? `${c.label}\n${c.detail}` : c.label}
             onClick={() => onSelect(c.id)}
             className={cn(
