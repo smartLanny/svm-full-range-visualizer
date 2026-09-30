@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { SvmRecord } from '../types';
 import { ColormapType } from '../types';
-import { cleanExtras, DEFAULT_SETTINGS, selectComparePanelIds, selectComparePanels, useAppStore } from './appStore';
+import { cleanExtras, DEFAULT_SETTINGS, fillPanelIds, nextPanelCandidate, selectComparePanelIds, selectComparePanels, useAppStore } from './appStore';
 import { sanitizePrefs, sanitizeSettings, sanitizeUserRecords } from './bootstrap';
 import { applyBundledEdit, bundledEditsOf } from './persistence';
 
@@ -210,6 +210,16 @@ describe('side-by-side panels (A, B + extras C–F)', () => {
       for (const v of violations()) bad.push(`step ${step} op ${op}: ${v}`);
     }
     expect(bad.slice(0, 5)).toEqual([]);
+  });
+
+  it('fill from the visible records keeps the visible panels first, then list order, six at most', () => {
+    expect(fillPanelIds(['r3', 'r1'], ids)).toEqual(['r3', 'r1', 'r0', 'r2', 'r4', 'r5']);
+    expect(fillPanelIds(['r3', 'r1', 'r6'], ['r1', 'r2'])).toEqual(['r1', 'r2']);
+    expect(fillPanelIds(['r3', 'r1'], ['r5'])).toEqual(['r3', 'r1']);
+    st().setHidden(['r2'], true);
+    expect(nextPanelCandidate(st(), ['r0', 'r1'])).toBe('r3');
+    expect(nextPanelCandidate(st(), ids.filter((x) => x !== 'r2'))).toBe('r2');
+    expect(nextPanelCandidate(st(), ids)).toBeNull();
   });
 
   it('cleanExtras / sanitizePrefs: unknown, duplicate, A / B and excess ids are dropped', () => {

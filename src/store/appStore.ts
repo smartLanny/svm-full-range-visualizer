@@ -386,6 +386,24 @@ export const selectComparePanelIds = (s: AppState): string[] => {
   const ids = new Set(s.records.map((r) => r.id));
   return [s.activeId, s.compareId, ...s.compareExtraIds].filter((id, i, all): id is string => id !== null && ids.has(id) && all.indexOf(id) === i);
 };
+/**
+ * Panels filled from the visible (not hidden) records, at most six: the current panels that are
+ * visible keep their order (A stays A when it is visible), then the other visible records in list
+ * order. Fewer than two visible records: the current panels.
+ */
+export function fillPanelIds(current: readonly string[], visible: readonly string[]): string[] {
+  const vis = new Set(visible);
+  const out = current.filter((id) => vis.has(id));
+  for (const id of visible) if (!out.includes(id)) out.push(id);
+  return out.length >= 2 ? out.slice(0, MAX_COMPARE_PANELS) : [...current];
+}
+
+/** The record "add a panel" picks: the first visible record not shown yet, else any; null if none. */
+export function nextPanelCandidate(s: Pick<AppState, 'records' | 'hiddenIds'>, panels: readonly string[]): string | null {
+  const free = s.records.filter((r) => !panels.includes(r.id));
+  return (free.find((r) => !s.hiddenIds.includes(r.id)) ?? free[0])?.id ?? null;
+}
+
 /** Records of the extra side-by-side panels C–F, in order (a new array per call). */
 export const selectCompareExtras = (s: AppState): SvmRecord[] =>
   s.compareExtraIds.map((id) => s.records.find((r) => r.id === id)).filter((r): r is SvmRecord => !!r);
