@@ -56,7 +56,7 @@ const strings: StringsModule = {
     // 降噪 (docs/adr/0012 addendum). Plain words only: no "stale reading" / "noise floor" jargon.
     denoise: {
       title: '降噪',
-      hint: '测不准的读数（接近全黑、SVM 尖峰、没刷新的读数）用两侧可信的读数插值补全，补不了的显示为无有效数据；可信的读数一律不改。关闭后显示原始读数。',
+      hint: '测不准的读数用两侧可信读数补全，补不了的显示为无有效数据；可信读数不改。',
       off: '降噪已关闭：显示原始读数',
       badge: '降噪 {n} 格',
       badgeTitle: '降噪处理了 {n} 格（原始读数都保留，可在设置中关闭降噪查看）',
@@ -159,7 +159,7 @@ const strings: StringsModule = {
     noValidData: 'No valid data',
     denoise: {
       title: 'Denoise',
-      hint: 'Unreliable readings (near black, SVM spikes, readings that did not update) are filled from trusted readings on both sides, or shown as no data; trusted readings are never changed. Off: raw readings.',
+      hint: 'Fills unreliable readings from trusted neighbours, or shows no data; trusted readings are never changed.',
       off: 'Denoise off: raw readings',
       badge: 'denoised {n}',
       badgeTitle: 'The denoise changed {n} cells (raw readings are kept; turn the denoise off in the settings to see them)',
