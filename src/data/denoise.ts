@@ -5,33 +5,40 @@
  * pure, memoised step that turns a raw record into what the views display, the same way for
  * every record (bundled or imported). With denoise off it returns the raw record itself.
  *
- * Detection (`analyseMatrix`, pure, per raw matrix):
+ * Detection (`analyseMatrix`, pure, per raw matrix; neighbours in gray / brightness-% order):
  *  1. Black level (黑场噪声): the instrument's reading of black, estimated from genuinely dark
- *     readings only — the G ≤ 2 rows in the dim columns (level luminance ≤ 100 nits; real signal
- *     at G2 is far below one reading step there). Robust: median ± RMS of the 90 % of readings
- *     closest to the median; quantised readings that are all 0 give 0 (no one-step floor is added).
- *     A cell whose luminance is at or below `median + 3 × spread` (never below 0) cannot be told
- *     apart from black: its SVM is meaningless.
+ *     readings only — the G ≤ 2 rows in the dim columns (level luminance ≤ 100 nits, where the
+ *     real signal at G2 is far below one reading step). Robust: median + 3 × the RMS about the
+ *     median of the 90 % of dark readings closest to it; never below 0. Quantised readings that
+ *     are all 0 give 0 — no one-step floor is added. Without dark rows only readings ≤ 0 count.
+ *     A cell at or below it cannot be told apart from black: its SVM is meaningless.
  *  2. Duplicated row / column (copy error): two adjacent rows (columns) identical in every cell;
  *     the dimmer one is not a measurement of its own position.
- *  3. Luminance reading unreliable (the SVM of the cell is fine and is always kept):
- *     - 亮度读数疑似未更新 (lumNotUpdated): luminance departs from the table's own pattern
- *       (log nits ≈ gray effect + level effect, median polish) by > 20 % AND matches an adjacent
- *       cell within 2.5 % — the luminance was not updated after the test pattern changed.
- *     - 亮度偏离整表规律 (lumOffPattern): > 35 % off the pattern and > 20 % off its own column
- *       (so a smooth column the separable model merely fits badly is left alone).
+ *  3. Luminance reading unreliable. The table's luminance pattern is log nits ≈ gray effect +
+ *     level effect (median polish on the cells clearly above the black level, refitted without
+ *     flagged cells); only cells well above the black level are judged.
+ *     - 亮度读数疑似未更新 (lumNotUpdated): > 20 % off the pattern, > 15 % off its own column's
+ *       interpolation, and within 2.5 % of an adjacent cell's reading — the luminance was not
+ *       updated after the test pattern changed. The SVM was measured afresh and is kept.
+ *     - 亮度偏离整表规律 (lumOffPattern): > 35 % off the pattern and either > 35 % off its own
+ *       column or out of order in it (brighter than the next brighter gray). A smooth column the
+ *       separable pattern merely fits badly is left alone. The SVM is kept.
+ *     - 读数疑似未更新 (readingNotUpdated): such a cell whose SVM also repeats the adjacent reading
+ *       (SVM within 1 %, luminance within 15 %) while its column puts the SVM > 10 % elsewhere —
+ *       the whole reading was not updated, so the SVM is a copy too (runs of them included).
  *     A column's level luminance comes from its G255 cell; when that luminance is unreliable the
  *     level is re-estimated from the pattern (the column's credible rows).
  *  4. SVM spike: more than 3× off the median of ≥ 2 credible neighbours (8-neighbourhood) and
  *     either more than 1.0 away from it or more than 10× off.
  *
  * Processing with denoise on (`processRecord`):
- *  - black-level and spike cells are FILLED by interpolation (log SVM; luminance geometric) only
- *    between credible measured neighbours on both sides of a short gap (≤ 2 cells) — first along
- *    gray in the same column, else along level luminance in the same row; never extrapolated.
- *    Otherwise they are shown as no data.
+ *  - black-level, repeated-reading and spike cells are FILLED by interpolation (log SVM; luminance
+ *    geometric) only between two highly credible measured cells (usable SVM, luminance clearly
+ *    above the black noise) on both sides of a short gap (≤ 2 cells) — first along gray in the
+ *    same column, else along level luminance in the same row; never extrapolated. Otherwise they
+ *    are shown as no data. A spike keeps its own (measured or estimated) luminance.
  *  - duplicated rows / columns → no data.
- *  - unreliable luminance → the measured SVM is kept; the luminance becomes an estimate
+ *  - unreliable luminance only → the measured SVM is kept; the luminance becomes an estimate
  *    (interpolated in the same column, else the table's pattern); a bad level is re-estimated.
  *  - every other cell is the raw DataPoint object itself (property-tested).
  */

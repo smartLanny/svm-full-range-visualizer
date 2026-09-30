@@ -1,5 +1,11 @@
 /**
- * Rule-based detection of obviously invalid measurements (docs/adr/0012).
+ * SUPERSEDED by src/data/denoise.ts (docs/adr/0012 addendum): the views show every record through
+ * the non-destructive `processRecord`, and records are kept raw (`restoreExcluded` / `rawDataset`
+ * put stored exclusions back at load). The destructive `excludeAnomalies` and the v1 rules below
+ * remain only for modules not yet switched over (importer screening, exclusion badges) and for
+ * reading `excluded` fields of older files.
+ *
+ * Rule-based detection of obviously invalid measurements (docs/adr/0012, v1).
  *
  * Rules, applied in order (a cell gets the first matching reason):
  *  1. belowNoise     — measured nits at or below the instrument's black-level noise ceiling

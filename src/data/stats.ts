@@ -8,7 +8,9 @@
  *
  * Coverage: valid area ÷ nominal area of the scope, both measured on the NOMINAL layout (every
  * row / column of the matrix inside the scope, whether or not it still holds a valid cell), so
- * records whose anomalies were excluded (docs/adr/0012) are visibly "smaller" than the others.
+ * records with cells the denoise shows as no data (docs/adr/0012) are visibly "smaller" than the
+ * others. Given a denoised record, valid cells are the measured plus the interpolated ones
+ * (denoiseInScope counts what the denoise did inside the scope).
  *
  * The typical-luminance read-outs (svmAt) use exactly the curve the 2D chart draws and its data
  * table prints (smooth gray slice + monotone spline in log10 nits), so the two never disagree.
@@ -18,6 +20,7 @@ import { LOW_GRAY_CLIP, SVM_CRITICAL, SVM_SAFE } from '../types';
 import { cellEdges, gridView, logNits, type GridView } from './grid';
 import { settleSlice, smoothSliceAtGray } from '../chart2d/slices';
 import { buildCurve, evalCurve } from '../chart2d/spline';
+import type { ProcessedRecord } from './denoise';
 
 /** Luminances (measured nits) at which the gray-slice SVM is reported. */
 export const SVM_AT_NITS = [2, 10, 50, 100] as const;
@@ -284,4 +287,28 @@ export function computeRecordStats(ds: Pick<Dataset, 'matrix' | 'excluded'>, opt
   const s = compute(ds, opts);
   perMatrix.set(key, s);
   return s;
+}
+
+/** What the denoise did inside a stats scope (docs/adr/0012 addendum). */
+export interface DenoiseInScope {
+  /** Cells filled by interpolation (they count towards coverage). */
+  interpolated: number;
+  /** Cells shown as no data. */
+  noData: number;
+  /** Cells whose SVM is measured but whose luminance is an estimate. */
+  lumEstimated: number;
+}
+
+/**
+ * Counts of processed cells inside the scope (low-gray clip / level cap, the same nominal rows and
+ * columns as the coverage) — for "降噪：插值 N 格，无有效数据 M 格". All zero with denoise off.
+ */
+export function denoiseInScope(pr: Pick<ProcessedRecord, 'notes' | 'record'>, opts: Pick<StatsOptions, 'clipLowGray' | 'maxNits'>): DenoiseInScope {
+  const out: DenoiseInScope = { interpolated: 0, noData: 0, lumEstimated: 0 };
+  if (!pr.notes.length) return out;
+  const nom = nominalScope(pr.record, opts);
+  const rows = new Set(nom.rows);
+  const cols = new Set(nom.cols);
+  for (const n of pr.notes) if (rows.has(n.r) && cols.has(n.c)) out[n.action]++;
+  return out;
 }
