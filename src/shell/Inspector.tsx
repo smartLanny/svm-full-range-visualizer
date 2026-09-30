@@ -43,7 +43,7 @@ import {
 } from '../types';
 import { Button, Field, Kbd, Section, Segmented, Select, Slider, Switch, cn } from '../ui';
 import { IconButton } from './IconBtn';
-import { DataRangeControls } from './SettingsPanel';
+import { DataRangeControls, DenoiseSwitch } from './SettingsPanel';
 
 /** Colormaps in menu order (recommended first). */
 const COLORMAPS: ColormapType[] = [
@@ -635,6 +635,7 @@ function Inspector2D() {
       </Section>
 
       <Section title={t('shell.inspector.chart2d.display')} icon={<Eye size={12} />}>
+        <DenoiseSwitch />
         <div className="grid grid-cols-2 gap-1.5">
           <Button
             size="sm"

@@ -790,7 +790,49 @@ function build(m: Dataset['matrix'], a: DenoiseAnalysis): Built {
   const untouched = !notes.length && !levelNotes.length;
   const out: Built = { matrix: untouched ? m : { ...m, headerNits, grid }, data, notes, noteGrid, levelNotes, summary };
   builtCache.set(m, out);
+  if (!untouched) {
+    const byRef = new Map(notes.map((n) => [refKey(n.gray, n.brightnessPercent), n]));
+    const byCol = new Map(levelNotes.map((l) => [l.brightnessPercent, l]));
+    displayRegistry.set(out.matrix, {
+      notes,
+      noteGrid,
+      levelNotes,
+      summary,
+      blackLevel: a.blackLevel,
+      noteAt: (gray, pct) => byRef.get(refKey(gray, pct)) ?? null,
+      levelNoteAt: (pct) => byCol.get(pct) ?? null,
+    });
+  }
   return out;
+}
+
+const refKey = (gray: number, pct: number) => `${gray}|${pct}`;
+
+/**
+ * What the denoise did to a DISPLAYED matrix (the `.record.matrix` of a processed record), for
+ * code that only holds the record it draws (3D panels, 2D series, stats thumbnails, exports).
+ */
+export interface DisplayNotes {
+  notes: CellNote[];
+  /** notes by matrix index of the displayed matrix (same indices as the raw one). */
+  noteGrid: (CellNote | null)[][];
+  levelNotes: LevelNote[];
+  summary: DenoiseSummary;
+  blackLevel: BlackLevel;
+  noteAt(gray: number, brightnessPercent: number): CellNote | null;
+  /** Re-estimated level of the column with this brightness %, or null. */
+  levelNoteAt(brightnessPercent: number): LevelNote | null;
+}
+
+const displayRegistry = new WeakMap<Dataset['matrix'], DisplayNotes>();
+
+/**
+ * Notes of a displayed record: non-null only for a record the denoise changed (denoise on). A raw
+ * record (denoise off, or nothing to change) has none. Keyed by the displayed matrix object, so a
+ * renamed record and every view of the same processed data share them.
+ */
+export function displayNotes(ds: Pick<Dataset, 'matrix'> | null | undefined): DisplayNotes | null {
+  return ds ? (displayRegistry.get(ds.matrix) ?? null) : null;
 }
 
 function lumVia(m: Dataset['matrix'], a: DenoiseAnalysis, r: number, c: number, rowOrd: number[], rpos: number[]): 'column' | 'pattern' {
@@ -909,7 +951,7 @@ export function processRecord<T extends Dataset>(record: T, opts: DenoiseOptions
     out = { record: raw, raw, denoise: false, analysis, notes: [], noteGrid, levelNotes: [], summary: EMPTY_SUMMARY(raw.matrix, valid), noteAt: () => null };
   } else {
     const b = build(raw.matrix, analysis);
-    const byRef = new Map(b.notes.map((n) => [`${n.gray}|${n.brightnessPercent}`, n]));
+    const byRef = new Map(b.notes.map((n) => [refKey(n.gray, n.brightnessPercent), n]));
     out = {
       record: b.matrix === raw.matrix ? raw : { ...raw, matrix: b.matrix, data: b.data },
       raw,
@@ -919,7 +961,7 @@ export function processRecord<T extends Dataset>(record: T, opts: DenoiseOptions
       noteGrid: b.noteGrid,
       levelNotes: b.levelNotes,
       summary: b.summary,
-      noteAt: (gray, pct) => byRef.get(`${gray}|${pct}`) ?? null,
+      noteAt: (gray, pct) => byRef.get(refKey(gray, pct)) ?? null,
     };
   }
   per.set(key, out as unknown as ProcessedRecord<Dataset>);

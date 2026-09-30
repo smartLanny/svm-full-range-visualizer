@@ -9,6 +9,11 @@
  *   half of it (a genuine pop keeps its whole size in one sub-step; steep but continuous data
  *   refines). Positions are clamped to the visible axis window and weighted by opacity.
  * - Dotted gap bridges fade in / out the same way (≤ 0.2 per frame).
+ *
+ * The records are checked as the chart draws them by default: processed by the denoise
+ * (docs/adr/0012 addendum). With the denoise off the raw junk is drawn as measured (e.g. an SVM
+ * of 62.8 at −0.05 nits next to readings of ~5): points still never appear / vanish / blink, but
+ * such a reading may move steeply, so the raw run checks everything except the step size.
  */
 import { describe, expect, it } from 'vitest';
 import fs from 'fs';
@@ -17,10 +22,14 @@ import type { Dataset, SliceMode, SvmRecord } from '../types';
 import { sliceFor, sweepExtent, sweepParam, SWEEP_DURATION, type CurvePoint } from './slices';
 import { buildAxes } from './scales';
 import { curveOf } from './scene';
+import { processRecord, rawDataset } from '../data/denoise';
 
 const dir = path.resolve(__dirname, '../../public/datasets');
 const manifest = JSON.parse(fs.readFileSync(path.join(dir, 'manifest.json'), 'utf8')) as { file: string; device: string; mode: string }[];
-const records: SvmRecord[] = manifest.map((m) => ({ ...(JSON.parse(fs.readFileSync(path.join(dir, m.file), 'utf8')) as Dataset), id: m.file, device: m.device, mode: m.mode, source: 'bundled' }));
+/** Raw records, as the app loads them (points a bundled file stores in `excluded` put back). */
+const raw: SvmRecord[] = manifest.map((m) => rawDataset({ ...(JSON.parse(fs.readFileSync(path.join(dir, m.file), 'utf8')) as Dataset), id: m.file, device: m.device, mode: m.mode, source: 'bundled' as const }));
+/** What the chart draws with the denoise on (the default). */
+const records: SvmRecord[] = raw.map((r) => processRecord(r, { denoise: true }).record);
 
 const FPS = 60;
 const MAX_STEP = 0.02;
@@ -40,7 +49,7 @@ const cases: Case[] = [
   { mode: 'brightness', axisMode: 'free', clip: false },
 ];
 
-function check(rec: SvmRecord, c: Case): string[] {
+function check(rec: SvmRecord, c: Case, steps = true): string[] {
   const ext = c.axisMode === 'standard' ? null : sweepExtent([rec], c.mode, c.clip);
   const ax = buildAxes(c.mode, c.axisMode, ext);
   const nx = (x: number) => (Math.min(ax.x.u1, Math.max(ax.x.u0, c.mode === 'gray' ? Math.log10(x) : x)) - ax.x.u0) / (ax.x.u1 - ax.x.u0);
@@ -74,7 +83,7 @@ function check(rec: SvmRecord, c: Case): string[] {
       }
       if (Math.abs(p.a - q.a) > MAX_DALPHA) errors.push(`${at} key ${k} alpha ${q.a.toFixed(2)} -> ${p.a.toFixed(2)}`);
       const d = dist(p, q);
-      if (d > MAX_STEP) {
+      if (steps && d > MAX_STEP) {
         // continuous motion or a pop? Refine the frame interval.
         let last = q;
         let maxSub = 0;
@@ -102,9 +111,10 @@ function check(rec: SvmRecord, c: Case): string[] {
 }
 
 describe('sweeps never pop (all bundled records, 60 fps)', () => {
-  it('has the bundled records, including the four with excluded cells', () => {
+  it('has the 16 bundled records, raw, most of them changed by the denoise', () => {
     expect(records.length).toBe(16);
-    expect(records.filter((r) => r.excluded?.length).length).toBe(4);
+    expect(raw.every((r) => r.excluded === undefined)).toBe(true);
+    expect(records.filter((r, i) => r !== raw[i]).length).toBeGreaterThanOrEqual(14);
   });
   for (const c of cases) {
     it(`${c.mode} sweep, ${c.axisMode} axes${c.clip ? '' : ', low grays shown'}`, () => {
@@ -112,4 +122,8 @@ describe('sweeps never pop (all bundled records, 60 fps)', () => {
       expect(errors.slice(0, 10)).toEqual([]);
     });
   }
+  it('denoise off (raw readings): nothing appears, vanishes or blinks', () => {
+    const errors = cases.flatMap((c) => raw.flatMap((r) => check(r, c, false)));
+    expect(errors.slice(0, 10)).toEqual([]);
+  });
 });

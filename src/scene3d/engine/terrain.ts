@@ -7,6 +7,7 @@ import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
 import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js';
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 import { BAR_GAP, BAR_GAP_MAX, plotValue, SY, type PanelModel, type SceneModel } from './model';
+import { displayNotes } from '../../data/denoise';
 import { boundaryEdges, buildSurfaceGrid, sampleSurface, type SurfaceGrid } from './surfaceGrid';
 import {
   cutUnderLabels,
@@ -122,6 +123,8 @@ export class PanelContent {
   readonly plate: THREE.Mesh;
   /** Hatched "no data" floor under the missing cells (null when the panel has none). */
   readonly noData: THREE.Mesh | null;
+  /** Dotted outlines of the cells the denoise filled by interpolation (top view; null when none). */
+  readonly interp: THREE.Mesh | null;
   lines: ContourLine[];
   readonly contourGroup = new THREE.Group();
   /**
@@ -143,7 +146,7 @@ export class PanelContent {
   constructor(
     readonly panel: PanelModel,
     readonly model: SceneModel,
-    mats: { surface: THREE.Material; walls: THREE.Material; bars: THREE.Material; plate: THREE.Material; noData: THREE.Material },
+    mats: { surface: THREE.Material; walls: THREE.Material; bars: THREE.Material; plate: THREE.Material; noData: THREE.Material; interp: THREE.Material },
   ) {
     const cap = model.heightCap;
     const unitH = (v: number) => plotValue(v, cap) * SY;
@@ -217,6 +220,16 @@ export class PanelContent {
       this.noData.renderOrder = 0;
       this.noData.frustumCulled = false;
       this.group.add(this.noData);
+    }
+
+    // --- interpolated cells (docs/adr/0012 addendum): dotted outline, shown in the top view ---
+    const interpGeo = buildInterpGeometry(panel);
+    this.interp = interpGeo ? new THREE.Mesh(interpGeo, mats.interp) : null;
+    if (this.interp) {
+      this.interp.renderOrder = 6;
+      this.interp.frustumCulled = false;
+      this.interp.visible = false;
+      this.group.add(this.interp);
     }
 
     // --- contours ---
@@ -403,6 +416,7 @@ export class PanelContent {
     this.bars.dispose();
     this.plate.geometry.dispose();
     this.noData?.geometry.dispose();
+    this.interp?.geometry.dispose();
     this.contourCut.dispose();
     this.contourValues.dispose();
     for (const s of this.labelSprites) (s.material as THREE.SpriteMaterial).dispose();
@@ -462,6 +476,38 @@ function buildWallGeometry(grid: SurfaceGrid, unitH: (v: number) => number): THR
   geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   geo.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3));
   geo.setAttribute('aValue', new THREE.Float32BufferAttribute(val, 1));
+  geo.setIndex(idx);
+  return geo;
+}
+
+/**
+ * One flat quad per cell the denoise filled by interpolation (y = 0, local 0..1 coordinates for the
+ * dotted outline), or null when there is none. SVM panels only: a difference map mixes two records.
+ */
+function buildInterpGeometry(panel: PanelModel): THREE.BufferGeometry | null {
+  const notes = panel.kind === 'svm' ? displayNotes(panel.record) : null;
+  if (!notes) return null;
+  const v = panel.view;
+  const pos: number[] = [];
+  const uv: number[] = [];
+  const idx: number[] = [];
+  panel.values.forEach((row, r) =>
+    row.forEach((val, c) => {
+      if (val === null || notes.noteGrid[v.rowIndex[r]]?.[v.colIndex[c]]?.action !== 'interpolated') return;
+      const x0 = panel.xe[c];
+      const x1 = panel.xe[c + 1];
+      const zf = Math.max(panel.ze[r], panel.ze[r + 1]);
+      const zb = Math.min(panel.ze[r], panel.ze[r + 1]);
+      const base = pos.length / 3;
+      pos.push(x0, 0, zf, x1, 0, zf, x1, 0, zb, x0, 0, zb);
+      uv.push(0, 0, 1, 0, 1, 1, 0, 1);
+      idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
+    }),
+  );
+  if (!idx.length) return null;
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute('aUv', new THREE.Float32BufferAttribute(uv, 2));
   geo.setIndex(idx);
   return geo;
 }

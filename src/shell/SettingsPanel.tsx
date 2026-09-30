@@ -16,7 +16,15 @@ function Group({ title, children }: { title: string; children: React.ReactNode }
   );
 }
 
-/** Data-range controls shared by the settings popover and the inspector. */
+/** 降噪 (docs/adr/0012 addendum): one persisted switch for every view (3D, 2D, stats, exports). */
+export function DenoiseSwitch() {
+  const t = useT();
+  const denoise = useAppStore((s) => s.denoise);
+  const set = useAppStore((s) => s.set);
+  return <Switch checked={denoise} onChange={(v) => set('denoise', v)} label={t('common.denoise.title')} description={t('common.denoise.hint')} />;
+}
+
+/** Data-range controls shared by the settings popover and the inspector (with the denoise switch). */
 export function DataRangeControls() {
   const t = useT();
   const clipLowGray = useAppStore((s) => s.clipLowGray);
@@ -24,6 +32,7 @@ export function DataRangeControls() {
   const set = useAppStore((s) => s.set);
   return (
     <>
+      <DenoiseSwitch />
       <Switch checked={clipLowGray} onChange={(v) => set('clipLowGray', v)} label={t('shell.inspector.clip')} description={t('shell.inspector.clipHint')} />
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">

@@ -12,9 +12,9 @@ import { translate } from '../../i18n';
 import type { Timeline } from '../../timeline/timeline';
 import { applyPose, clonePose, copyPose, fitPose, lerpPose, PERSP_TAN, poseBasis, type CamPose, type Insets, type Viewport } from './camera';
 import { gridView, bracket } from '../../data/grid';
-import type { AnomalyKind } from '../../data/anomalies';
+import { displayNotes, type CellNote, type LevelNote } from '../../data/denoise';
 import { buildModel, cellAt, setModelHeightCap, SY, type ModelResult, type PanelId, type PanelModel, type SceneModel } from './model';
-import { makeFloorMaterial, makeNoDataMaterial, makeTerrainMaterial, PLATE_COLOR, setTerrainColormap, type ColorSpec, type NoDataMaterial, type TerrainUniforms } from './materials';
+import { makeFloorMaterial, makeInterpMaterial, makeNoDataMaterial, makeTerrainMaterial, PLATE_COLOR, setTerrainColormap, type ColorSpec, type InterpMaterial, type NoDataMaterial, type TerrainUniforms } from './materials';
 import { PanelContent } from './terrain';
 import { Axes, CAPTION_STYLE, type AxisLabelSpec } from './axes';
 import { captionLineHeight, drawCaptionTexture, drawColorbarTexture, drawTitleTexture, HUD_SUBTITLE_STYLE, HUD_TITLE_STYLE, Hud, SUBTITLE_LINE, TITLE_LINE, type ColorbarSpec, type Rect } from './hud';
@@ -100,12 +100,24 @@ export interface HoverInfo {
   /** svm: colorMax; diff: symmetric color range. */
   range: number;
   /**
-   * Cell without valid data (docs/adr/0012): the exclusion rule when the raw point was excluded
-   * (looked up in record.excluded by gray + brightness %), else null = never measured / out of
-   * range. `who` names the record for a difference map.
+   * What the denoise did here (docs/adr/0012 addendum): the cell's own note (single / side by
+   * side), or for a difference map A's cell and the B cells its resampling uses (`who`).
    */
-  missing?: { reason: AnomalyKind | null; who?: 'A' | 'B'; raw?: { nits: number; svm: number } };
+  notes?: HoverNote[];
+  /** The column's level luminance was re-estimated by the denoise (A's column for a diff). */
+  level?: LevelNote;
+  /**
+   * Cell without valid data that no note explains (never measured / out of range); `who` names
+   * the record for a difference map.
+   */
+  missing?: { who?: 'A' | 'B' };
   key: string;
+}
+
+/** A denoise note under the cursor; `who` names the record of a difference map. */
+export interface HoverNote {
+  who?: 'A' | 'B';
+  note: CellNote;
 }
 
 /** Background colors that make the 3D view "pure black" (presentation, docs C3). */
@@ -197,6 +209,7 @@ export class Engine {
     bars: THREE.ShaderMaterial & { uniforms: TerrainUniforms };
     plate: THREE.MeshBasicMaterial;
     noData: NoDataMaterial;
+    interp: InterpMaterial;
   };
   private colorKey = '';
   private readonly floor: THREE.Mesh;
@@ -303,6 +316,7 @@ export class Engine {
       bars: makeTerrainMaterial(spec),
       plate: new THREE.MeshBasicMaterial({ color: PLATE_COLOR, transparent: true, depthWrite: true }),
       noData: makeNoDataMaterial(),
+      interp: makeInterpMaterial(),
     };
     this.mats.walls.side = THREE.DoubleSide;
     // The "no data" floor lies on the plate: pulled forward in depth so it never z-fights it.
@@ -1103,6 +1117,7 @@ export class Engine {
       show(pc.contourCut.line);
       show(pc.contourValues.line);
       show(pc.noData);
+      show(pc.interp);
       pc.labelSprites.forEach(show);
       const vm = pc.valuesMesh?.material as THREE.MeshBasicMaterial | undefined;
       if (vm?.map) gl.initTexture(vm.map);
@@ -1404,12 +1419,18 @@ export class Engine {
     // the plot), 1 CSS px lines.
     this.mats.noData.uniforms.uSpacing.value = 6 * this.topWorldPerCss();
     this.mats.noData.uniforms.uPx.value = this.pxScale;
+    this.mats.interp.uniforms.uPx.value = this.pxScale;
 
     this.ensureContourLayout();
     if (fp.valuesOpacity > 0.002) this.ensureValues();
     // Values printed only when the layout-wide decision found room for them (see ensureValues).
     const valuesOp = this.valuesNone ? 0 : fp.valuesOpacity;
     this.updateValuesHint();
+    // Interpolated cells (docs/adr/0012 addendum): a hollow ring at the sample point once the
+    // terrain lies flat (top view / the intro's heatmap), fading in with the flattening — never in
+    // 3D, never popping; it steps aside while the value table prints the numbers.
+    const interpOp = smoothstep(0.3, 0.02, fp.heightK) * Math.max(fp.surfaceOpacity, fp.barsOpacity) * smoothstep(0.6, 0.2, fp.pose.phi) * (1 - valuesOp);
+    this.mats.interp.uniforms.uOpacity.value = 0.9 * interpOp;
 
     const labelRects: { sp: THREE.Sprite; view: ViewSlot; order: number; rect: Rect }[] = [];
     this.panels.forEach((pc, i) => {
@@ -1427,6 +1448,10 @@ export class Engine {
       if (barsOn) pc.setGrowth(i === 0 ? fp.growth : null, i === 0 ? fp.barFade : null);
       pc.plate.position.y = plateY;
       if (pc.noData) pc.noData.position.y = plateY + 0.002;
+      if (pc.interp) {
+        pc.interp.visible = interpOp > 0.003;
+        pc.interp.position.y = 0.02;
+      }
       // contours
       // Contours follow the surface; over 3D bars they would float inside the bars, so they only
       // show there once the bars are (nearly) flat.
@@ -2534,7 +2559,7 @@ export class Engine {
       info.a = p ? p.svm : null;
       info.b = pm.otherValues?.[r]?.[c] ?? null;
     }
-    if (value === null) info.missing = missingReason(pm, r, c);
+    Object.assign(info, cellNotes(pm, r, c));
     return info;
   }
 
@@ -2803,31 +2828,51 @@ export class Engine {
 }
 
 /**
- * Why a cell has no valid data (docs/adr/0012): the rule that excluded its raw point, looked up in
- * the record's `excluded` list by gray + brightness %. For a difference map, A's own cell first,
- * then the B cells the resampling needs at that spot.
+ * Denoise notes of a cell (docs/adr/0012 addendum), looked up in the displayed records' notes by
+ * gray + brightness %: the cell's own note; for a difference map A's cell first, then the B cells
+ * the bilinear resampling at A's (level luminance, gray) uses (weighted corners only).
  */
-export function missingReason(pm: PanelModel, r: number, c: number): NonNullable<HoverInfo['missing']> {
-  const find = (rec: SvmRecord | undefined, gray: number, percent: number) =>
-    rec?.excluded?.find((x) => x.gray === gray && Math.abs(x.brightnessPercent - percent) < 1e-9) ?? null;
+export function cellNotes(pm: PanelModel, r: number, c: number): Pick<HoverInfo, 'notes' | 'level' | 'missing'> {
   const v = pm.view;
   const diff = pm.kind === 'diff';
-  if (!v.points[r][c]) {
-    const x = find(pm.record, v.grays[r], v.percents[c]);
-    return { reason: (x?.reason as AnomalyKind) ?? null, who: diff ? 'A' : undefined, raw: x ? { nits: x.nits, svm: x.svm } : undefined };
-  }
-  if (!diff || !pm.other) return { reason: null };
-  // B is bilinearly resampled at A's (level luminance, gray): report an excluded bracketing cell.
-  const bv = gridView(pm.other);
-  const ci = bracket(bv.x, v.x[c]);
-  const ri = bracket(bv.grays, v.grays[r]);
-  if (ci >= 0 && ri >= 0) {
-    for (const rr of [ri, Math.min(ri + 1, bv.grays.length - 1)])
-      for (const cc of [ci, Math.min(ci + 1, bv.x.length - 1)]) {
-        if (bv.points[rr][cc]) continue;
-        const x = find(pm.other, bv.grays[rr], bv.percents[cc]);
-        if (x) return { reason: x.reason as AnomalyKind, who: 'B' };
+  const who = diff ? ('A' as const) : undefined;
+  const na = displayNotes(pm.record);
+  const out: Pick<HoverInfo, 'notes' | 'level' | 'missing'> = {};
+  const notes: HoverNote[] = [];
+  const own = na?.noteAt(v.grays[r], v.percents[c]) ?? null;
+  if (own) notes.push({ who, note: own });
+  const level = na?.levelNoteAt(v.percents[c]);
+  if (level) out.level = level;
+  const value = pm.values[r]?.[c] ?? null;
+  if (!v.points[r][c] && !own) out.missing = { who };
+  if (diff && pm.other) {
+    const nb = displayNotes(pm.other);
+    const bv = gridView(pm.other);
+    const ci = bracket(bv.x, v.x[c]);
+    const ri = bracket(bv.grays, v.grays[r]);
+    let bMissing = false;
+    if (ci >= 0 && ri >= 0) {
+      const c1 = Math.min(ci + 1, bv.x.length - 1);
+      const r1 = Math.min(ri + 1, bv.grays.length - 1);
+      const tx = c1 === ci ? 0 : (v.x[c] - bv.x[ci]) / (bv.x[c1] - bv.x[ci]);
+      const tz = r1 === ri ? 0 : (v.grays[r] - bv.grays[ri]) / (bv.grays[r1] - bv.grays[ri]);
+      const corners: [number, number, number][] = [
+        [ri, ci, (1 - tx) * (1 - tz)],
+        [ri, c1, tx * (1 - tz)],
+        [r1, ci, (1 - tx) * tz],
+        [r1, c1, tx * tz],
+      ];
+      const seen = new Set<string>();
+      for (const [rr, cc, w] of corners) {
+        if (w <= 1e-9 || seen.has(`${rr}|${cc}`)) continue;
+        seen.add(`${rr}|${cc}`);
+        const n = nb?.noteAt(bv.grays[rr], bv.percents[cc]) ?? null;
+        if (n) notes.push({ who: 'B', note: n });
+        else if (!bv.points[rr][cc]) bMissing = true;
       }
+    } else bMissing = true;
+    if (value === null && v.points[r][c] && bMissing && !notes.some((x) => x.who === 'B' && x.note.action === 'noData')) out.missing = { who: 'B' };
   }
-  return { reason: null, who: 'B' };
+  if (notes.length) out.notes = notes;
+  return out;
 }

@@ -42,7 +42,7 @@ const strings: StringsModule = {
       copyFailed: '复制失败',
       empty: '没有可显示的数据',
       note: '数值为曲线在各采样点处的插值 SVM；空白表示该记录在此处无数据。',
-      excludedNote: '* 该记录已按规则剔除明显异常的测量点（悬停记录名查看原因）；剔除处曲线断开、以点线示意，表中为空。',
+      denoiseNote: '降噪已开启：虚线下划的斜体数值用到了插值补全的读数，空白处为无有效数据；悬停数值查看原因，关闭降噪可看原始读数。',
       colNits: '{v} nits',
       colGray: 'G{v}',
     },
@@ -56,9 +56,6 @@ const strings: StringsModule = {
       hintNone: '导入一条测量记录后即可在这里对比曲线。',
       showAll: '全部显示',
       canvas: '没有可显示的记录',
-    },
-    exclusion: {
-      gaps: '剔除处曲线断开，以点线示意（不做插值）',
     },
     // Export contents of the 2D view (docs/adr/0010 addendum).
     export: {
@@ -112,7 +109,7 @@ const strings: StringsModule = {
       copyFailed: 'Copy failed',
       empty: 'No data to show',
       note: 'Values are each curve’s interpolated SVM at the sample; blank = no data there for that record.',
-      excludedNote: '* Obvious anomalies were excluded from this record (hover its name for the reasons); the curve breaks there, shown dotted, and the table is blank.',
+      denoiseNote: 'Denoise on: italic, dotted-underlined values use an interpolated reading; blanks have no valid data. Hover a value for the reason; turn the denoise off to see raw readings.',
       colNits: '{v} nits',
       colGray: 'G{v}',
     },
@@ -126,9 +123,6 @@ const strings: StringsModule = {
       hintNone: 'Import a measurement record to compare curves here.',
       showAll: 'Show all',
       canvas: 'No records to show',
-    },
-    exclusion: {
-      gaps: 'The curve breaks at excluded points, shown dotted (not interpolated)',
     },
     // Export contents of the 2D view (docs/adr/0010 addendum).
     export: {

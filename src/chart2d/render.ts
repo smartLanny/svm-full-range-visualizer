@@ -5,7 +5,7 @@
  */
 import { SVM_CRITICAL, SVM_SAFE } from '../types';
 import type { Scene, LegendGroup, LegendProbe, ProbeAxes, SubtitleSlot } from './scene';
-import { bezierAt, bridgeBezier, evalCurve, segmentBezier, type Bezier, type Curve } from './spline';
+import { bezierAt, bridgeBezier, curveSpanAt, evalCurve, segmentBezier, type Bezier, type Curve } from './spline';
 import { edgeAlpha, type Axes, type Axis } from './scales';
 
 export const FONT_STACK = 'Inter, "PingFang SC", "Microsoft YaHei", "Noto Sans SC", "Source Han Sans SC", system-ui, sans-serif';
@@ -21,8 +21,6 @@ const C = {
   safe: '#22c55e',
   critical: '#ef4444',
   crosshair: 'rgba(182,191,204,0.55)',
-  /** '*' marker of records with excluded anomalous points (docs/adr/0012). */
-  warn: '#f5b454',
 };
 
 const REF_AREA = 1600 * 900;
@@ -73,6 +71,14 @@ export interface HoverValue {
   id: string;
   svm: number;
   py: number;
+  /** Key of the curve node within snapping distance of the crosshair (tooltip: denoise notes). */
+  node?: number;
+}
+
+/** A visible record whose curve has a gap under the crosshair: the keys of the drawn nodes around it. */
+export interface HoverGap {
+  id: string;
+  keys: [number, number];
 }
 
 export interface RenderResult {
@@ -82,7 +88,7 @@ export interface RenderResult {
   legend: Rect | null;
   hits: LegendHit[];
   /** Crosshair read-out (null when the pointer is outside the plot / over the legend). */
-  hover: { u: number; px: number; py: number; values: HoverValue[] } | null;
+  hover: { u: number; px: number; py: number; values: HoverValue[]; gaps: HoverGap[] } | null;
 }
 
 export interface Layout {
@@ -260,7 +266,7 @@ function layoutLegend(ctx: CanvasRenderingContext2D, groups: LegendGroup[], s: n
     const out: LegendItem[] = [{ kind: 'header', gi, rowIndex: -1, h: m.headH, w: m.chip + m.gap + ctx.measureText(g.label).width }];
     ctx.font = font(500, m.fs);
     g.rows.forEach((r, i) =>
-      out.push({ kind: 'row', gi, rowIndex: i, h: m.rowH, w: m.sampleW + m.gap + ctx.measureText(r.label).width + (r.excluded ? ctx.measureText(' *').width + 2 * s * k : 0) }),
+      out.push({ kind: 'row', gi, rowIndex: i, h: m.rowH, w: m.sampleW + m.gap + ctx.measureText(r.label).width }),
     );
     return out;
   });
@@ -516,7 +522,7 @@ function anchorOf(pl: LegendPlacement) {
 function drawLegend(ctx: CanvasRenderingContext2D, scene: Scene, s: number, plot: Rect, view: RenderView, hits: LegendHit[]): Rect | null {
   const groups = scene.legend;
   if (groups.length === 0 || !scene.showLegend) return null;
-  const sig = `${scene.lang}|${groups.map((g) => `${g.label}:${g.rows.map((r) => r.label + (r.excluded ? '*' : '')).join(',')}`).join(';')}`;
+  const sig = `${scene.lang}|${groups.map((g) => `${g.label}:${g.rows.map((r) => r.label).join(',')}`).join(';')}`;
   const to = placeLegend(ctx, groups, s, plot, scene.legendProbe, scene.legendAxes, sig);
   if (!scene.legendProbeFrom || scene.legendMix >= 1) return paintLegend(ctx, scene, s, to.L, to.x, to.y, 1, view, hits);
   // Transition into / out of a sweep: the static placement and the sweep's may differ in corner
@@ -603,10 +609,6 @@ function paintLegend(ctx: CanvasRenderingContext2D, scene: Scene, s: number, L: 
         ctx.textAlign = 'left';
         ctx.textBaseline = 'middle';
         ctx.fillText(r.label, cx + m.sampleW + m.gap, mid + 0.5 * s);
-        if (r.excluded) {
-          ctx.fillStyle = r.hidden ? C.ink4 : C.warn;
-          ctx.fillText('*', cx + m.sampleW + m.gap + ctx.measureText(r.label).width + 2 * s * L.k, mid + 0.5 * s);
-        }
         if (r.hidden) {
           const tw = ctx.measureText(r.label).width;
           ctx.strokeStyle = C.ink4;
@@ -920,6 +922,7 @@ export function renderChart(ctx: CanvasRenderingContext2D, w: number, h: number,
   for (const se of ordered) {
     if (!se.curve) continue;
     const hot = highlight.has(se.id);
+    const dim = dimOthers && !hot;
     drawCurve(ctx, se.curve, map, {
       color: se.style.color,
       casing: scene.background,
@@ -930,6 +933,18 @@ export function renderChart(ctx: CanvasRenderingContext2D, w: number, h: number,
       casingAlpha: dimOthers && !hot ? 0.18 : 0.9,
       s,
     });
+    // Points filled by the denoise's interpolation (docs/adr/0012 addendum): hollow rings.
+    for (const hm of se.hollow) {
+      ctx.globalAlpha = hm.a * (dim ? 0.2 : 1);
+      ctx.beginPath();
+      ctx.arc(map.ax * hm.x + map.bx, map.ay * hm.y + map.by, 3.6 * s, 0, Math.PI * 2);
+      ctx.fillStyle = scene.background;
+      ctx.fill();
+      ctx.lineWidth = 1.6 * s;
+      ctx.strokeStyle = se.style.color;
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
   }
   ctx.restore();
 
@@ -954,11 +969,29 @@ export function renderChart(ctx: CanvasRenderingContext2D, w: number, h: number,
   if (p && inPlot && !inLegend) {
     const u = (p.x - mx.b) / mx.a;
     const values: HoverValue[] = [];
+    const gaps: HoverGap[] = [];
+    const snap = 7 * s;
     for (const se of scene.series) {
       if (!se.curve) continue;
-      const v = evalCurve(se.curve, u);
-      if (v === null) continue;
-      values.push({ id: se.id, svm: v, py: Y(v) });
+      const c = se.curve;
+      const v = evalCurve(c, u);
+      if (v === null) {
+        const span = curveSpanAt(c, u);
+        if (span?.gap) gaps.push({ id: se.id, keys: [c.keys[span.nodes[0]], c.keys[span.nodes[1]]] });
+        continue;
+      }
+      // the drawn node nearest the crosshair, when it is close (a reading the pointer is on)
+      let node: number | undefined;
+      let best = snap;
+      for (let i = 0; i < c.xs.length; i++) {
+        if (c.a[i] < 0.5) continue;
+        const d = Math.abs(X(c.xs[i]) - p.x);
+        if (d <= best) {
+          best = d;
+          node = c.keys[i];
+        }
+      }
+      values.push({ id: se.id, svm: v, py: Y(v), node });
     }
     ctx.save();
     ctx.strokeStyle = C.crosshair;
@@ -981,7 +1014,7 @@ export function renderChart(ctx: CanvasRenderingContext2D, w: number, h: number,
       ctx.stroke();
     }
     ctx.restore();
-    hover = { u, px: p.x, py: p.y, values };
+    hover = { u, px: p.x, py: p.y, values, gaps };
   }
 
   ctx.restore();

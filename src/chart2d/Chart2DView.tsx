@@ -1,14 +1,14 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { LineChart, Play, Square, Table2 } from 'lucide-react';
 import { useAppStore, getAppState } from '../store/appStore';
-import { useRecordStyles } from '../store/hooks';
+import { useDisplayRecords, useRecordStyles } from '../store/hooks';
 import { useT } from '../i18n';
 import { Button, IconButton, cn } from '../ui';
 import { useRegisterActiveTimeline, useTimeline } from '../timeline/timeline';
 import { TimelineBar } from '../timeline/TimelineBar';
 import { registerExportTarget } from '../export/registry';
-import { exclusionSummary } from '../data/anomalies';
-import { buildScene, CHART_BG, exclusionText, sliceParam, sweepProgressOf, titleText, type ChartInputs, type SceneOptions } from './scene';
+import { displayNotes } from '../data/denoise';
+import { buildScene, CHART_BG, denoiseText, sliceParam, sweepProgressOf, titleText, type ChartInputs, type SceneOptions } from './scene';
 import { exportScale, font, renderChart, screenScale, type LegendHit } from './render';
 import { easeInOutSine, SWEEP_DURATION } from './slices';
 import { chart2dContents, contentSliceMode, isSliceContent, isSweepContent, sliceFileName, sweepAnimation, sweepFileName } from './exportContents';
@@ -70,12 +70,11 @@ interface Runtime {
 /** Glide duration for a jump of `dq` sweep lengths: short hops are quick, long ones ≤ 1.2 s. */
 const glideDuration = (dq: number) => Math.min(1.2, 0.35 + 0.9 * Math.abs(dq));
 
-/** Tooltip text for a record with excluded anomalous points (docs/adr/0012). */
-function exclusionTip(recId: string): string | null {
-  const st = getAppState();
-  const rec = st.records.find((r) => r.id === recId);
-  const sum = rec ? exclusionSummary(rec) : null;
-  return sum ? exclusionText(st.lang, sum) : null;
+/** Legend tooltip of a record the denoise changed (docs/adr/0012 addendum): what it did. */
+function denoiseTip(recId: string, records: ChartInputs['records']): string | null {
+  const rec = records.find((r) => r.id === recId);
+  const sum = displayNotes(rec)?.summary;
+  return sum ? denoiseText(getAppState().lang, sum) : null;
 }
 
 /**
@@ -86,7 +85,8 @@ function exclusionTip(recId: string): string | null {
  */
 export default function Chart2DView() {
   const t = useT();
-  const records = useAppStore((s) => s.records);
+  // What the chart draws: every record processed under the denoise setting (docs/adr/0012 addendum).
+  const records = useDisplayRecords(useAppStore((s) => s.records));
   const hiddenIds = useAppStore((s) => s.hiddenIds);
   const lang = useAppStore((s) => s.lang);
   const sliceMode = useAppStore((s) => s.sliceMode);
@@ -417,8 +417,8 @@ export default function Chart2DView() {
     r.pointer = { x, y };
     const hit = hitAt(x, y);
     const id = hit?.kind === 'record' ? hit.id : null;
-    // legend row of a record with excluded points: native tooltip with the breakdown (C4)
-    if (id !== r.hoverId) e.currentTarget.title = (id && exclusionTip(id)) || '';
+    // legend row of a record the denoise changed: native tooltip with the breakdown (C4)
+    if (id !== r.hoverId) e.currentTarget.title = (id && denoiseTip(id, inputsRef.current.records)) || '';
     r.hoverId = id;
     r.hoverDevice = hit?.kind === 'device' ? hit.device : null;
     e.currentTarget.style.cursor = hit ? 'pointer' : '';
