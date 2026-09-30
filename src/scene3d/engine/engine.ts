@@ -1952,10 +1952,12 @@ export class Engine {
       cx = reg.x1 - reg.x0 <= w ? (reg.x0 + reg.x1) / 2 : Math.min(reg.x1 - w / 2, Math.max(reg.x0 + w / 2, cx));
       // Clear of the plot's top tick labels (e.g. gray 255 at the top-left corner in top view).
       let y0 = maxY + 15 * S;
-      // Below the title (when it spans the caption's column), inside the frame and inside the
-      // view's own region (a lower row's caption never climbs into the row above).
+      // Below the title (when it spans the caption's column) and inside the frame; in a grid of
+      // 3–6 panels a lower row's caption never climbs past the axis band of the row above (a tall
+      // perspective terrain would otherwise push it there).
       const g = lay.regions[i] ?? cell;
-      let yMax = Math.min(H - 4 * S, g.y + g.h - 2 * S);
+      let yMax = H - 4 * S;
+      if (this.views.length >= 3) yMax = Math.min(yMax, g.y + g.h + (STACK_PAD - 2) * S);
       if (titleRect && titleRect.x1 > cx - w / 2 && titleRect.x0 < cx + w / 2) yMax = Math.min(yMax, titleRect.y0 - 6 * S);
       y0 = Math.max(cell.y + 4 * S, Math.min(y0, yMax - h));
       rows.push({ tt, rect: { x0: cx - w / 2, y0, x1: cx + w / 2, y1: y0 + h }, row: lay.slots[i]?.row ?? 0 });
