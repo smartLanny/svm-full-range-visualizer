@@ -2,11 +2,13 @@
  * Sub-viewports ("cells") of the 3D frame. Side-by-side renders each panel (2–6 records) in its
  * own cell with its own camera (same orientation and scale, docs/adr/0002): the panels can never
  * overlap on screen, whatever their heights or the orbit. The cells form a grid of congruent
- * cells (A top-left, row by row); a last row with fewer panels is centered. Two panels keep their
- * classic arrangement: next to each other in landscape frames, stacked (A above B) in portrait
- * ones (aspect < 1). Pure layout math, unit tested.
+ * cells (A top-left, row by row); a last row with fewer panels is centered. The grid is the one
+ * showing the biggest plates (all plates have the same aspect, plate.ts): e.g. two panels next to
+ * each other in landscape frames, stacked (A above B) in portrait and square ones. Pure layout
+ * math, unit tested.
  */
 import type { Insets, Viewport } from './camera';
+import { PLATE_ASPECT } from './plate';
 
 /** A cell of the frame: drawing-buffer px, origin bottom-left. */
 export interface Cell {
@@ -49,37 +51,19 @@ export interface CellLayout {
   regions: Cell[];
 }
 
-/** Width / depth of the plate at depth 1 (log luminance span × gray span, typical records). */
-export const NOMINAL_PLATE_ASPECT = 1.45;
-
-/**
- * Depth (gray axis) stretch for a cell of this aspect: 1 for landscape / square cells, deeper for
- * narrow ones (≤ 1.5) so the plate fills a tall cell instead of a thin band. Quantised to quarters,
- * so resizing rebuilds the scene only at a few thresholds.
- */
-export function depthScaleFor(cellAspect: number): number {
-  const k = Math.min(1.5, Math.max(1, 0.85 / Math.max(0.1, cellAspect)));
-  return Math.floor(k * 4 + 1e-6) / 4;
-}
-
-/** Deepest plate of a grid cell (fillDepthScale). */
-export const MAX_FILL_DEPTH = 2;
-
-/**
- * Depth stretch letting a plate (width / depth `plateAspect` at depth 1) fill a plot area of
- * w × h px: between 1 and MAX_FILL_DEPTH, quantised down to eighths (never deeper than the area).
- * Used for grids of 3–6 panels, whose axis bands take a bigger share of each cell than a single
- * frame's, and whose cells are often much taller than a plate (e.g. 2 × 2 in 9:16).
- */
-export function fillDepthScale(plot: { w: number; h: number }, plateAspect = NOMINAL_PLATE_ASPECT): number {
-  if (!(plot.w > 0 && plot.h > 0)) return 1;
-  const k = Math.min(MAX_FILL_DEPTH, Math.max(1, (plateAspect * plot.h) / plot.w));
-  return Math.floor(k * 8 + 1e-6) / 8;
-}
-
-/** Approximate cell aspect (before any HUD insets), e.g. to choose the plate depth. */
+/** Approximate cell aspect (before any HUD insets), e.g. to turn the perspective view in narrow cells. */
 export function approxCellAspect(grid: GridShape, aspect: number): number {
   return (aspect * grid.rows) / grid.cols;
+}
+
+/**
+ * Size (px) of a plate of aspect `plateAspect` (width : depth, plate.ts) fitted into a plot area of
+ * w × h px: as large as possible, never stretched — the rest of the area becomes margins.
+ */
+export function plateFit(plot: { w: number; h: number }, plateAspect = PLATE_ASPECT): { w: number; h: number } {
+  if (!(plot.w > 0 && plot.h > 0 && plateAspect > 0)) return { w: 0, h: 0 };
+  const w = Math.min(plot.w, plot.h * plateAspect);
+  return { w, h: w / plateAspect };
 }
 
 /**
@@ -128,26 +112,32 @@ export interface GridMetrics {
 }
 
 /**
- * Grid for n side-by-side panels in a frame (W × H px; `metrics` gives the single-panel insets and
- * the cell bands of each candidate grid): two panels as before (side by side when aspect ≥ 1,
- * else stacked); more panels take the candidate grid whose congruent cells show the biggest plates
- * (each deepened to fill its cell, see fillDepthScale). The 16:9 / 9:16 defaults (defaultGrid) get
- * a small bonus so near-ties keep the familiar arrangement and resizing does not flip grids back
- * and forth.
+ * Preference of the familiar grid (defaultGrid): another candidate must show plates at least this
+ * much bigger (area; ≈ 18 % wider) to replace it. Keeps the 16:9 / 9:16 arrangements (3 in a row,
+ * 2 × 2 for four in 9:16) where a candidate is only somewhat bigger (≤ 1.3 in the usual frames),
+ * while clearly better grids (≥ 1.6: square frames, the narrow workbench) win.
  */
-export function gridFor(n: number, vp: Viewport, metrics: (g: GridShape) => GridMetrics, plateAspect = NOMINAL_PLATE_ASPECT): GridShape {
+export const DEFAULT_GRID_BONUS = 1.4;
+
+/**
+ * Grid for n side-by-side panels in a frame (W × H px; `metrics` gives the single-panel insets and
+ * the cell bands of each candidate grid): the candidate grid whose congruent cells show the
+ * biggest plates. Every plate has the same aspect (plate.ts), so this prefers the grids whose
+ * cells suit that shape: e.g. two panels side by side in 16:9, stacked in 9:16 and in square
+ * frames, where side-by-side cells would leave each plate half as big. The 16:9 / 9:16 defaults
+ * (defaultGrid) get a bonus (DEFAULT_GRID_BONUS) so the familiar arrangement stays unless another
+ * grid is clearly better, and resizing does not flip grids back and forth.
+ */
+export function gridFor(n: number, vp: Viewport, metrics: (g: GridShape) => GridMetrics, plateAspect = PLATE_ASPECT): GridShape {
   if (n <= 1) return SINGLE_GRID;
   const aspect = vp.width / Math.max(1, vp.height);
-  if (n === 2) return aspect < 1 ? { cols: 1, rows: 2 } : { cols: 2, rows: 1 };
   const def = defaultGrid(n, aspect >= 1);
   let best = def;
   let bestScore = -1;
   for (const g of gridCandidates(n)) {
     const { ins, opt } = metrics(g);
-    const plot = gridPlotSize(vp, ins, g, opt);
-    const pa = plateAspect / fillDepthScale(plot, plateAspect);
-    const w = Math.min(plot.w, plot.h * pa);
-    const score = w * (w / pa) * (g.cols === def.cols && g.rows === def.rows ? 1.12 : 1);
+    const plate = plateFit(gridPlotSize(vp, ins, g, opt), plateAspect);
+    const score = plate.w * plate.h * (g.cols === def.cols && g.rows === def.rows ? DEFAULT_GRID_BONUS : 1);
     if (score > bestScore + 1e-9) {
       best = g;
       bestScore = score;

@@ -8,6 +8,7 @@ import type { ColormapType, SvmRecord } from '../types';
 import { SVM_CRITICAL, SVM_SAFE } from '../types';
 import { cellEdges, gridView, logNits, type GridView } from '../data/grid';
 import { getJsColor } from '../colormaps';
+import { plateHeight } from '../scene3d/engine/plate';
 
 /** Shared extent of all thumbnails, so cards compare at the same scale. */
 export interface ThumbExtent {
@@ -46,8 +47,17 @@ export function thumbExtent(records: SvmRecord[], opts: { clipLowGray: boolean; 
 }
 
 const TICK_CANDIDATES = [0, 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000];
-/** Height of the heatmap (CSS px). */
-export const THUMB_HEIGHT = 128;
+/** Heatmap height (CSS px) until the thumbnail's width is known (a typical 310 px card). */
+export const THUMB_DEFAULT_HEIGHT = plateHeight(242);
+
+/**
+ * Height (CSS / design px) of a heatmap `width` px wide: the plate aspect of the 3D heatmaps
+ * (plate.ts, docs/adr/0002 addendum "stable heatmap proportions"), so every heatmap in the app has
+ * the same shape — never the wide, flat strip a fixed height made of wide cards.
+ */
+export function thumbHeight(width: number): number {
+  return width > 0 ? plateHeight(width) : THUMB_DEFAULT_HEIGHT;
+}
 
 /** Level-luminance ticks under a heatmap `width` px wide (at least 30 px apart). */
 export function thumbTicks(width: number, extent: ThumbExtent): { v: number; px: number }[] {
@@ -66,11 +76,12 @@ export function thumbTicks(width: number, extent: ThumbExtent): { v: number; px:
 }
 
 /**
- * Gray labels left of the heatmap: top and bottom measured gray, plus the current slice (accent)
- * which hides a neighbour closer than 14 px. `top` is the label's CSS top within the heatmap.
+ * Gray labels left of a heatmap `height` px tall: top and bottom measured gray, plus the current
+ * slice (accent) which hides a neighbour closer than 14 px. `top` is the label's CSS top within
+ * the heatmap.
  */
-export function thumbGrayLabels(extent: ThumbExtent, sliceGray: number | null): { g: number; top: number; accent?: boolean }[] {
-  const yOf = (g: number) => ((extent.g1 - g) / (extent.g1 - extent.g0)) * THUMB_HEIGHT;
+export function thumbGrayLabels(extent: ThumbExtent, sliceGray: number | null, height: number): { g: number; top: number; accent?: boolean }[] {
+  const yOf = (g: number) => ((extent.g1 - g) / (extent.g1 - extent.g0)) * height;
   const out: { g: number; y: number; accent?: boolean }[] = [];
   const sliceY = sliceGray !== null && sliceGray >= extent.g0 && sliceGray <= extent.g1 ? yOf(sliceGray) : null;
   for (const g of [extent.grayMax, extent.grayMin]) {
@@ -78,7 +89,7 @@ export function thumbGrayLabels(extent: ThumbExtent, sliceGray: number | null): 
     if (sliceY === null || Math.abs(y - sliceY) > 14) out.push({ g, y });
   }
   if (sliceY !== null && sliceGray !== null) out.push({ g: Math.round(sliceGray), y: sliceY, accent: true });
-  return out.map(({ g, y, accent }) => ({ g, top: Math.min(THUMB_HEIGHT - 12, Math.max(-1, y - 7)), accent }));
+  return out.map(({ g, y, accent }) => ({ g, top: Math.min(height - 12, Math.max(-1, y - 7)), accent }));
 }
 
 export interface DrawOpts {

@@ -19,7 +19,7 @@ import { SVM_AT_NITS } from '../data/stats';
 import { translate, type TFunction } from '../i18n';
 import { FONT_STACK } from '../chart2d/render';
 import { band, BAND_COLORS, fmtNitsOrDash, fmtPct, fmtSvmOrDash, markOf, metricByKey, type MetricKey, type Ranking, type SortDir, type SortKey, type StatsRow } from './model';
-import { drawHeatmap, HATCH_BASE, HATCH_LINE, hasNoDataCells, THUMB_HEIGHT, thumbGrayLabels, thumbTicks, type ThumbExtent } from './heatmap';
+import { drawHeatmap, HATCH_BASE, HATCH_LINE, hasNoDataCells, thumbGrayLabels, thumbHeight, thumbTicks, type ThumbExtent } from './heatmap';
 import {
   cachedMeasure,
   chooseCardGrid,
@@ -68,9 +68,10 @@ export interface StatsRenderInfo {
   strip: Box | null;
   /** Output px per design px of the cards / table. */
   scale: number;
-  /** Cards: grid and each card's rectangle (in row order). */
+  /** Cards: grid and each card's rectangle (in row order), and its heatmap's (null: none). */
   grid?: CardGrid;
   cards?: Box[];
+  heatmaps?: (Box | null)[];
   /** Table: the bands (column keys) and their rectangles. */
   bands?: { cols: string[]; box: Box }[];
 }
@@ -264,6 +265,8 @@ interface Env {
   views: Map<string, GridView>;
   /** Heatmap canvases drawn during this render (their backing stores are released at the end). */
   scratch: HTMLCanvasElement[];
+  /** Heatmap rectangle of the card last drawn (card design px), null without a thumbnail. */
+  heat?: Box | null;
 }
 
 function viewOf(e: Env, row: StatsRow): GridView {
@@ -507,6 +510,8 @@ function cardPass(p: Pen, e: Env, row: StatsRow, cw: number, h: number | null): 
   if (extent) {
     const y2 = y1 + 65 + 16;
     const avail = iw - 36;
+    // Same shape as on screen and in 3D: the plate aspect (thumbHeight).
+    const TH = thumbHeight(avail);
     const view = viewOf(e, row);
     const noData = hasNoDataCells(view);
     const caption = t('stats.thumb.caption');
@@ -544,7 +549,7 @@ function cardPass(p: Pen, e: Env, row: StatsRow, cw: number, h: number | null): 
     });
     const hy = y2 + (oneLine ? 14 : 30) + 6;
     const sliceGray = row.stats.sliceGray;
-    p.image(52, hy, avail, THUMB_HEIGHT, 6, (pw, ph, scale) => {
+    p.image(52, hy, avail, TH, 6, (pw, ph, scale) => {
       const c = document.createElement('canvas');
       c.width = pw;
       c.height = ph;
@@ -554,17 +559,18 @@ function cardPass(p: Pen, e: Env, row: StatsRow, cw: number, h: number | null): 
       e.scratch.push(c);
       return c;
     });
-    p.ring(52, hy, avail, THUMB_HEIGHT, 6, C.line);
-    for (const g of thumbGrayLabels(extent, sliceGray)) {
+    p.ring(52, hy, avail, TH, 6, C.line);
+    e.heat = { x: 52, y: hy, w: avail, h: TH };
+    for (const g of thumbGrayLabels(extent, sliceGray, TH)) {
       p.text(`G${g.g}`, 44, hy + g.top, 14, 10, g.accent ? 500 : 400, g.accent ? C.accentHover : C.ink3, 'right');
     }
     for (const tk of thumbTicks(avail, extent)) {
       const label = String(tk.v);
-      if (tk.px < 8) p.text(label, 52, hy + THUMB_HEIGHT + 4, 14, 10, 400, C.ink3);
-      else if (tk.px > avail - 12) p.text(label, 52 + avail, hy + THUMB_HEIGHT + 4, 14, 10, 400, C.ink3, 'right');
-      else p.text(label, 52 + tk.px, hy + THUMB_HEIGHT + 4, 14, 10, 400, C.ink3, 'center');
+      if (tk.px < 8) p.text(label, 52, hy + TH + 4, 14, 10, 400, C.ink3);
+      else if (tk.px > avail - 12) p.text(label, 52 + avail, hy + TH + 4, 14, 10, 400, C.ink3, 'right');
+      else p.text(label, 52 + tk.px, hy + TH + 4, 14, 10, 400, C.ink3, 'center');
     }
-    y3 = hy + THUMB_HEIGHT + 4 + 14 + 12;
+    y3 = hy + TH + 4 + 14 + 12;
   }
 
   // SVM at typical luminances (gray slice)
@@ -1025,16 +1031,20 @@ export function renderStatsExport(canvas: HTMLCanvasElement, input: StatsExportI
     const gx = body.x + (body.w - grid.width) / 2;
     const gy = body.y + (body.h - grid.height) / 2;
     const cards: Box[] = [];
+    const heatmaps: (Box | null)[] = [];
     rows.forEach((r, i) => {
       const col = i % grid.cols;
       const row = Math.floor(i / grid.cols);
       const x = Math.round(gx + col * (grid.cardW + 16) * s);
       const y = Math.round(gy + row * (grid.cardH + 16) * s);
       ctx.setTransform(s, 0, 0, s, x, y);
+      e.heat = null;
       cardPass(pen, e, r, grid.cardW, grid.cardH);
       cards.push({ x, y, w: grid.cardW * s, h: grid.cardH * s });
+      const hb = e.heat as Box | null;
+      heatmaps.push(hb ? { x: x + hb.x * s, y: y + hb.y * s, w: hb.w * s, h: hb.h * s } : null);
     });
-    Object.assign(info, { scale: s, grid, cards });
+    Object.assign(info, { scale: s, grid, cards, heatmaps });
   } else if (P.fit) {
     const fit: TableFit = P.fit;
     const s = fit.scale;

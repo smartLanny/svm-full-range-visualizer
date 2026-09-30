@@ -24,10 +24,7 @@ import { measureText, TextCache, type TextTexture } from './text';
 import { chooseValueFont, drawValuesTexture, measureValueCells } from './values';
 import {
   approxCellAspect,
-  depthScaleFor,
-  fillDepthScale,
   gridFor,
-  gridPlotSize,
   presetFit,
   regionAt,
   SINGLE_GRID,
@@ -456,23 +453,6 @@ export class Engine {
     this.invalidate();
   }
 
-  /**
-   * Depth stretch of the gray axis for the cell shape of a layout (the frame, or one panel's cell
-   * side by side): 1 for landscape / square, deeper for narrow cells (9:16 → 1.5) so the plate, the
-   * terrain and the heatmap fill a tall cell instead of a thin band. Quantised, so resizing only
-   * rebuilds the scene at a few thresholds.
-   */
-  private depthScale(s: EngineSettings | null, layout: SceneLayout): number {
-    const n = this.panelsFor(s, layout);
-    const g = this.gridOf(n, s);
-    // Grids of 3–6 panels: deepen the plate to fill the (nominal) plot area of a cell.
-    if (n >= 3) {
-      const m = this.gridMetrics(n, g, s);
-      return fillDepthScale(gridPlotSize(this.vp, m.ins, g, m.opt));
-    }
-    return depthScaleFor(approxCellAspect(g, this.vp.width / Math.max(1, this.vp.height)));
-  }
-
   /** Panels a layout shows side by side (A, B + extras, ≤ 6); 1 = a single view. */
   private panelsFor(s: EngineSettings | null, layout: SceneLayout): number {
     if (layout !== 'sideBySide' || !s) return 1;
@@ -509,10 +489,10 @@ export class Engine {
   }
 
   /**
-   * Nominal frame insets and cell bands (px) of a candidate grid, for choosing the grid and the
-   * plate depth before the model exists: a typical title / colorbar / axis band, the floating
-   * controls, and the caption band the panels' captions would need in cells of that width (one
-   * line, or two when a caption does not fit).
+   * Nominal frame insets and cell bands (px) of a candidate grid, for choosing the grid before the
+   * model exists: a typical title / colorbar / axis band, the floating controls, and the caption
+   * band the panels' captions would need in cells of that width (one line, or two when a caption
+   * does not fit).
    */
   private gridMetrics(n: number, g: GridShape, s: EngineSettings | null): GridMetrics {
     const S = this.pxScale;
@@ -543,8 +523,9 @@ export class Engine {
 
   /**
    * Portrait frames: room under the plot's axis band for the horizontal colorbar (CSS px). Grids of
-   * 3–6 panels fill their cells (no centering slack below the plot), so they reserve the colorbar's
-   * full height; single / two-panel frames keep their layout.
+   * 3–6 panels keep only a tick band under each plot (LUM_BAND_GRID), so the room below the last
+   * row also holds its luminance axis title: they reserve the colorbar's full height; single /
+   * two-panel frames keep their layout.
    */
   private portraitColorbarRoom(n: number): number {
     return n >= 3 ? 80 : 64;
@@ -555,7 +536,7 @@ export class Engine {
     return this.gridOf(this.viewPanels());
   }
 
-  /** Approximate aspect of one view's cell (before HUD insets): drives plate depth / orientation. */
+  /** Approximate aspect of one view's cell (before HUD insets): turns the perspective view in narrow cells. */
   private cellAspect(): number {
     return approxCellAspect(this.grid(), this.vp.width / Math.max(1, this.vp.height));
   }
@@ -568,10 +549,13 @@ export class Engine {
     const layout = this.layoutOverride ?? s.layout;
     const extras = layout === 'sideBySide' ? (s.extras ?? []).map((r) => r.id).join(',') : '';
     const g = this.gridOf(this.panelsFor(s, layout), s);
-    return [layout, s.a?.id, s.b?.id, extras, s.clipLowGray, s.maxNits, s.lang, this.depthScale(s, layout), `${g.cols}x${g.rows}`].join('|');
+    return [layout, s.a?.id, s.b?.id, extras, s.clipLowGray, s.maxNits, s.lang, `${g.cols}x${g.rows}`].join('|');
   }
 
-  /** The frame shape changed the model (portrait depth): rebuild, cross-fading on screen. */
+  /**
+   * The frame changed the side-by-side grid: rebuild, cross-fading on screen. (The plate itself
+   * never depends on the frame: it always has the plate aspect, plate.ts.)
+   */
   private refreshModelForViewport() {
     const s = this.settings;
     if (!s) return;
@@ -730,7 +714,6 @@ export class Engine {
       maxNits: s.maxNits,
       colorMax: s.colorMax,
       heightCap: s.heightCap,
-      depthScale: this.depthScale(s, layout),
     });
     this.modelResult = res;
     this.model = res.ok ? res.model : null;
@@ -749,7 +732,7 @@ export class Engine {
       this.buildViews(m);
       this.panels[0]?.heightGroup.add(this.hover);
     }
-    // Exports rebuild offscreen (layout overrides, export-size depth): the React overlay (empty
+    // Exports rebuild offscreen (layout overrides, export-size grid): the React overlay (empty
     // state, tooltip) must not follow them — it is told once, after the export (endExport).
     if (this.quiet) this.exportRebuilt = true;
     else this.onModel(res);
@@ -913,7 +896,7 @@ export class Engine {
     this.uiInset = bottomCss;
     this.clearFits();
     if (this.intro) this.intro.planKey = '';
-    // The room left for the plots can change the side-by-side grid (and so the plate depth).
+    // The room left for the plots can change the side-by-side grid.
     this.refreshModelForViewport();
     if (this.hasRendered && !this.introDriving && !this.quiet && this.model) {
       this.camTransition = { from: clonePose(this.lastPose), t0: now(), dur: CAM_DUR * 0.7, clip: !!this.clip };
@@ -2687,7 +2670,7 @@ export class Engine {
     const saved = this.exportSaved;
     this.exportSaved = null;
     // Restore the on-screen size FIRST: the model rebuilds below (layout override of an intro video,
-    // export scene, portrait depth of the export frame) then happen at the screen viewport, and
+    // export scene, side-by-side grid of the export frame) then happen at the screen viewport, and
     // (`restoring`) never capture a cross-fade snapshot of an export-sized frame (it would be
     // stretched over the view) nor start a camera move.
     if (gl && saved) {
@@ -2699,8 +2682,8 @@ export class Engine {
       this.pxScale = saved.pxScale;
     }
     // From here on the metrics are the screen's (the room kept for the floating controls decides
-    // the side-by-side grid and plate depth): rebuilding with export metrics would leave a model
-    // that differs from the one on screen before the export. `restoring` keeps it all instant.
+    // the side-by-side grid): rebuilding with export metrics would leave a model that differs from
+    // the one on screen before the export. `restoring` keeps it all instant.
     this.exporting = false;
     this.restoring = true;
     try {

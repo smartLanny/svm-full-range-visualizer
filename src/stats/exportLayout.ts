@@ -162,7 +162,8 @@ export interface CardGrid {
  * Columns, card width and scale that make `n` cards as large as possible inside `box` (output
  * px): for every column count, the card width (CARD_MIN_W…CARD_MAX_W) that balances the width and
  * height limits — so a landscape export gets many columns, a portrait one few, and the cards fill
- * the aspect. `heightAt(cw)` = the (uniform) card height at card width cw (non-increasing).
+ * the aspect. `heightAt(cw)` = the (uniform) card height at card width cw (its heatmap keeps the
+ * plate aspect, so wider cards are taller).
  * The scale is capped at `maxScale` (few cards on a large export stay readable, not huge).
  */
 export function chooseCardGrid(n: number, box: { w: number; h: number }, heightAt: (cw: number) => number, maxScale = Infinity): CardGrid {

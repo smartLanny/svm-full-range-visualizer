@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   approxCellAspect,
+  DEFAULT_GRID_BONUS,
   defaultGrid,
-  depthScaleFor,
-  fillDepthScale,
+  plateFit,
   gridCandidates,
   gridFor,
   gridPlotSize,
@@ -14,16 +14,18 @@ import {
   type CellLayout,
   type GridShape,
 } from './cells';
+import { PLATE_ASPECT } from './plate';
 
 const ins = { left: 70, right: 110, top: 116, bottom: 96 };
 const opt = { pad: 24, capBand: 26, lumBand: 62 };
 const SIDE: GridShape = { cols: 2, rows: 1 };
 const STACK: GridShape = { cols: 1, rows: 2 };
 
-describe('side-by-side cells: two panels (as before)', () => {
-  it('two panels: side by side in landscape frames, stacked in portrait ones (aspect < 1)', () => {
+describe('side-by-side cells: two panels', () => {
+  it('two panels: side by side in landscape frames, stacked in portrait and square ones (bigger plates)', () => {
     const g = (w: number, h: number) => gridFor(2, { width: w, height: h }, () => ({ ins, opt }));
-    expect([g(1920, 1080), g(1000, 1000), g(990, 1000), g(1080, 1920)]).toEqual([SIDE, SIDE, STACK, STACK]);
+    // Square frames: side-by-side cells are twice as tall as a plate, stacked ones fit it.
+    expect([g(1920, 1080), g(1600, 900), g(1024, 768), g(1000, 1000), g(990, 1000), g(1080, 1920)]).toEqual([SIDE, SIDE, SIDE, STACK, STACK, STACK]);
     expect(gridFor(1, { width: 1920, height: 1080 }, () => ({ ins, opt }))).toEqual({ cols: 1, rows: 1 });
     expect([approxCellAspect({ cols: 1, rows: 1 }, 1.6), approxCellAspect(SIDE, 1.6), approxCellAspect(STACK, 0.5625)]).toEqual([1.6, 0.8, 1.125]);
   });
@@ -165,13 +167,12 @@ describe('side-by-side cells: 2–6 panels on a grid', () => {
     // The chosen grid shows plates at least as big as any candidate's (bonus aside).
     const plate = (g: GridShape) => {
       const p = gridPlotSize(sq, ins, g, opt);
-      const pa = 1.45 / fillDepthScale(p);
-      const w = Math.min(p.w, p.h * pa);
-      return w * (w / pa);
+      const f = plateFit(p);
+      return f.w * f.h;
     };
     for (const n of [3, 4, 5, 6]) {
       const best = Math.max(...gridCandidates(n).map(plate));
-      expect(plate(gridFor(n, sq, () => ({ ins, opt }))) * 1.12).toBeGreaterThanOrEqual(best);
+      expect(plate(gridFor(n, sq, () => ({ ins, opt }))) * DEFAULT_GRID_BONUS).toBeGreaterThanOrEqual(best);
     }
   });
 
@@ -211,11 +212,76 @@ describe('side-by-side cells: 2–6 panels on a grid', () => {
     expect(a.y + a.h - lay.fit.top).toBeCloseTo(vp.height - ins.top, 9);
     expect(d.y + lay.fit.bottom).toBeCloseTo(ins.bottom, 9);
   });
+});
 
-  it('narrow cells deepen the plate (quantised)', () => {
-    expect([2, 1, 0.85, 0.7, 0.6, 0.5, 0.3].map(depthScaleFor)).toEqual([1, 1, 1, 1, 1.25, 1.5, 1.5]);
-    // Grids: the plate fills the plot area (never deeper than it, at most 2).
-    expect([300, 220, 200, 150, 120, 100].map((w) => fillDepthScale({ w, h: 200 }))).toEqual([1, 1.25, 1.375, 1.875, 2, 2]);
-    expect(fillDepthScale({ w: 0, h: 200 })).toBe(1);
+describe('stable plate proportions (docs/adr/0002, addendum)', () => {
+  /** Frames: exports, the workbench's 3D canvas at 1600 × 900 / 1280 × 720 and presentation stages. */
+  const frames: { name: string; vp: { width: number; height: number }; portrait: boolean }[] = [
+    { name: '16:9 1920×1080', vp: { width: 1920, height: 1080 }, portrait: false },
+    { name: '16:9 3840×2160', vp: { width: 3840, height: 2160 }, portrait: false },
+    { name: '9:16 1080×1920', vp: { width: 1080, height: 1920 }, portrait: true },
+    { name: '1:1 1080×1080', vp: { width: 1080, height: 1080 }, portrait: false },
+    { name: 'workbench 1600×900', vp: { width: 1028, height: 852 }, portrait: false },
+    { name: 'workbench 1280×720', vp: { width: 708, height: 672 }, portrait: false },
+    { name: 'stage 9:16', vp: { width: 506, height: 900 }, portrait: true },
+    { name: 'stage 16:9', vp: { width: 1600, height: 900 }, portrait: false },
+  ];
+  /** Nominal metrics like the engine's (landscape: colorbar right; portrait: below). */
+  const metrics = (n: number, portrait: boolean) => (g: GridShape) => {
+    const cap = 26 + (g.rows > 1 ? 12 : 0);
+    return {
+      ins: { left: 70, right: portrait ? 30 : 110, top: 84 + cap, bottom: 62 + (portrait ? (n >= 3 ? 80 : 64) : 0) + 34 },
+      opt: { pad: 24, capBand: cap, lumBand: n >= 3 ? 34 : 62 },
+    };
+  };
+
+  it('fitting a plate never stretches it: the plate keeps its aspect and fills one side of the plot', () => {
+    for (const plot of [
+      { w: 800, h: 600 },
+      { w: 200, h: 290 },
+      { w: 980, h: 1500 },
+      { w: 1700, h: 900 },
+    ]) {
+      const f = plateFit(plot);
+      expect(f.w / f.h).toBeCloseTo(PLATE_ASPECT, 9);
+      expect(f.w).toBeLessThanOrEqual(plot.w + 1e-9);
+      expect(f.h).toBeLessThanOrEqual(plot.h + 1e-9);
+      expect(Math.max(f.w / plot.w, f.h / plot.h)).toBeCloseTo(1, 9);
+    }
+    expect(plateFit({ w: 0, h: 100 })).toEqual({ w: 0, h: 0 });
+  });
+
+  it('1–6 panels in every frame: the chosen grid shows plates of the plate aspect, as big as any candidate (familiar grid bonus aside)', () => {
+    const problems: string[] = [];
+    for (const f of frames)
+      for (let n = 1; n <= 6; n++) {
+        const m = metrics(n, f.portrait);
+        const g = gridFor(n, f.vp, m);
+        const plate = plateFit(gridPlotSize(f.vp, m(g).ins, g, m(g).opt));
+        if (!(plate.w > 0) || Math.abs(plate.w / plate.h - PLATE_ASPECT) > 1e-9) problems.push(`${f.name} n=${n}: plate ${plate.w}×${plate.h}`);
+        // Readable: at least ~1/7 of the frame's short side deep even with six panels.
+        if (plate.h < Math.min(f.vp.width, f.vp.height) / 7) problems.push(`${f.name} n=${n}: plate only ${plate.h.toFixed(0)} px deep`);
+        if (n >= 2) {
+          const best = Math.max(...gridCandidates(n).map((c) => ((p) => p.w * p.h)(plateFit(gridPlotSize(f.vp, m(c).ins, c, m(c).opt)))));
+          if (plate.w * plate.h * DEFAULT_GRID_BONUS < best - 1e-6) problems.push(`${f.name} n=${n}: ${g.cols}x${g.rows} not the best grid`);
+        }
+      }
+    expect(problems).toEqual([]);
+  });
+
+  it('grids of the workbench, stages and exports: familiar in 16:9 / 9:16, bigger plates in square frames', () => {
+    const got = (f: (typeof frames)[number]) => [2, 3, 4, 5, 6].map((n) => gridFor(n, f.vp, metrics(n, f.portrait))).map((g) => `${g.cols}x${g.rows}`);
+    const by = Object.fromEntries(frames.map((f) => [f.name, got(f).join(' ')]));
+    expect(by).toEqual({
+      '16:9 1920×1080': '2x1 3x1 2x2 3x2 3x2',
+      '16:9 3840×2160': '2x1 3x1 2x2 3x2 3x2',
+      '9:16 1080×1920': '1x2 1x3 2x2 2x3 2x3',
+      // Square frames: stacked pair, 2 × 2 for three, two columns for five / six.
+      '1:1 1080×1080': '1x2 2x2 2x2 2x3 2x3',
+      'workbench 1600×900': '2x1 2x2 2x2 3x2 3x2',
+      'workbench 1280×720': '2x1 2x2 2x2 2x3 2x3',
+      'stage 9:16': '1x2 1x3 2x2 2x3 2x3',
+      'stage 16:9': '2x1 3x1 2x2 3x2 3x2',
+    });
   });
 });
