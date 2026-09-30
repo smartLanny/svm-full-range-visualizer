@@ -95,11 +95,14 @@ export class ScenarioOverlay {
       this.halo = mk(this.haloMat, 8);
       this.core = mk(this.coreMat, 9);
     }
-    // Labels: "夜间 30%" inside the top-left corner; right-aligned when wider than the rectangle
-    // (the outdoor band is narrow and sits at the plate's right edge).
+    // Labels: "夜间 30%" inside the top-left corner. A rectangle narrower than its label (the
+    // outdoor band at the plate's right edge) gets it just under its bottom edge, right-aligned
+    // (above its top edge when the rectangle reaches the plate's bottom), so it never runs into
+    // the neighbouring rectangle's label.
     const shares = weightShares(config);
     const k = worldPerCssPx / (pxScale * 2);
     const pad = 4 * worldPerCssPx;
+    const plate = panel.rect;
     for (const r of rects) {
       const tt = this.cache.get(`${label(r.id)} ${Math.round(shares[r.id] * 100)}%`, SCENARIO_LABEL_STYLE, pxScale * 2);
       const mat = new THREE.SpriteMaterial({ map: tt.texture, transparent: true, depthTest: false, depthWrite: false });
@@ -107,8 +110,14 @@ export class ScenarioOverlay {
       const w = tt.w * k;
       const h = tt.h * k;
       sp.scale.set(w, h, 1);
-      const fits = w + 2 * pad <= r.x1 - r.x0;
-      sp.position.set(fits ? r.x0 + pad + w / 2 : r.x1 - pad - w / 2, 0, r.z0 + pad + h / 2);
+      if (w + 2 * pad <= r.x1 - r.x0) sp.position.set(r.x0 + pad + w / 2, 0, r.z0 + pad + h / 2);
+      else {
+        const x = Math.max(plate.x0 + w / 2, r.x1 - pad - w / 2);
+        const below = r.z1 + pad * 0.5 + h / 2;
+        const above = r.z0 - pad * 0.5 - h / 2;
+        const z = below + h / 2 <= plate.z1 ? below : above - h / 2 >= plate.z0 ? above : r.z0 + pad + h / 2;
+        sp.position.set(x, 0, z);
+      }
       sp.renderOrder = 10;
       this.sprites.push(sp);
       this.group.add(sp);

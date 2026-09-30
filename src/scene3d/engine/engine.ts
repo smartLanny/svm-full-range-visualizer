@@ -700,11 +700,12 @@ export class Engine {
     this.scenarioOverlayKey = key;
     const m = this.model!;
     const label = (id: string) => translate(s.lang, `stats.scenario.name.${id}`);
-    for (const p of m.panels) {
+    m.panels.forEach((p, i) => {
       const o = new ScenarioOverlay(p, m, cfg, label, wpc, this.pxScale);
       this.scenarioOverlays.push(o);
-      this.world.add(o.group);
-    }
+      // Inside the panel's group: side by side, each view shows only its own panels (showOnly).
+      (this.panels[i]?.group ?? this.world).add(o.group);
+    });
   }
 
   private disposeAxes() {
