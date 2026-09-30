@@ -276,7 +276,7 @@ const strings: StringsModule = {
       cap: '亮度上限',
       cap500: '500 nits',
       capAll: '全部',
-      capHint: '隐藏档位亮度高于 500 nits 的列（3D 与统计）',
+      capHint: '亮度横轴统一止于 500 nits：3D 与统计隐藏档位亮度更高的列，2D 灰阶截面不画更亮的点',
     },
     colormaps: {
       RD_YL_BU_ENHANCED: '增强 RdYlBu（推荐）',
@@ -634,7 +634,7 @@ const strings: StringsModule = {
       cap: 'Luminance cap',
       cap500: '500 nits',
       capAll: 'All',
-      capHint: 'Hide columns above 500 nits level luminance (3D and stats)',
+      capHint: 'One 500-nit end for the luminance axis: 3D and stats hide brighter levels, the 2D gray slice leaves out brighter points',
     },
     colormaps: {
       RD_YL_BU_ENHANCED: 'Enhanced RdYlBu (recommended)',

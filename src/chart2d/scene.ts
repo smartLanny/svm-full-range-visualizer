@@ -29,6 +29,11 @@ export interface ChartInputs {
   sliceNits: number;
   axisMode: AxisMode;
   clipLowGray: boolean;
+  /**
+   * Level-luminance cap (settings.maxNits, shared with 3D and the stats; null = no cap): the right
+   * end of the gray slice's luminance axis in every axis mode. Absent = no cap.
+   */
+  maxNits?: number | null;
   presenting: boolean;
   presentBlack: boolean;
   /** overlays.title (H shortcut): draw the title + subtitle. Default true. */
@@ -158,8 +163,10 @@ const sameRecs = (a: SvmRecord[], b: SvmRecord[]) => a.length === b.length && a.
 
 const toRange = (mode: SliceMode, e: Extent | null): URange | null =>
   e && (mode !== 'gray' || e.xMin > 0) ? { x0: toAxisX(mode, e.xMin), x1: toAxisX(mode, e.xMax), y0: e.yMin, y1: e.yMax } : null;
-const toExtent = (mode: SliceMode, r: URange | null): Extent | null =>
-  r ? { xMin: mode === 'gray' ? Math.pow(10, r.x0) : r.x0, xMax: mode === 'gray' ? Math.pow(10, r.x1) : r.x1, yMin: r.y0, yMax: r.y1 } : null;
+/** The level cap (ChartInputs.maxNits) of a gray slice's extent (see Extent.xCap). */
+const withCap = (mode: SliceMode, e: Extent | null, cap: number | null): Extent | null => (e && mode === 'gray' && cap !== null ? { ...e, xCap: cap } : e);
+const toExtent = (mode: SliceMode, r: URange | null, cap: number | null): Extent | null =>
+  withCap(mode, r ? { xMin: mode === 'gray' ? Math.pow(10, r.x0) : r.x0, xMax: mode === 'gray' ? Math.pow(10, r.x1) : r.x1, yMin: r.y0, yMax: r.y1 } : null, cap);
 
 /**
  * A sweep's range track (axisTrack.ts) over the visible records, with the per-sample axes of the
@@ -169,6 +176,7 @@ const toExtent = (mode: SliceMode, r: URange | null): Extent | null =>
 interface TrackMemo {
   key: string;
   recs: SvmRecord[];
+  cap: number | null;
   track: RangeTrack | null;
   probeAxes: Map<AxisMode, Axes[]>;
   reserve: Map<AxisMode, string[]>;
@@ -176,11 +184,11 @@ interface TrackMemo {
   speeds: Map<AxisMode, Float64Array[]>;
 }
 let trackMemo: TrackMemo[] = [];
-function memoTrack(recs: SvmRecord[], mode: SliceMode, clip: boolean): TrackMemo {
-  const key = `${mode}|${clip}`;
+function memoTrack(recs: SvmRecord[], mode: SliceMode, clip: boolean, cap: number | null): TrackMemo {
+  const key = `${mode}|${clip}|${cap}`;
   const hit = trackMemo.find((m) => m.key === key && sameRecs(m.recs, recs));
   if (hit) return hit;
-  const value: TrackMemo = { key, recs, track: sweepTrack(recs, mode, clip), probeAxes: new Map(), reserve: new Map(), levels: new Map(), speeds: new Map() };
+  const value: TrackMemo = { key, recs, cap, track: sweepTrack(recs, mode, clip, cap), probeAxes: new Map(), reserve: new Map(), levels: new Map(), speeds: new Map() };
   trackMemo = [value, ...trackMemo].slice(0, 3);
   return value;
 }
@@ -189,7 +197,7 @@ function memoTrack(recs: SvmRecord[], mode: SliceMode, clip: boolean): TrackMemo
 function sweepProbeAxes(m: TrackMemo, mode: SliceMode, axisMode: AxisMode): Axes[] {
   let v = m.probeAxes.get(axisMode);
   if (!v) {
-    v = Array.from({ length: PROBE_SAMPLES + 1 }, (_, i) => buildAxes(mode, axisMode, toExtent(mode, m.track ? trackAt(m.track, (i / PROBE_SAMPLES) * SWEEP_DURATION) : null)));
+    v = Array.from({ length: PROBE_SAMPLES + 1 }, (_, i) => buildAxes(mode, axisMode, toExtent(mode, m.track ? trackAt(m.track, (i / PROBE_SAMPLES) * SWEEP_DURATION) : null, m.cap)));
     m.probeAxes.set(axisMode, v);
   }
   return v;
@@ -208,7 +216,7 @@ function sweepLevels(m: TrackMemo, mode: SliceMode, axisMode: AxisMode): { x: Fl
   if (!v) {
     const tr = m.track;
     const n = tr ? tr.x0.length : 1;
-    const ext = Array.from({ length: n }, (_, i) => toExtent(mode, tr ? trackAt(tr, i * TRACK_DT) : null));
+    const ext = Array.from({ length: n }, (_, i) => toExtent(mode, tr ? trackAt(tr, i * TRACK_DT) : null, m.cap));
     const cache = new Map<string, { x: number; y: number }>();
     const lv = (i: number, bias: number) => {
       const k = `${i}|${bias}`;
@@ -250,7 +258,7 @@ function sweepSpeeds(m: TrackMemo, mode: SliceMode, axisMode: AxisMode): Float64
   let v = m.speeds.get(axisMode);
   if (!v) {
     const tr = m.track;
-    v = tr ? speedSeries(mode, axisMode, tr.x0.length, TRACK_DT, (i) => toExtent(mode, trackAt(tr, i * TRACK_DT)), Math.round(TRACK_HOLD / TRACK_DT)) : [0, 1, 2, 3].map(() => new Float64Array(1));
+    v = tr ? speedSeries(mode, axisMode, tr.x0.length, TRACK_DT, (i) => toExtent(mode, trackAt(tr, i * TRACK_DT), m.cap), Math.round(TRACK_HOLD / TRACK_DT)) : [0, 1, 2, 3].map(() => new Float64Array(1));
     m.speeds.set(axisMode, v);
   }
   return v;
@@ -274,7 +282,7 @@ function sweepReserve(m: TrackMemo, mode: SliceMode, axisMode: AxisMode): string
     const cols: string[][] = [[], [], [], []];
     const n = m.track ? m.track.x0.length : 0;
     for (let i = 0; i < n; i++) {
-      const e = toExtent(mode, trackAt(m.track!, i * TRACK_DT));
+      const e = toExtent(mode, trackAt(m.track!, i * TRACK_DT), m.cap);
       rangeValues(mode, xDomain(mode, axisMode, e), yDomain(axisMode, e)).forEach((s, k) => cols[k].push(s));
     }
     v = cols.map(widest);
@@ -298,13 +306,13 @@ function memoGlide(recs: SvmRecord[], key: string, make: () => GlideMemo): Glide
 }
 
 let probeMemo: { key: string; recs: SvmRecord[]; value: LegendProbe }[] = [];
-function memoProbe(recs: SvmRecord[], mode: SliceMode, clip: boolean, t: number | null, param: number): LegendProbe {
-  const key = t === null ? `static|${mode}|${clip}|${param}` : `sweep|${mode}|${clip}`;
+function memoProbe(recs: SvmRecord[], mode: SliceMode, clip: boolean, cap: number | null, t: number | null, param: number): LegendProbe {
+  const key = t === null ? `static|${mode}|${clip}|${cap}|${param}` : `sweep|${mode}|${clip}|${cap}`;
   const hit = probeMemo.find((m) => m.key === key && sameRecs(m.recs, recs));
   if (hit) return hit.value;
   const params = t === null ? [param] : Array.from({ length: PROBE_SAMPLES + 1 }, (_, i) => sweepParam(mode, (i / PROBE_SAMPLES) * SWEEP_DURATION));
   const slice = t === null ? staticSliceFor : sliceFor;
-  const frames = params.map((p) => recs.map((r) => curveOf(mode, slice(r, mode, p, clip))).filter((c): c is Curve => !!c));
+  const frames = params.map((p) => recs.map((r) => curveOf(mode, slice(r, mode, p, clip, cap))).filter((c): c is Curve => !!c));
   const value = { frames };
   probeMemo = [{ key, recs, value }, ...probeMemo.filter((m) => !(m.key === key && sameRecs(m.recs, recs)))].slice(0, 4);
   return value;
@@ -389,6 +397,7 @@ export interface SceneOptions {
 /** Build the scene for the frame described by `opts`. */
 export function buildScene(inputs: ChartInputs, opts: SceneOptions): Scene {
   const { lang, sliceMode: mode, axisMode, clipLowGray } = inputs;
+  const cap = inputs.maxNits ?? null;
   const tr = (k: string, v?: Record<string, string | number>) => translate(lang, k, v);
   const hidden = new Set(inputs.hiddenIds);
   const visible = inputs.records.filter((r) => !hidden.has(r.id));
@@ -408,11 +417,11 @@ export function buildScene(inputs: ChartInputs, opts: SceneOptions): Scene {
   const refCache = new Map<SvmRecord, CurvePoint[]>();
   const refOf = (rec: SvmRecord) => {
     let r = refCache.get(rec);
-    if (!r) refCache.set(rec, (r = sliceFor(rec, mode, paramStatic, clipLowGray)));
+    if (!r) refCache.set(rec, (r = sliceFor(rec, mode, paramStatic, clipLowGray, cap)));
     return r;
   };
   const framePoints = (rec: SvmRecord, prm: number, w: number): CurvePoint[] => {
-    const raw = sliceFor(rec, mode, prm, clipLowGray);
+    const raw = sliceFor(rec, mode, prm, clipLowGray, cap);
     return w === 1 ? settleSlice(raw) : w > 0 ? settleSlice(raw, w, refOf(rec)) : raw;
   };
 
@@ -437,11 +446,14 @@ export function buildScene(inputs: ChartInputs, opts: SceneOptions): Scene {
   // smoothed opacity-weighted range of the current frame (axisTrack.ts, a pure function of t);
   // during a glide, the glide's own frames, pinned to the exact ranges of its two ends.
   const moving = axisMode !== 'standard' && (opts.t !== null || !!blend);
-  const tm = moving && (opts.t !== null || (blend && blend.from !== null)) ? memoTrack(visible, mode, clipLowGray) : null;
+  const tm = moving && (opts.t !== null || (blend && blend.from !== null)) ? memoTrack(visible, mode, clipLowGray, cap) : null;
   const staticExtents = new Map<number, Extent | null>();
   const staticExtent = (prm: number): Extent | null => {
     if (!staticExtents.has(prm))
-      staticExtents.set(prm, prm === param && settle === 1 ? slicesExtent(series.map((se) => se.points)) : slicesExtent(visible.map((r) => staticSliceFor(r, mode, prm, clipLowGray))));
+      staticExtents.set(
+        prm,
+        withCap(mode, prm === param && settle === 1 ? slicesExtent(series.map((se) => se.points)) : slicesExtent(visible.map((r) => staticSliceFor(r, mode, prm, clipLowGray, cap))), cap),
+      );
     return staticExtents.get(prm)!;
   };
   const endRange = (tt: number | null, prm: number): URange | null => (tt === null ? toRange(mode, staticExtent(prm)) : tm?.track ? trackAt(tm.track, tt) : null);
@@ -456,7 +468,7 @@ export function buildScene(inputs: ChartInputs, opts: SceneOptions): Scene {
   if (axisMode !== 'standard') {
     if (!moving) extent = staticExtent(param);
     else if (!blend) {
-      extent = toExtent(mode, endRange(opts.t, paramTo));
+      extent = toExtent(mode, endRange(opts.t, paramTo), cap);
       const tt = opts.t!;
       const tr = tm!.track;
       const sp = tr ? sweepSpeeds(tm!, mode, axisMode).map((a) => seriesAt(a, TRACK_DT, tt)) : null;
@@ -464,16 +476,16 @@ export function buildScene(inputs: ChartInputs, opts: SceneOptions): Scene {
       motion = { settle: 0, from: null, level: endLevels(tt, paramTo), speed: spd };
     } else {
       const bl = blend;
-      const key = `${mode}|${clipLowGray}|${bl.from}|${paramFrom}|${opts.t}|${paramTo}`;
+      const key = `${mode}|${clipLowGray}|${cap}|${bl.from}|${paramFrom}|${opts.t}|${paramTo}`;
       const gm = memoGlide(visible, `${key}|${axisMode}`, () => {
         const w = (p: number) => staticW(bl.from) + (staticW(opts.t) - staticW(bl.from)) * p;
         const frameAt = (p: number) => visible.map((r) => framePoints(r, mixParam(mode, paramFrom, paramTo, p), w(p)));
         const range = glideTrack(mode, frameAt, endRange(bl.from, paramFrom), endRange(opts.t, paramTo));
-        const speeds = range ? speedSeries(mode, axisMode, GLIDE_SAMPLES + 1, 1 / GLIDE_SAMPLES, (i) => toExtent(mode, range(i / GLIDE_SAMPLES)), 4) : null;
+        const speeds = range ? speedSeries(mode, axisMode, GLIDE_SAMPLES + 1, 1 / GLIDE_SAMPLES, (i) => toExtent(mode, range(i / GLIDE_SAMPLES), cap), 4) : null;
         return { range, speeds };
       });
       const glide = gm.range;
-      extent = toExtent(mode, glide ? glide(bl.p) : null);
+      extent = toExtent(mode, glide ? glide(bl.p) : null, cap);
       staticEnd = bl.from === null ? staticExtent(paramFrom) : opts.t === null ? staticExtent(paramTo) : null;
       const la = endLevels(bl.from, paramFrom);
       const lb = endLevels(opts.t, paramTo);
@@ -549,11 +561,11 @@ export function buildScene(inputs: ChartInputs, opts: SceneOptions): Scene {
   // toggling a record in the legend never moves the legend away from under the pointer.
   // Each end is placed with the axes it is drawn with: a static slice with its own axes, a sweep
   // with every probe sample's moving axes (one corner for the whole sweep either way).
-  const legendProbe = memoProbe(legendRecs, mode, clipLowGray, opts.t, paramTo);
-  const legendProbeFrom = blend ? memoProbe(legendRecs, mode, clipLowGray, blend.from, paramFrom) : null;
+  const legendProbe = memoProbe(legendRecs, mode, clipLowGray, cap, opts.t, paramTo);
+  const legendProbeFrom = blend ? memoProbe(legendRecs, mode, clipLowGray, cap, blend.from, paramFrom) : null;
   const probeAxes = (tt: number | null, prm: number): ProbeAxes => {
     if (axisMode === 'standard') return axes;
-    if (tt !== null) return sweepProbeAxes(tm ?? memoTrack(visible, mode, clipLowGray), mode, axisMode);
+    if (tt !== null) return sweepProbeAxes(tm ?? memoTrack(visible, mode, clipLowGray, cap), mode, axisMode);
     return !moving ? axes : buildAxes(mode, axisMode, staticExtent(prm));
   };
   const legendAxes = probeAxes(opts.t, paramTo);

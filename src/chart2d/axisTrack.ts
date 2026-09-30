@@ -247,19 +247,19 @@ export function smoothTrack(raw: (URange | null)[], dt: number, holdS: number, k
 }
 
 /** Raw (unsmoothed) weighted range of every sweep frame at TRACK_DT. */
-export function rawSweepRanges(records: SvmRecord[], mode: SliceMode, clipLowGray: boolean): (URange | null)[] {
+export function rawSweepRanges(records: SvmRecord[], mode: SliceMode, clipLowGray: boolean, maxNits: number | null = null): (URange | null)[] {
   const n = Math.round(SWEEP_DURATION / TRACK_DT);
   const out: (URange | null)[] = [];
   for (let i = 0; i <= n; i++) {
     const prm = sweepParam(mode, i * TRACK_DT);
-    out.push(weightedRange(mode, records.map((r) => sliceFor(r, mode, prm, clipLowGray))));
+    out.push(weightedRange(mode, records.map((r) => sliceFor(r, mode, prm, clipLowGray, maxNits))));
   }
   return out;
 }
 
 /** The smoothed range track of a sweep over `records` (null = no data in any frame). */
-export function sweepTrack(records: SvmRecord[], mode: SliceMode, clipLowGray: boolean): RangeTrack | null {
-  return smoothTrack(rawSweepRanges(records, mode, clipLowGray), TRACK_DT, TRACK_HOLD, TRACK_KERNEL, TRACK_SPEED);
+export function sweepTrack(records: SvmRecord[], mode: SliceMode, clipLowGray: boolean, maxNits: number | null = null): RangeTrack | null {
+  return smoothTrack(rawSweepRanges(records, mode, clipLowGray, maxNits), TRACK_DT, TRACK_HOLD, TRACK_KERNEL, TRACK_SPEED);
 }
 
 /**

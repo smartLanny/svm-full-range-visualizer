@@ -152,6 +152,9 @@ function xRange(slice: SliceMode, mode: AxisMode, extent: Extent | null): [numbe
       const pad = Math.max(0.04 * (b - a), 0.02);
       lo = Math.pow(10, a - pad);
       hi = Math.pow(10, b + pad);
+      // Under the level cap (500 nits by default) the pad never pushes the axis past the cap: the
+      // points are capped too, so the axis still contains them.
+      if (extent.xCap !== undefined) hi = Math.min(hi, Math.max(extent.xCap, extent.xMax));
     }
     return [lo, hi];
   }

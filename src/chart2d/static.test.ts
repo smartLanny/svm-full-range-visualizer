@@ -312,3 +312,40 @@ describe('presentation title clears the exit button (presentSafeLeft)', () => {
     expect(titleX(1600, 56)).toBeCloseTo(titleX(1600, 0), 9);
   });
 });
+
+describe('unified 500-nit luminance cap (settings.maxNits, shared with 3D and the stats)', () => {
+  const end = (u: number) => Math.pow(10, u);
+  it('no gray-slice point and no axis end passes the cap, in any axis mode, static or sweeping', () => {
+    for (const axisMode of ['standard', 'adaptive', 'free'] as const) {
+      for (const t of [null, 0, 2.5, 5, 10]) {
+        const sc = buildScene(inputs({ sliceMode: 'gray', sliceGray: 255, axisMode, maxNits: 500 }), { t, interactive: false });
+        for (const s of sc.series) for (const p of s.points) expect(p.x).toBeLessThanOrEqual(500 * (1 + 1e-9));
+        expect(end(sc.axes.x.u1)).toBeLessThanOrEqual(500 * (1 + 1e-6));
+      }
+    }
+  });
+  it('with the cap off the adaptive axis reaches the brightest reading', () => {
+    const brightest = Math.max(...records.flatMap((r) => r.matrix.headerNits));
+    expect(brightest).toBeGreaterThan(900);
+    const sc = buildScene(inputs({ sliceMode: 'gray', sliceGray: 255, axisMode: 'adaptive', maxNits: null }), { t: null, interactive: false });
+    expect(Math.max(...sc.series.flatMap((s) => s.points.map((p) => p.x)))).toBeCloseTo(brightest, 6);
+    expect(end(sc.axes.x.u1)).toBeGreaterThan(brightest);
+  });
+});
+
+describe('unified cap: the moving gray axis stays smooth', () => {
+  it('its ends move by a small share of the span per 60 fps frame, and every opaque point stays inside', () => {
+    for (const axisMode of ['adaptive', 'free'] as const) {
+      let prev: { u0: number; u1: number } | null = null;
+      let worst = 0;
+      for (let f = 0; f <= 600; f++) {
+        const sc = buildScene(inputs({ sliceMode: 'gray', axisMode, maxNits: 500 }), { t: f / 60, interactive: false });
+        const { u0, u1 } = sc.axes.x;
+        if (prev) worst = Math.max(worst, Math.abs(u1 - prev.u1) / (u1 - u0), Math.abs(u0 - prev.u0) / (u1 - u0));
+        prev = { u0, u1 };
+        for (const s of sc.series) for (const p of s.points) if (p.a >= 0.999) expect(Math.log10(p.x)).toBeLessThanOrEqual(u1 + 1e-9);
+      }
+      expect(worst).toBeLessThan(0.02);
+    }
+  }, 60000);
+});

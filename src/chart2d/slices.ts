@@ -287,13 +287,21 @@ export function settleSlice(pts: CurvePoint[], w = 1, ref: CurvePoint[] = pts): 
 // ---------------------------------------------------------------------------------------------
 // Slice dispatch, sweeps and data extents.
 
-export function sliceFor(rec: SvmRecord, mode: SliceMode, param: number, clipLowGray: boolean): CurvePoint[] {
-  return mode === 'gray' ? smoothSliceAtGray(rec, param) : smoothSliceAtLevel(rec, param, { clipLowGray });
+/**
+ * The slice of a record. `maxNits` (settings: the level-luminance cap shared with 3D and the stats,
+ * 500 nits by default; null = no cap) is the right end of the gray slice's luminance axis: points
+ * brighter than it are left out, so no axis mode reaches past it. The brightness slice's levels
+ * are 2–500 nits already.
+ */
+export function sliceFor(rec: SvmRecord, mode: SliceMode, param: number, clipLowGray: boolean, maxNits: number | null = null): CurvePoint[] {
+  if (mode !== 'gray') return smoothSliceAtLevel(rec, param, { clipLowGray });
+  const pts = smoothSliceAtGray(rec, param);
+  return maxNits === null ? pts : pts.filter((p) => p.x <= maxNits * (1 + 1e-9));
 }
 
 /** The static slice (readings only, see settleSlice) of a record. */
-export function staticSliceFor(rec: SvmRecord, mode: SliceMode, param: number, clipLowGray: boolean): CurvePoint[] {
-  return settleSlice(sliceFor(rec, mode, param, clipLowGray));
+export function staticSliceFor(rec: SvmRecord, mode: SliceMode, param: number, clipLowGray: boolean, maxNits: number | null = null): CurvePoint[] {
+  return settleSlice(sliceFor(rec, mode, param, clipLowGray, maxNits));
 }
 
 export const SWEEP_DURATION = 10;
@@ -319,6 +327,8 @@ export interface Extent {
   xMax: number;
   yMin: number;
   yMax: number;
+  /** Gray slice under the level cap (settings.maxNits): the x axis ends at most here (nits). */
+  xCap?: number;
 }
 
 function extendExtent(e: Extent | null, pts: SlicePoint[]): Extent | null {

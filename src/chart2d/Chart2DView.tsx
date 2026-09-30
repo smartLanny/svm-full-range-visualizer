@@ -94,6 +94,7 @@ export default function Chart2DView() {
   const sliceNits = useAppStore((s) => s.sliceNits);
   const axisMode = useAppStore((s) => s.axisMode);
   const clipLowGray = useAppStore((s) => s.clipLowGray);
+  const maxNits = useAppStore((s) => s.maxNits);
   const presenting = useAppStore((s) => s.presenting);
   const presentBlack = useAppStore((s) => s.presentBlack);
   const presentSafeLeft = useAppStore((s) => s.presentSafeLeft);
@@ -113,8 +114,8 @@ export default function Chart2DView() {
   const [tableNonce, setTableNonce] = useState(0);
 
   const inputs: ChartInputs = useMemo(
-    () => ({ records, hiddenIds, styles, lang, sliceMode, sliceGray, sliceNits, axisMode, clipLowGray, presenting, presentBlack, showTitle, showLegend }),
-    [records, hiddenIds, styles, lang, sliceMode, sliceGray, sliceNits, axisMode, clipLowGray, presenting, presentBlack, showTitle, showLegend],
+    () => ({ records, hiddenIds, styles, lang, sliceMode, sliceGray, sliceNits, axisMode, clipLowGray, maxNits, presenting, presentBlack, showTitle, showLegend }),
+    [records, hiddenIds, styles, lang, sliceMode, sliceGray, sliceNits, axisMode, clipLowGray, maxNits, presenting, presentBlack, showTitle, showLegend],
   );
   const visibleCount = useMemo(() => records.filter((r) => !hiddenIds.includes(r.id)).length, [records, hiddenIds]);
 
