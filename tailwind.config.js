@@ -30,6 +30,7 @@ export default {
         },
         safe: '#22c55e',        // SVM < 0.4 reference line
         critical: '#ef4444',    // SVM >= 1.0 reference line
+        strong: '#d946ef',      // scenario grade 强烈 (SVM >= 3.0), docs/adr/0009 addendum
       },
       fontFamily: {
         sans: ['Inter', '"PingFang SC"', '"Microsoft YaHei"', '"Noto Sans SC"', '"Source Han Sans SC"', 'system-ui', 'sans-serif'],

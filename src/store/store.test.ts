@@ -36,6 +36,44 @@ describe('sanitizeSettings (persisted settings are checked key by key)', () => {
   });
 });
 
+describe('sanitizeSettings — scenario reference (docs/adr/0009 addendum)', () => {
+  const S = DEFAULT_SETTINGS.scenarios;
+  it('defaults: 夜间 2–20 nits × G15–100 30 %, 室内 50–250 × G15–255 50 %, 户外 400–500 × G128–255 20 %; overlay off', () => {
+    expect(S).toEqual({
+      night: { nitsMin: 2, nitsMax: 20, grayMin: 15, grayMax: 100, weight: 30 },
+      indoor: { nitsMin: 50, nitsMax: 250, grayMin: 15, grayMax: 255, weight: 50 },
+      outdoor: { nitsMin: 400, nitsMax: 500, grayMin: 128, grayMax: 255, weight: 20 },
+    });
+    expect(DEFAULT_SETTINGS.overlays.scenarios).toBe(false);
+  });
+  it('a save without the key keeps the defaults (no revision bump needed)', () => {
+    expect(sanitizeSettings({ rev: 2, lang: 'en' })).toEqual({ lang: 'en' });
+    expect(sanitizeSettings({ overlays: { title: false } }).overlays?.scenarios).toBe(false);
+    expect(sanitizeSettings({ overlays: { scenarios: true } }).overlays?.scenarios).toBe(true);
+  });
+  it('keeps valid scenarios, replaces each invalid one by its default', () => {
+    const night = { nitsMin: 1, nitsMax: 30, grayMin: 20, grayMax: 90, weight: 40 };
+    const out = sanitizeSettings({
+      rev: 2,
+      scenarios: {
+        night,
+        indoor: { nitsMin: 250, nitsMax: 50, grayMin: 15, grayMax: 255, weight: 50 }, // min > max
+        outdoor: { nitsMin: 400, nitsMax: 900, grayMin: 128, grayMax: 255, weight: 20 }, // over the 500-nit cap
+      },
+    });
+    expect(out.scenarios).toEqual({ night, indoor: S.indoor, outdoor: S.outdoor });
+    const bad = { ...S, indoor: { ...S.indoor, grayMax: 256 }, outdoor: { ...S.outdoor, weight: -3 } };
+    expect(sanitizeSettings({ scenarios: bad }).scenarios).toEqual(S);
+    expect(sanitizeSettings({ scenarios: { night: { ...S.night, nitsMin: 0 } } }).scenarios).toEqual(S);
+    // all weights 0 -> default weights
+    const zero = { night: { ...S.night, weight: 0 }, indoor: { ...S.indoor, weight: 0 }, outdoor: { ...S.outdoor, weight: 0 } };
+    expect(sanitizeSettings({ scenarios: zero }).scenarios).toEqual(S);
+    // not an object: the key is dropped (defaults apply)
+    expect(sanitizeSettings({ scenarios: 'x' }).scenarios).toBeUndefined();
+    expect(sanitizeSettings({ scenarios: [S.night] }).scenarios).toBeUndefined();
+  });
+});
+
 describe('sanitizeUserRecords (a bad stored record never blanks the app)', () => {
   it('drops invalid records and keeps the rest', () => {
     const good = rec('u1');

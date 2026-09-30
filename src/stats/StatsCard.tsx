@@ -2,12 +2,13 @@ import React from 'react';
 import { Box } from 'lucide-react';
 import type { ColormapType, Lang } from '../types';
 import type { RecordStyle } from '../data/colors';
+import type { ScenarioConfig } from '../data/scenarios';
 import { deviceLabel, modeLabel } from '../data/records';
 import { fmtNits } from '../data/grid';
 import { useT } from '../i18n';
 import { Badge, Button, cn } from '../ui';
 import { fmtSvmOrDash, markOf, type MetricKey, type Ranking, type StatsRow } from './model';
-import { CaveatMark, caveatText, CoverageValue, DenoiseBadge, RecordKey, ShareBar, SvmValue } from './parts';
+import { CaveatMark, caveatText, CoverageValue, DenoiseBadge, RecordKey, ScenarioBlock, ShareBar, SvmValue } from './parts';
 import { Thumbnail, type ThumbExtent } from './Thumbnail';
 
 interface Props {
@@ -20,6 +21,8 @@ interface Props {
   colormap: ColormapType;
   colorMax: number;
   extent: ThumbExtent | null;
+  /** Scenario ranges / weights (tooltip of the scenario reference). */
+  scenarios: ScenarioConfig;
   onOpen3d: (id: string) => void;
 }
 
@@ -57,7 +60,7 @@ function Metric({
   );
 }
 
-export function StatsCard({ row, style, lang, rank, clipLowGray, maxNits, colormap, colorMax, extent, onOpen3d }: Props) {
+export function StatsCard({ row, style, lang, rank, clipLowGray, maxNits, colormap, colorMax, extent, scenarios, onOpen3d }: Props) {
   const t = useT();
   const { rec, stats: s } = row;
   const device = deviceLabel(rec, lang);
@@ -96,7 +99,7 @@ export function StatsCard({ row, style, lang, rank, clipLowGray, maxNits, colorm
       </header>
 
       {empty ? (
-        <div className="mx-4 mb-4 flex flex-1 flex-col items-center justify-center rounded-lg border border-dashed border-line-strong py-10 text-center">
+        <div className="mx-4 flex flex-1 flex-col items-center justify-center rounded-lg border border-dashed border-line-strong py-10 text-center">
           <div className="text-xs text-ink-2">{t('stats.noCells')}</div>
           <div className="mt-1 text-2xs text-ink-3">{t('stats.noCellsHint')}</div>
         </div>
@@ -209,7 +212,7 @@ export function StatsCard({ row, style, lang, rank, clipLowGray, maxNits, colorm
           )}
 
           {/* SVM at typical luminances */}
-          <div className="mx-4 mb-4 mt-3 rounded-lg bg-surface-1 px-3 py-2.5 ring-1 ring-inset ring-line" title={t('stats.metric.svmAtHint')}>
+          <div className="mx-4 mt-3 rounded-lg bg-surface-1 px-3 py-2.5 ring-1 ring-inset ring-line" title={t('stats.metric.svmAtHint')}>
             <div className="flex items-baseline justify-between text-2xs text-ink-3">
               <span>{t('stats.metric.svmAt')}</span>
               {s.sliceGray !== null && <span className="tabular-nums">{t('stats.metric.svmAtSlice', { g: Math.round(s.sliceGray) })}</span>}
@@ -231,6 +234,9 @@ export function StatsCard({ row, style, lang, rank, clipLowGray, maxNits, colorm
           </div>
         </>
       )}
+
+      {/* scenario reference: its own ranges, independent of the scope — shown even when the scope is empty */}
+      <ScenarioBlock row={row} rank={rank} config={scenarios} />
     </article>
   );
 }

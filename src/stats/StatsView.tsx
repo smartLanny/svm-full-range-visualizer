@@ -66,6 +66,7 @@ export default function StatsView() {
   const sliceGray = useAppStore((s) => s.sliceGray);
   const colormap = useAppStore((s) => s.colormap);
   const colorMax = useAppStore((s) => s.colorMax);
+  const scenarios = useAppStore((s) => s.scenarios);
   const set = useAppStore((s) => s.set);
   const setActive = useAppStore((s) => s.setActive);
   // Pure-black presentation background (recording / keying): the page and its bars are #000.
@@ -86,7 +87,7 @@ export default function StatsView() {
     }
   }, [ui]);
 
-  const rows = useMemo(() => buildRows(records, { clipLowGray, maxNits, sliceGray }), [records, clipLowGray, maxNits, sliceGray]);
+  const rows = useMemo(() => buildRows(records, { clipLowGray, maxNits, sliceGray, scenarios }), [records, clipLowGray, maxNits, sliceGray, scenarios]);
   const sorted = useMemo(() => sortRows(rows, ui.sortKey, ui.sortDir, lang), [rows, ui.sortKey, ui.sortDir, lang]);
   const rank = useMemo(() => rankRows(rows), [rows]);
   const extent = useMemo(() => thumbExtent(records, { clipLowGray, maxNits }), [records, clipLowGray, maxNits]);
@@ -143,7 +144,7 @@ export default function StatsView() {
   const rootRef = useRef<HTMLDivElement>(null);
   const exportRef = useRef<{ input: StatsExportInput; mode: ViewMode }>(null!);
   exportRef.current = {
-    input: { lang, rows: sorted, styles, rank, extent, clipLowGray, maxNits, sliceGray, colormap, colorMax, sortKey: ui.sortKey, sortDir: ui.sortDir, scope },
+    input: { lang, rows: sorted, styles, rank, extent, clipLowGray, maxNits, sliceGray, colormap, colorMax, scenarios, sortKey: ui.sortKey, sortDir: ui.sortDir, scope },
     mode: ui.mode,
   };
   useEffect(() => {
@@ -233,6 +234,7 @@ export default function StatsView() {
     { value: 'at1', label: 'SVM @10 nits' },
     { value: 'at3', label: 'SVM @100 nits' },
     { value: 'coverage', label: t('stats.col.coverage') },
+    { value: 'scenario', label: t('stats.col.scenario') },
   ];
   const dirLabel = t(ui.sortDir === 'asc' ? 'stats.sort.asc' : 'stats.sort.desc');
   const footnote =
@@ -349,6 +351,7 @@ export default function StatsView() {
                     colormap={colormap}
                     colorMax={colorMax}
                     extent={extent}
+                    scenarios={scenarios}
                     onOpen3d={onOpen3d}
                   />
                 ))}
@@ -366,6 +369,7 @@ export default function StatsView() {
                 sortKey={ui.sortKey}
                 sortDir={ui.sortDir}
                 sliceGray={sliceGray}
+                scenarios={scenarios}
                 onSort={onSort}
                 onOpen3d={onOpen3d}
               />
@@ -406,6 +410,7 @@ export default function StatsView() {
           </span>
           {footnote}
           <span>{t('stats.metric.svmAtHint')}</span>
+          <span>{t('stats.scenario.legend')}</span>
         </div>
       )}
     </div>

@@ -21,6 +21,7 @@ import { cellEdges, gridView, logNits, type GridView } from './grid';
 import { settleSlice, smoothSliceAtGray } from '../chart2d/slices';
 import { buildCurve, evalCurve } from '../chart2d/spline';
 import { displayNotes, type ProcessedRecord } from './denoise';
+import { DEFAULT_SCENARIOS, scenarioKey, scenarioReference, type ScenarioConfig, type ScenarioReference } from './scenarios';
 
 /** Luminances (measured nits) at which the gray-slice SVM is reported. */
 export const SVM_AT_NITS = [2, 10, 50, 100] as const;
@@ -31,6 +32,8 @@ export interface StatsOptions {
   maxNits: number | null;
   /** Gray level of the gray slice used for svmAt. */
   sliceGray: number;
+  /** Scenario ranges / weights of the scenario reference (default DEFAULT_SCENARIOS). */
+  scenarios?: ScenarioConfig;
 }
 
 export interface StatsPeak {
@@ -81,6 +84,11 @@ export interface RecordStats {
   sliceGray: number | null;
   /** Extent of the valid cells in scope. */
   validExtent: { grayMin: number; grayMax: number; levelMin: number; levelMax: number } | null;
+  /**
+   * Scenario-weighted SVM reference (scenarios.ts, docs/adr/0009 addendum): its own luminance /
+   * gray ranges, so it does NOT depend on the scope (clip / cap) — a reference next to the shares.
+   */
+  scenario: ScenarioReference;
 }
 
 /** Areas of the scope's cells: area[r][c] = Δgray × Δx (0..255 gray, x ≥ 0). */
@@ -268,6 +276,7 @@ function compute(ds: Pick<Dataset, 'matrix'>, opts: StatsOptions): RecordStats {
     svmAt,
     sliceGray,
     validExtent: cellCount > 0 ? { grayMin, grayMax, levelMin, levelMax } : null,
+    scenario: scenarioReference(ds, opts.scenarios ?? DEFAULT_SCENARIOS),
   };
 }
 
@@ -278,7 +287,7 @@ const cache = new WeakMap<Dataset['matrix'], Map<string, RecordStats>>();
  * record as displayed (processed by the denoise): its notes are found by its matrix.
  */
 export function computeRecordStats(ds: Pick<Dataset, 'matrix'>, opts: StatsOptions): RecordStats {
-  const key = `${opts.clipLowGray ? 1 : 0}|${opts.maxNits ?? 'all'}|${opts.sliceGray}`;
+  const key = `${opts.clipLowGray ? 1 : 0}|${opts.maxNits ?? 'all'}|${opts.sliceGray}|${scenarioKey(opts.scenarios ?? DEFAULT_SCENARIOS)}`;
   let perMatrix = cache.get(ds.matrix);
   if (!perMatrix) {
     perMatrix = new Map();

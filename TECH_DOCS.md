@@ -123,6 +123,8 @@ release/              单文件离线版（构建产物，已提交）、icon.ic
 
 指标定义见 ADR 0009：统计范围 = 当前裁剪和亮度上限下的 GridView；安全 / 中等 / 临界占比和平均值按单元格面积加权；另有峰值、全白达标亮度、典型亮度 SVM、有效单元格数。`computeRecordStats()` 按“矩阵 + 选项”缓存；`stats/model.ts` 负责排序、每列最佳值和“复制为 TSV”。
 
+场景加权 SVM（ADR 0009 补充“场景加权参考”）：`data/scenarios.ts` 的 `scenarioReference(record, config)` 在（log10 档位亮度 × 灰阶）平面上对夜间 / 室内 / 户外三个矩形求面积加权算术平均（部分落入的格按重叠面积、名义单元格布局、外侧边界不外推），覆盖率 ≥ 40 % 的场景按权重合成综合，否则重新分配权重；分级 `scenarioGrade()`（界限 0.4 / 1.0 / 3.0）。它与统计范围无关，结果挂在 `RecordStats.scenario` 上（`StatsOptions.scenarios`，默认 `DEFAULT_SCENARIOS`），按“矩阵 + 配置”单独缓存。配置保存在设置 `scenarios`，`store/bootstrap.ts` 用 `sanitizeScenarios()` 逐个场景校验；设置面板 `ScenarioSettings` 可编辑并恢复默认。界面：卡片底部 `stats/parts.tsx` 的 `ScenarioBlock`，表格列组与 `model.ts` 的 `scenario / scNight / scIndoor / scOutdoor` 指标（越低越好；权重被重新分配的综合不参与“最佳”），TSV 末尾四列，导出 `exportRender.ts` 同步绘制。3D 俯视叠加层 `scene3d/engine/scenarioOverlay.ts`（`overlays.scenarios`，默认关）。
+
 ### 3.7 时间轴（`src/timeline`）
 
 `Timeline` 是一个时钟：`time`（秒）、播放 / 暂停 / 拖动 / 调速（0.5×–2×）/ 循环。视图在自己的渲染循环里读取 `timeline.time` 并据此求值画面；React 只订阅粗粒度变化（播放状态、结束等）。打开动画的视图用 `useRegisterActiveTimeline()` 登记为“当前动画”，空格、←/→、R 等全局快捷键作用于它。
@@ -194,7 +196,7 @@ npm run typecheck   # tsc --noEmit
 npm test            # vitest：src/**/*.test.ts
 ```
 
-单元测试覆盖：网格与插值（`data/grid.test.ts`）、降噪（`data/denoise.test.ts`：检测、插值规则、未标记的格与原始读数完全相同等属性测试；`data/denoiseView.test.ts`：显示记录的说明、全部内置记录每条说明的中英文案、3D 提示的格子说明；`chart2d/denoiseMarks.test.ts`：截面点与格子的对应）、旧版剔除（`data/anomalies.test.ts`）、记录解析（`data/records.test.ts`）、统计（`data/stats.test.ts`、`stats/model.test.ts`）、统计页导出的排版与文件名（`stats/export.test.ts`）、2D 截面与样条（`chart2d/chart2d.test.ts`）、3D 模型与开场动画（`scene3d/engine/model.test.ts`、`intro.test.ts`）、导出尺寸 / 帧时间 / 编码参数 / 文件名（`export/presets.test.ts`、`export/exportNames.test.ts`）、离线版是否过期（`export/releaseFreshness.test.ts`）。
+单元测试覆盖：网格与插值（`data/grid.test.ts`）、降噪（`data/denoise.test.ts`：检测、插值规则、未标记的格与原始读数完全相同等属性测试；`data/denoiseView.test.ts`：显示记录的说明、全部内置记录每条说明的中英文案、3D 提示的格子说明；`chart2d/denoiseMarks.test.ts`：截面点与格子的对应）、旧版剔除（`data/anomalies.test.ts`）、记录解析（`data/records.test.ts`）、统计（`data/stats.test.ts`、`stats/model.test.ts`）、场景加权参考（`data/scenarios.test.ts`：均匀矩阵、部分格裁剪、对数面积加权、缺场景重新分配权重、覆盖率门槛、分级边界、与裁剪 / 上限无关、配置校验；`stats/scenarioExport.test.ts`；`scene3d/engine/scenarioOverlay.test.ts`）、统计页导出的排版与文件名（`stats/export.test.ts`）、2D 截面与样条（`chart2d/chart2d.test.ts`）、3D 模型与开场动画（`scene3d/engine/model.test.ts`、`intro.test.ts`）、导出尺寸 / 帧时间 / 编码参数 / 文件名（`export/presets.test.ts`、`export/exportNames.test.ts`）、离线版是否过期（`export/releaseFreshness.test.ts`）。
 
 浏览器端检查（需要 Playwright，用 `PW_MODULE` 指向其 `index.mjs`）：
 

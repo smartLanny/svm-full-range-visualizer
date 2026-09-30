@@ -44,6 +44,7 @@ function readSettings(st: AppState): EngineSettings {
     heightCap: st.heightCap,
     colorMax: st.colorMax,
     overlays: st.overlays,
+    scenarios: st.scenarios,
     background: st.presenting && st.presentBlack ? '#000000' : BG,
     // Presentation: keep the in-canvas title clear of the exit button (shell contract).
     safeLeft: st.presenting ? st.presentSafeLeft : 0,
@@ -68,6 +69,7 @@ const RELEVANT: (keyof AppState)[] = [
   'heightCap',
   'colorMax',
   'overlays',
+  'scenarios',
   'presenting',
   'presentBlack',
   'presentSafeLeft',
