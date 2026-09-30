@@ -99,6 +99,15 @@ const strings: StringsModule = {
       title: '没有可统计的记录',
       hint: '在记录列表中显示至少一条记录，或导入新的测量数据。',
     },
+    export: {
+      cards: '统计卡片',
+      cardsDetail: '{n} 条记录的卡片（含热力图缩略图），按画幅重新排列',
+      table: '统计表格',
+      tableDetail: '{n} 条记录 × 全部指标列，按当前排序',
+      sortedBy: '排序：{key}（{dir}）',
+      fileCards: 'SVM_统计摘要_{n}条',
+      fileTable: 'SVM_统计表格_{n}条',
+    },
   },
   en: {
     title: 'Summary stats',
@@ -196,6 +205,15 @@ const strings: StringsModule = {
     empty: {
       title: 'No records to summarize',
       hint: 'Show at least one record in the record list, or import new measurements.',
+    },
+    export: {
+      cards: 'Stats cards',
+      cardsDetail: 'Cards of {n} records (with heatmap thumbnails), arranged for the aspect',
+      table: 'Stats table',
+      tableDetail: '{n} records × all metric columns, in the current sort order',
+      sortedBy: 'Sorted by {key} ({dir})',
+      fileCards: 'SVM_summary_stats_{n}_records',
+      fileTable: 'SVM_stats_table_{n}_records',
     },
   },
 };

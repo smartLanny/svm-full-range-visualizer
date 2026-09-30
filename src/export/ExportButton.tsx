@@ -16,8 +16,8 @@ if (import.meta.env.DEV) {
 /**
  * Header entry point for PNG / video export (docs/adr/0010). Opens the dialog for the active tab's
  * view, which offers that view's export contents (the frame on screen, other renderings, videos).
- * Disabled with a hint when there are no records or while the view has not registered an
- * ExportTarget (the stats page until it has one).
+ * Every view registers one (3D terrain, 2D chart, stats page); the button is disabled with a hint
+ * when there are no records or while the active view has not registered its ExportTarget yet.
  */
 export default function ExportButton() {
   const t = useT();
@@ -27,7 +27,7 @@ export default function ExportButton() {
   const empty = useAppStore((s) => s.records.length === 0);
   const [open, setOpen] = useState(false);
 
-  const reason = empty ? t('export.unavailableEmpty') : !target ? (tab === 'stats' ? t('export.unavailableStats') : t('export.unavailableView')) : null;
+  const reason = empty ? t('export.unavailableEmpty') : !target ? t('export.unavailableView') : null;
   // The tooltip says what the dialog offers for this view (it lists the view's export contents).
   const title = reason ?? t(`export.buttonTitleView.${tab}`);
 

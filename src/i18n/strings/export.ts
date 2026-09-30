@@ -8,9 +8,8 @@ const strings: StringsModule = {
     buttonTitleView: {
       scene3d: '导出 3D 地形：当前画面、俯视热力图、立体图、并排对比、差值图或开场动画视频',
       chart2d: '导出 2D 截面：当前画面、灰阶截面、亮度截面或扫描动画视频',
-      stats: '导出统计：可选择导出内容',
+      stats: '导出统计摘要：统计卡片或统计表格（PNG）',
     },
-    unavailableStats: '统计页没有可导出的画面，请切换到 3D 或 2D 视图',
     unavailableView: '当前视图还没有可导出的画面',
     unavailableEmpty: '还没有记录：请先导入数据，或在“设置”中恢复内置记录',
     title: '导出',
@@ -105,9 +104,8 @@ const strings: StringsModule = {
     buttonTitleView: {
       scene3d: 'Export the 3D terrain: current view, top-view heatmap, 3D view, side by side, difference map or intro video',
       chart2d: 'Export the 2D cross-section: current view, gray slice, brightness slice or sweep videos',
-      stats: 'Export the stats: choose what to export',
+      stats: 'Export the summary stats: cards or table (PNG)',
     },
-    unavailableStats: 'Nothing to export on the stats page — switch to the 3D or 2D view',
     unavailableView: 'This view has nothing to export yet',
     unavailableEmpty: 'No records yet: import data, or restore the bundled records in Settings',
     title: 'Export',
