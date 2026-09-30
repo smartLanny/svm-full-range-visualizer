@@ -7,7 +7,9 @@
  *
  * Drives the real UI (header "导出" button → dialog → progress modal) in headless Chromium and
  * checks: PNG dimensions, MP4 container + decoded duration/size, WebGL-canvas capture is not
- * black, cancel, render failure recovery, and the MediaRecorder fallback.
+ * black, cancel, render failure recovery, and the MediaRecorder fallback. The mock target has no
+ * contents() (a legacy target): the dialog offers its implicit contents "current" + "animation".
+ * The real views' contents are checked by scripts/verify-export-contents.mjs.
  */
 import fs from 'fs';
 import path from 'path';
@@ -99,7 +101,9 @@ async function decodeVideo(page, file, type) {
     ['window', null, null],
   ]) {
     await openDialog(page);
-    await page.click('text=图片 PNG');
+    // Legacy target (no contents()): the dialog offers the frame on screen + the animation.
+    ok((await page.getAttribute('[data-testid=export-content-current]', 'aria-checked')) === 'true', 'legacy target: "当前画面" offered and selected by default');
+    await page.click('[data-testid=export-content-current]');
     await page.click(`[data-testid=export-quality-${quality}]`);
     if (aspect) await page.click(`[data-testid="export-aspect-${aspect}"]`);
     const name = await page.textContent('[data-testid=export-filename]');
@@ -121,7 +125,7 @@ async function decodeVideo(page, file, type) {
 for (const mode of ['mockExport', 'mockExport=webgl']) {
   const { page, problems } = await open(mode);
   await openDialog(page);
-  await page.click('text=视频');
+  await page.click('[data-testid=export-content-animation]');
   await page.click('[data-testid=export-quality-1080]');
   await page.click('[data-testid="export-aspect-16:9"]');
   await page.click('text=30 fps');
@@ -154,7 +158,7 @@ for (const mode of ['mockExport', 'mockExport=webgl']) {
   let downloaded = false;
   page.on('download', () => (downloaded = true));
   await openDialog(page);
-  await page.click('text=视频');
+  await page.click('[data-testid=export-content-animation]');
   await page.click('[data-testid=export-quality-2160]');
   await page.click('text=60 fps');
   await page.waitForFunction(() => !document.querySelector('[data-testid=export-encoder]')?.textContent?.includes('检测'));
@@ -175,7 +179,7 @@ for (const mode of ['mockExport', 'mockExport=webgl']) {
 {
   const { page, problems } = await open('mockExport&mockFail=0.5');
   await openDialog(page);
-  await page.click('text=视频');
+  await page.click('[data-testid=export-content-animation]');
   await page.click('[data-testid=export-quality-1080]');
   await page.click('text=30 fps');
   await page.waitForFunction(() => !document.querySelector('[data-testid=export-encoder]')?.textContent?.includes('检测'));
@@ -195,7 +199,7 @@ for (const mode of ['mockExport', 'mockExport=webgl']) {
 {
   const { page, problems } = await open('mockExport&exportForce=recorder', { width: 1280, height: 720 });
   await openDialog(page);
-  await page.click('text=视频');
+  await page.click('[data-testid=export-content-animation]');
   await page.click('[data-testid=export-quality-1080]');
   await page.click('text=30 fps');
   await page.waitForFunction(() => !document.querySelector('[data-testid=export-encoder]')?.textContent?.includes('检测'));

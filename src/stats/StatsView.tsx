@@ -8,7 +8,11 @@ import { Button, IconButton, Segmented, Select, Switch, cn, toast } from '../ui'
 import { buildRows, copyText, defaultDir, METRICS, rankRows, sortRows, toTsv, type SortDir, type SortKey } from './model';
 import { StatsCard } from './StatsCard';
 import { StatsTable } from './StatsTable';
-import { thumbExtent } from './Thumbnail';
+import { thumbExtent } from './heatmap';
+import { registerExportTarget } from '../export/registry';
+import { FONT_STACK } from '../chart2d/render';
+import { renderStatsCard, renderStatsExport, type StatsExportInput, type StatsRenderInfo } from './exportRender';
+import { statsContentOf, statsContents, statsFileName } from './exportContents';
 
 type ViewMode = 'cards' | 'table';
 
@@ -35,6 +39,17 @@ function loadUi(): { mode: ViewMode; sortKey: SortKey; sortDir: SortDir } {
     };
   } catch {
     return fallback;
+  }
+}
+
+/** Make sure Inter is ready before the export measures / draws text (CJK comes from system fonts). */
+async function ensureFonts(): Promise<void> {
+  if (typeof document === 'undefined' || !document.fonts) return;
+  try {
+    await Promise.all([400, 500, 600].map((w) => document.fonts.load(`${w} 16px ${FONT_STACK}`)));
+    await document.fonts.ready;
+  } catch {
+    /* fall back to whatever is available */
   }
 }
 
@@ -115,6 +130,87 @@ export default function StatsView() {
     return () => ro.disconnect();
   }, [measure, ui.mode, records.length]);
 
+  const scope = [
+    clipLowGray ? t('stats.scope.clip', { g: LOW_GRAY_CLIP }) : t('stats.scope.allGray'),
+    maxNits !== null ? t('stats.scope.cap', { n: maxNits }) : t('stats.scope.allLevels'),
+    t('stats.scope.slice', { g: Math.round(sliceGray) }),
+  ].join(' · ');
+
+  // ---- export (docs/adr/0010, addendum "stats page"): the cards grid and the table, redrawn
+  // offline by a Canvas2D renderer at the export's size (never a screenshot of the DOM).
+  const rootRef = useRef<HTMLDivElement>(null);
+  const exportRef = useRef<{ input: StatsExportInput; mode: ViewMode }>(null!);
+  exportRef.current = {
+    input: { lang, rows: sorted, styles, rank, extent, clipLowGray, maxNits, sliceGray, colormap, colorMax, sortKey: ui.sortKey, sortDir: ui.sortDir, scope },
+    mode: ui.mode,
+  };
+  useEffect(() => {
+    let canvas: HTMLCanvasElement | null = null;
+    let active: string | undefined;
+    const unregister = registerExportTarget({
+      id: 'stats',
+      contents: () => {
+        const { input, mode } = exportRef.current;
+        return statsContents({ lang: input.lang, mode, count: input.rows.length });
+      },
+      fileName: (_kind, content) => {
+        const { input, mode } = exportRef.current;
+        return statsFileName(input.lang, content, mode, input.rows.length);
+      },
+      animation: () => null,
+      // "Current view" preset: the page (header + body) in device px.
+      viewSize: () => {
+        const el = rootRef.current;
+        const dpr = window.devicePixelRatio || 1;
+        return { width: Math.round((el?.clientWidth || window.innerWidth) * dpr), height: Math.round((el?.clientHeight || window.innerHeight) * dpr) };
+      },
+      begin: async ({ width, height }, content) => {
+        active = content;
+        await ensureFonts();
+        canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(width));
+        canvas.height = Math.max(1, Math.round(height));
+      },
+      renderFrame: async (_t, content = active) => {
+        if (!canvas) {
+          const s = window.devicePixelRatio || 1;
+          canvas = document.createElement('canvas');
+          canvas.width = Math.round((rootRef.current?.clientWidth || 1600) * s);
+          canvas.height = Math.round((rootRef.current?.clientHeight || 900) * s);
+        }
+        const { input, mode } = exportRef.current;
+        renderStatsExport(canvas, input, statsContentOf(content, mode));
+        return canvas;
+      },
+      end: () => {
+        active = undefined;
+        canvas = null;
+      },
+    });
+    // DEV-only hooks for scripts/verify-export-contents.mjs (layout of an export, one card alone).
+    const w = window as unknown as Record<string, unknown>;
+    if (import.meta.env.DEV) {
+      w.__svmStatsExport = {
+        render: (width: number, height: number, content: 'cards' | 'table'): { info: StatsRenderInfo; png: string } => {
+          const c = document.createElement('canvas');
+          c.width = width;
+          c.height = height;
+          const info = renderStatsExport(c, exportRef.current.input, content);
+          return { info, png: c.toDataURL('image/png') };
+        },
+        card: (index: number, cw: number, ch: number, scale: number): string => {
+          const c = document.createElement('canvas');
+          renderStatsCard(c, exportRef.current.input, index, cw, ch, scale);
+          return c.toDataURL('image/png');
+        },
+      };
+    }
+    return () => {
+      unregister();
+      if (import.meta.env.DEV) delete w.__svmStatsExport;
+    };
+  }, []);
+
   const onCopy = async () => {
     try {
       await copyText(toTsv(sorted, t, lang));
@@ -123,12 +219,6 @@ export default function StatsView() {
       toast(t('stats.copyFailed'), 'error');
     }
   };
-
-  const scope = [
-    clipLowGray ? t('stats.scope.clip', { g: LOW_GRAY_CLIP }) : t('stats.scope.allGray'),
-    maxNits !== null ? t('stats.scope.cap', { n: maxNits }) : t('stats.scope.allLevels'),
-    t('stats.scope.slice', { g: Math.round(sliceGray) }),
-  ].join(' · ');
 
   const sortOptions: { value: SortKey; label: string }[] = [
     { value: 'order', label: t('stats.sort.order') },
@@ -152,7 +242,7 @@ export default function StatsView() {
     ) : null;
 
   return (
-    <div className={cn('flex h-full min-h-0 flex-col', black ? 'bg-black' : 'bg-canvas')}>
+    <div ref={rootRef} data-testid="stats-view" className={cn('flex h-full min-h-0 flex-col', black ? 'bg-black' : 'bg-canvas')}>
       {/* header: the title block keeps a minimum width; when title + controls do not fit on one
           line the controls wrap to a second row (never squeezing the title). In presentation it
           is only the title + scope lines (the controls float over its right end on hover), starts

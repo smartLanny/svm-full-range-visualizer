@@ -27,6 +27,8 @@ export interface ExportJob {
   /** Real-time MediaRecorder fallback in use. */
   realtime: boolean;
   cancelling: boolean;
+  /** Name of the exported content (docs/adr/0010 addendum), shown in the progress title. */
+  label?: string;
 }
 
 interface SessionState {
@@ -90,12 +92,23 @@ function holdTimeline(): () => void {
   };
 }
 
+/** Label of `content` in the target's list (undefined for legacy targets / unknown ids). */
+function contentLabel(target: ExportTarget, content?: string): string | undefined {
+  if (!content || !target.contents) return undefined;
+  try {
+    return target.contents().find((c) => c.id === content)?.label;
+  } catch {
+    return undefined;
+  }
+}
+
 function errorMessage(e: unknown): string {
   if (e instanceof Error) return e.message || e.name;
   return String(e);
 }
 
-export async function runImageExport(target: ExportTarget, size: ExportSize): Promise<boolean> {
+/** Export an image content (undefined = the frame on screen) as PNG and download it. */
+export async function runImageExport(target: ExportTarget, size: ExportSize, content?: string): Promise<boolean> {
   const t = getT();
   if (isExporting()) {
     toast(t('export.error.busy'), 'info');
@@ -103,11 +116,11 @@ export async function runImageExport(target: ExportTarget, size: ExportSize): Pr
   }
   const id = nextId++;
   useExportSession.setState({
-    job: { id, kind: 'image', phase: 'render', done: 0, total: 1, startedAt: performance.now(), size, fps: 0, realtime: false, cancelling: false },
+    job: { id, kind: 'image', phase: 'render', done: 0, total: 1, startedAt: performance.now(), size, fps: 0, realtime: false, cancelling: false, label: contentLabel(target, content) },
   });
   const release = holdTimeline();
   try {
-    const res = await exportPng(target, size);
+    const res = await exportPng(target, size, content);
     downloadBlob(res.blob, res.fileName);
     toast(getT()('export.done.image', { file: res.fileName }), 'success', 5000);
     return true;
@@ -121,7 +134,8 @@ export async function runImageExport(target: ExportTarget, size: ExportSize): Pr
   }
 }
 
-export async function runVideoExport(target: ExportTarget, size: ExportSize, fps: number, force: VideoForce = 'auto'): Promise<boolean> {
+/** Export a video content (undefined = the view's animation) and download it. */
+export async function runVideoExport(target: ExportTarget, size: ExportSize, fps: number, force: VideoForce = 'auto', content?: string): Promise<boolean> {
   const t = getT();
   if (isExporting()) {
     toast(t('export.error.busy'), 'info');
@@ -131,7 +145,7 @@ export async function runVideoExport(target: ExportTarget, size: ExportSize, fps
   controller = new AbortController();
   const signal = controller.signal;
   useExportSession.setState({
-    job: { id, kind: 'video', phase: 'prepare', done: 0, total: 1, startedAt: performance.now(), size, fps, realtime: false, cancelling: false },
+    job: { id, kind: 'video', phase: 'prepare', done: 0, total: 1, startedAt: performance.now(), size, fps, realtime: false, cancelling: false, label: contentLabel(target, content) },
   });
   const release = holdTimeline();
   let lastUpdate = 0;
@@ -141,6 +155,7 @@ export async function runVideoExport(target: ExportTarget, size: ExportSize, fps
       fps,
       signal,
       force,
+      content,
       onProgress: (p) => {
         const now = performance.now();
         const job = useExportSession.getState().job;

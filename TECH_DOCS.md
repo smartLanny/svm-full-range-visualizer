@@ -43,7 +43,7 @@ src/
   shell/              顶栏、记录面板、参数面板、导入器、拖放、演示模式、快捷键、对话框
   scene3d/            Scene3DView（React 外壳）+ engine/（命令式 three.js 引擎）
   chart2d/            Chart2DView + scene / render / slices / spline / scales / table / tooltip
-  stats/              统计页（卡片 / 表格 / 缩略热力图）
+  stats/              统计页（卡片 / 表格 / 缩略热力图 heatmap.ts）+ 导出（exportRender / exportLayout / exportContents）
   timeline/           Timeline 时钟、TimelineBar 控件、当前动画注册表
   export/             导出按钮、对话框、进度、PNG / 视频引擎、ExportTarget 注册表
   i18n/               t()、useT()；strings/<模块>.ts
@@ -134,26 +134,31 @@ release/              单文件离线版（构建产物，已提交）、icon.ic
 
 ## 4. 导出（`src/export`，ADR 0010）
 
-视图在挂载期间向 `registry.ts` 注册一个 **ExportTarget**：
+视图在挂载期间向 `registry.ts` 注册一个 **ExportTarget**，并通过 `contents()` 列出可导出的**内容**（ADR 0010 补充“导出内容”）：
 
 ```ts
 interface ExportTarget {
   id: MainTab;
-  fileName(kind?: 'image' | 'video'): string;      // 不含扩展名
-  animation(): { duration: number; label: string; fileName?: string } | null;
-  begin(size): Promise<void>;                       // 切到指定尺寸渲染
-  renderFrame(t: number | null): Promise<HTMLCanvasElement>;
-  end(): void;                                      // 恢复交互渲染（出错时也会调用）
+  contents?(): ExportContent[];                     // 当前画面、俯视热力图、并排对比、截面、动画视频……
+  fileName(kind?: 'image' | 'video', content?: string): string;   // 不含扩展名
+  animation(content?: string): { duration: number; label: string; fileName?: string } | null;
+  begin(size, content?: string): Promise<void>;     // 切到指定尺寸渲染，并加上该内容的离屏覆盖
+  renderFrame(t: number | null, content?: string): Promise<HTMLCanvasElement>;
+  end(): void;                                      // 撤掉覆盖、恢复交互渲染（出错时也会调用）
   viewSize?(): { width: number; height: number };   // 当前画布的绘图缓冲尺寸（设备像素）
 }
+interface ExportContent { id: string; kind: 'image' | 'video'; label: string; detail?: string; duration?: number; current?: boolean; icon?: … }
 ```
 
-- **PNG**（`png.ts`）：`begin(size)` → `renderFrame(null)` → 立即复制到 2D 画布（WebGL 缓冲在合成后会被清空）→ `end()` → 编码。`renderFrame(null)` 必须渲染用户此刻看到的画面：动画开着（播放、暂停或拖到某处）时，就渲染动画在当前时间的那一帧。导出开始前会暂停正在播放的时间轴，结束后恢复。
-- **视频**（`video.ts`）：按帧求值 `renderFrame(i / fps)`，帧数 = 时长 × fps + 1（最后一帧是动画终点）。优先 WebCodecs 编码 H.264（硬件优先），不支持时用 VP9，都封装为 MP4（mp4-muxer）；两者都是离线逐帧渲染，与机器速度无关，不掉帧。浏览器没有可用的 WebCodecs 编码器时退回 MediaRecorder 实时录制（WebM / MP4）。编码器队列有背压，可随时取消。`codecs.ts` 按分辨率和帧率选择 H.264 level。
+- **内容**：对话框先列出当前视图的内容（`contents.ts` 的 `listContents()`：去重、视频以 `animation(id)` 的时长为准；没有 `contents()` 的旧目标隐含 `current` + `animation`），默认选中上次在该视图导出的内容（仍可用时），否则“当前画面”。3D 的内容与离屏场景见 `scene3d/exportContents.ts`（引擎 `beginExport(w, h, { layout?, view? })`），2D 见 `chart2d/exportContents.ts`（覆盖 `sliceMode`），统计页见 `stats/exportContents.ts`（统计卡片 / 统计表格，只有图片）。覆盖只在 `begin()`/`end()` 之间存在，不写 store；`end()` 后屏幕逐像素还原。
+- **统计页**（ADR 0010 补充“统计页”）：不截 DOM，而是 `stats/exportRender.ts` 用 Canvas2D 按屏幕设计（设计像素 = StatsCard / StatsTable 的 CSS px）重画：标题 / 统计范围条、卡片网格或表格、底部图例条。每张卡片、每段表格由一个“遍历”函数从上到下排版，不传画布时只测量高度，传画布时同时绘制，所以排版与绘制不会不一致。`stats/exportLayout.ts`（纯函数、有单元测试）按导出尺寸选列数和卡片宽度（296–460 设计像素，所有卡片同高），表格在竖屏且能明显放大文字时分成两段（记录列重复），宽度不够时行高最多加 50 % 填满。热力图缩略图与屏幕共用 `stats/heatmap.ts`。“在 3D 中查看”按钮、悬停状态和未激活列的排序图标不画。
+- **PNG**（`png.ts`）：`begin(size, id)` → `renderFrame(null, id)` → 立即复制到 2D 画布（WebGL 缓冲在合成后会被清空）→ `end()` → 编码。对“当前画面”，`renderFrame(null)` 必须渲染用户此刻看到的画面：动画开着（播放、暂停或拖到某处）时，就渲染动画在当前时间的那一帧。导出开始前会暂停正在播放的时间轴，结束后恢复。
+- **视频**（`video.ts`）：按帧求值 `renderFrame(i / fps, id)`，帧数 = 时长 × fps + 1（最后一帧是动画终点）。优先 WebCodecs 编码 H.264（硬件优先），不支持时用 VP9，都封装为 MP4（mp4-muxer）；两者都是离线逐帧渲染，与机器速度无关，不掉帧。浏览器没有可用的 WebCodecs 编码器时退回 MediaRecorder 实时录制（WebM / MP4）。编码器队列有背压，可随时取消。`codecs.ts` 按分辨率和帧率选择 H.264 level。
 - **尺寸**（`presets.ts`）：当前视图（`viewSize()`，与屏幕上的画面尺寸和比例一致，最长边不超过 4096）/ 1080p / 1440p / 4K，画幅 16:9、9:16、1:1；视频尺寸取偶数。
-- **文件名**：PNG 用 `fileName('image')`；视频优先用 `animation().fileName`（例如 2D 扫描、并排布局下只含记录 A 的开场动画），否则用 `fileName('video')`；再附上尺寸和帧率。`safeFileName()` 去掉 Windows / macOS 不允许的字符，保留中文；标题里的“·”连同两侧空格合并为一个 `_`。
+- **文件名**：PNG 用 `fileName('image', id)`；视频优先用 `animation(id).fileName`（例如 2D 扫描、并排布局下只含记录 A 的开场动画），否则用 `fileName('video', id)`；再附上尺寸和帧率。文件名在 `begin()` 之前确定。`safeFileName()` 去掉 Windows / macOS 不允许的字符，保留中文；标题里的“·”连同两侧空格合并为一个 `_`。
 - `session.ts`：同一时间只有一个导出任务；进度弹窗的预览画布命令式绘制（约 8 Hz），React 状态最多约 12 Hz 更新一次。导出期间全局快捷键被屏蔽，Esc 取消。
-- 没有记录、在统计页、或视图尚未注册时，“导出”按钮禁用并在提示中说明原因。并排 / 差值布局下，导出对话框提示视频只演示记录 A。
+- 没有记录、或视图尚未注册导出目标时，“导出”按钮禁用并在提示中说明原因；可用时提示列出该视图可导出的内容。3D、2D 和统计页都注册了目标。并排 / 差值布局下，开场动画视频一项注明只演示记录 A。
+- 端到端校验：`scripts/verify-export.mjs`（导出引擎，DEV 模拟目标）和 `scripts/verify-export-contents.mjs`（真实视图的每项内容：尺寸、非空白、视角正确、文件名、屏幕与 store 不变；统计页另查已知排版的渲染、每张卡片的文字与缩略图、导出卡片与屏幕卡片逐像素接近；`--quick` 跳过视频，`--only=3d|2d|stats|header` 只跑一部分）。
 
 ## 5. 构建与离线版
 
@@ -185,7 +190,7 @@ npm run typecheck   # tsc --noEmit
 npm test            # vitest：src/**/*.test.ts
 ```
 
-单元测试覆盖：网格与插值（`data/grid.test.ts`）、异常检测（`data/anomalies.test.ts`）、记录解析（`data/records.test.ts`）、统计（`data/stats.test.ts`、`stats/model.test.ts`）、2D 截面与样条（`chart2d/chart2d.test.ts`）、3D 模型与开场动画（`scene3d/engine/model.test.ts`、`intro.test.ts`）、导出尺寸 / 帧时间 / 编码参数 / 文件名（`export/presets.test.ts`、`export/exportNames.test.ts`）、离线版是否过期（`export/releaseFreshness.test.ts`）。
+单元测试覆盖：网格与插值（`data/grid.test.ts`）、异常检测（`data/anomalies.test.ts`）、记录解析（`data/records.test.ts`）、统计（`data/stats.test.ts`、`stats/model.test.ts`）、统计页导出的排版与文件名（`stats/export.test.ts`）、2D 截面与样条（`chart2d/chart2d.test.ts`）、3D 模型与开场动画（`scene3d/engine/model.test.ts`、`intro.test.ts`）、导出尺寸 / 帧时间 / 编码参数 / 文件名（`export/presets.test.ts`、`export/exportNames.test.ts`）、离线版是否过期（`export/releaseFreshness.test.ts`）。
 
 浏览器端检查（需要 Playwright，用 `PW_MODULE` 指向其 `index.mjs`）：
 

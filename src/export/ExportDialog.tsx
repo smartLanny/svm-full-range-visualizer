@@ -1,8 +1,23 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Box, Clapperboard, Download, Film, Image as ImageIcon, Info, LineChart } from 'lucide-react';
-import { useT } from '../i18n';
-import { useAppStore } from '../store/appStore';
+import {
+  BarChart3,
+  Box,
+  ChartSpline,
+  Clapperboard,
+  Columns3,
+  Diff,
+  Download,
+  Film,
+  Grid3x3,
+  Image as ImageIcon,
+  LineChart,
+  Monitor,
+  Table2,
+  type LucideIcon,
+} from 'lucide-react';
+import { useLang, useT } from '../i18n';
 import { Button, Dialog, Segmented, cn } from '../ui';
+import { animationOf, defaultContent, listContents, parseRemembered, type RememberedContents } from './contents';
 import {
   ASPECTS,
   estimateVideoBytes,
@@ -15,24 +30,24 @@ import {
   resolveSize,
   type ExportAspect,
   type ExportFps,
-  type ExportKind,
   type ExportQuality,
 } from './presets';
 import { pngFileName } from './png';
-import type { ExportSize, ExportTarget } from './registry';
+import { CURRENT_CONTENT, type ExportContent, type ExportContentIcon, type ExportSize, type ExportTarget } from './registry';
 import { runImageExport, runVideoExport } from './session';
 import { currentViewSize } from './useExportTarget';
 import { planVideo, videoFileName, type VideoForce, type VideoPlan } from './video';
 
 interface Prefs {
-  kind: ExportKind;
   aspect: ExportAspect;
   quality: ExportQuality;
   fps: ExportFps;
+  /** Last exported content per view (docs/adr/0010 addendum), used while that view still offers it. */
+  content: RememberedContents;
 }
 
 const PREFS_KEY = 'svm-export-prefs.v1';
-const DEFAULT_PREFS: Prefs = { kind: 'image', aspect: '16:9', quality: '1080', fps: 60 };
+const DEFAULT_PREFS: Prefs = { aspect: '16:9', quality: '1080', fps: 60, content: {} };
 
 function loadPrefs(): Prefs {
   try {
@@ -40,10 +55,10 @@ function loadPrefs(): Prefs {
     if (!raw) return DEFAULT_PREFS;
     const p = JSON.parse(raw) as Partial<Prefs>;
     return {
-      kind: p.kind === 'video' ? 'video' : 'image',
       aspect: ASPECTS.includes(p.aspect as ExportAspect) ? (p.aspect as ExportAspect) : DEFAULT_PREFS.aspect,
       quality: QUALITIES.includes(p.quality as ExportQuality) ? (p.quality as ExportQuality) : DEFAULT_PREFS.quality,
       fps: p.fps === 30 ? 30 : 60,
+      content: parseRemembered(p.content),
     };
   } catch {
     return DEFAULT_PREFS;
@@ -72,6 +87,21 @@ const ASPECT_GLYPH: Record<ExportAspect, { w: number; h: number }> = {
   '9:16': { w: 12, h: 21 },
   '1:1': { w: 16, h: 16 },
 };
+
+const CONTENT_ICON: Record<ExportContentIcon, LucideIcon> = {
+  screen: Monitor,
+  top: Grid3x3,
+  perspective: Box,
+  sideBySide: Columns3,
+  diff: Diff,
+  intro: Clapperboard,
+  slice: ChartSpline,
+  sweep: Film,
+  table: Table2,
+  chart: BarChart3,
+};
+
+const VIEW_ICON: Record<ExportTarget['id'], LucideIcon> = { scene3d: Box, chart2d: LineChart, stats: BarChart3 };
 
 function Tile({
   selected,
@@ -111,12 +141,85 @@ function Tile({
 
 function Row({ label, hint, children }: { label: React.ReactNode; hint?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex min-w-0 flex-col gap-2">
       <div className="flex items-baseline justify-between gap-3">
         <span className="text-xs font-medium text-ink-2">{label}</span>
         {hint && <span className="truncate text-2xs text-ink-3">{hint}</span>}
       </div>
       {children}
+    </div>
+  );
+}
+
+/** "图片" / "视频 · 0:13" chip of a content option. */
+function KindChip({ content }: { content: ExportContent }) {
+  const t = useT();
+  const video = content.kind === 'video';
+  return (
+    <span
+      className={cn(
+        'inline-flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-2xs font-medium ring-1 ring-inset',
+        video ? 'bg-accent/10 text-accent-hover ring-accent/30' : 'bg-surface-1 text-ink-3 ring-line',
+      )}
+    >
+      {video ? <Film size={11} /> : <ImageIcon size={11} />}
+      {video ? t('export.content.video') : t('export.content.image')}
+      {video && content.duration !== undefined && <span className="font-mono tabular-nums">· {formatDuration(content.duration)}</span>}
+    </span>
+  );
+}
+
+/** The view's export contents as a single-choice list (label, one-line detail, kind / duration). */
+function ContentList({ contents, selected, onSelect }: { contents: ExportContent[]; selected: string | null; onSelect: (id: string) => void }) {
+  const t = useT();
+  return (
+    <div role="radiogroup" aria-label={t('export.content.label')} className="flex flex-col gap-1.5" data-testid="export-contents">
+      {contents.map((c) => {
+        const sel = c.id === selected;
+        const Icon = CONTENT_ICON[c.icon ?? (c.kind === 'video' ? 'sweep' : 'screen')] ?? Monitor;
+        return (
+          <button
+            key={c.id}
+            type="button"
+            role="radio"
+            aria-checked={sel}
+            data-testid={`export-content-${c.id}`}
+            data-kind={c.kind}
+            data-current={c.current ? '' : undefined}
+            title={c.detail ? `${c.label}\n${c.detail}` : c.label}
+            onClick={() => onSelect(c.id)}
+            className={cn(
+              'group flex w-full min-w-0 items-center gap-3 rounded-lg px-2.5 py-2 text-left ring-1 ring-inset transition-colors',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-ring',
+              sel ? 'bg-accent-muted ring-accent/60' : 'bg-surface-3 ring-line hover:bg-surface-4',
+            )}
+          >
+            <span
+              className={cn(
+                'flex h-8 w-8 shrink-0 items-center justify-center rounded-md transition-colors',
+                sel ? 'bg-accent/25 text-accent-hover' : 'bg-surface-1 text-ink-3 group-hover:text-ink-2',
+              )}
+            >
+              <Icon size={16} />
+            </span>
+            <span className="flex min-w-0 flex-1 flex-col">
+              <span className="flex min-w-0 items-center gap-1.5">
+                <span className={cn('truncate text-sm font-medium', sel ? 'text-ink-1' : 'text-ink-2 group-hover:text-ink-1')}>{c.label}</span>
+                {c.current && c.id !== CURRENT_CONTENT && (
+                  <span
+                    title={t('export.content.onScreenTitle')}
+                    className="shrink-0 rounded bg-surface-1 px-1 text-[10px] font-medium leading-4 text-ink-2 ring-1 ring-inset ring-line-strong"
+                  >
+                    {t('export.content.onScreen')}
+                  </span>
+                )}
+              </span>
+              {c.detail && <span className="truncate text-2xs leading-snug text-ink-3">{c.detail}</span>}
+            </span>
+            <KindChip content={c} />
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -127,22 +230,35 @@ export interface ExportDialogProps {
   target: ExportTarget;
 }
 
+/**
+ * Export dialog (docs/adr/0010): first WHAT to export — the active view's contents (the frame on
+ * screen, other renderings of the same data, animations) — then size / aspect (and fps for videos).
+ */
 export default function ExportDialog({ open, onClose, target }: ExportDialogProps) {
   const t = useT();
+  const lang = useLang();
   const [prefs, setPrefs] = useState<Prefs>(loadPrefs);
-  const [windowSize, setWindowSize] = useState<ExportSize>(() => currentViewSize(target));
   const [encoder, setEncoder] = useState<EncoderStatus>({ state: 'checking' });
-  // The 3D intro always plays record A alone (docs/adr/0010, contract C6).
-  const layout = useAppStore((s) => s.layout);
+  /** The user's pick in this opening of the dialog (null = the default, see defaultContent). */
+  const [pickedId, setPickedId] = useState<string | null>(null);
 
-  const anim = open ? target.animation() : null;
-  const kind: ExportKind = anim ? prefs.kind : 'image';
-  const isVideo = kind === 'video';
-
-  // Refresh the "current view" size each time the dialog opens.
+  // Read when the dialog opens (and on a language switch), during render so the first frame of the
+  // dialog already shows them: the "current view" size and the view's contents — they follow the
+  // view's state (layout, records, slice mode, an open animation).
+  const windowSize = useMemo<ExportSize>(() => currentViewSize(target), [open, target]); // eslint-disable-line react-hooks/exhaustive-deps
+  const contents = useMemo<ExportContent[]>(
+    () => (open ? listContents(target, { current: t('export.content.current'), currentDetail: t('export.content.currentDetail') }) : []),
+    [open, target, lang], // eslint-disable-line react-hooks/exhaustive-deps
+  );
+  // A new opening starts from the default again: the content remembered for this view, else the
+  // one on screen.
   useEffect(() => {
-    if (open) setWindowSize(currentViewSize(target));
-  }, [open, target]);
+    if (!open) setPickedId(null);
+  }, [open]);
+
+  const content = contents.find((c) => c.id === pickedId) ?? defaultContent(contents, prefs.content[target.id]);
+  const isVideo = content?.kind === 'video';
+  const anim = open && content && isVideo ? animationOf(target, content.id) : null;
 
   const patch = (p: Partial<Prefs>) =>
     setPrefs((prev) => {
@@ -168,21 +284,29 @@ export default function ExportDialog({ open, onClose, target }: ExportDialogProp
   }, [open, isVideo, size.width, size.height, prefs.fps]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fileName = useMemo(() => {
-    if (!open) return '';
-    if (!isVideo) return pngFileName(target, size);
-    const container = encoder.state === 'ready' ? encoder.plan.container : 'mp4';
-    return videoFileName(target, size, prefs.fps, container);
-  }, [open, isVideo, target, size.width, size.height, prefs.fps, encoder]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (!open || !content) return '';
+    try {
+      if (!isVideo) return pngFileName(target, size, content.id);
+      const container = encoder.state === 'ready' ? encoder.plan.container : 'mp4';
+      return videoFileName(target, size, prefs.fps, container, content.id);
+    } catch (e) {
+      console.warn('Export file name failed:', e);
+      return '';
+    }
+  }, [open, content, isVideo, target, size.width, size.height, prefs.fps, encoder]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!open) return null;
 
   const frames = anim ? frameCount(anim.duration, prefs.fps) : 0;
-  const canStart = !isVideo || encoder.state === 'ready';
+  const canStart = !!content && (!isVideo || (!!anim && encoder.state === 'ready'));
 
   const start = () => {
+    if (!content) return;
+    // Remember the choice for this view (offered first next time while the view still has it).
+    patch({ content: { ...prefs.content, [target.id]: content.id } });
     onClose();
-    if (isVideo) void runVideoExport(target, size, prefs.fps, devForce());
-    else void runImageExport(target, size);
+    if (isVideo) void runVideoExport(target, size, prefs.fps, devForce(), content.id);
+    else void runImageExport(target, size, content.id);
   };
 
   const qualityDims = (q: ExportQuality) => {
@@ -193,8 +317,7 @@ export default function ExportDialog({ open, onClose, target }: ExportDialogProp
     q === 'window' ? t('export.quality.window') : q === '1080' ? t('export.quality.p1080') : q === '1440' ? t('export.quality.p1440') : t('export.quality.p2160');
   const aspectName = (a: ExportAspect) => (a === '16:9' ? t('export.aspect.landscape') : a === '9:16' ? t('export.aspect.portrait') : t('export.aspect.square'));
 
-  const ViewIcon = target.id === 'scene3d' ? Box : LineChart;
-  const introLayoutNote = target.id === 'scene3d' && anim && layout !== 'single' ? t('export.layoutNote') : null;
+  const ViewIcon = VIEW_ICON[target.id] ?? Monitor;
 
   let encoderLine: React.ReactNode = null;
   if (isVideo) {
@@ -214,7 +337,7 @@ export default function ExportDialog({ open, onClose, target }: ExportDialogProp
       onClose={onClose}
       title={t('export.title')}
       icon={<Download size={15} className="text-accent-hover" />}
-      widthClass="max-w-[540px]"
+      widthClass="max-w-[880px]"
       closeLabel={t('common.close')}
       footer={
         <>
@@ -233,88 +356,62 @@ export default function ExportDialog({ open, onClose, target }: ExportDialogProp
         </>
       }
     >
-      <div className="flex flex-col gap-4">
-        {/* What is being exported */}
-        <div className="flex items-center gap-3 rounded-lg bg-surface-1 px-3 py-2.5 ring-1 ring-inset ring-line">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-accent-muted text-accent-hover">
-            <ViewIcon size={16} />
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="text-sm font-medium text-ink-1">{t(`export.view.${target.id}`)}</div>
-            <div className="truncate text-2xs text-ink-3">
-              {anim ? (
-                <>
-                  <Clapperboard size={11} className="-mt-px mr-1 inline" />
-                  {anim.label} · {formatDuration(anim.duration)}
-                </>
-              ) : (
-                t('export.kind.noAnimation')
-              )}
+      <div className="grid gap-5 md:grid-cols-2">
+        {/* 1. What to export */}
+        <Row
+          label={
+            <span className="flex items-center gap-1.5">
+              <ViewIcon size={13} className="text-accent-hover" />
+              {t('export.content.label')}
+            </span>
+          }
+          hint={t('export.content.hint', { view: t(`export.view.${target.id}`), n: contents.length })}
+        >
+          <ContentList contents={contents} selected={content?.id ?? null} onSelect={setPickedId} />
+        </Row>
+
+        {/* 2. Size / aspect / frame rate */}
+        <div className="flex min-w-0 flex-col gap-4">
+          <Row label={t('export.quality.label')}>
+            <div role="radiogroup" aria-label={t('export.quality.label')} className="grid grid-cols-4 gap-2">
+              {QUALITIES.map((q) => {
+                const d = qualityDims(q);
+                return (
+                  <Tile key={q} selected={prefs.quality === q} onClick={() => patch({ quality: q })} testId={`export-quality-${q}`}>
+                    <span className="max-w-full truncate text-xs font-semibold">{qualityName(q)}</span>
+                    <span className="max-w-full truncate font-mono text-2xs tabular-nums text-ink-3">
+                      {d.width}×{d.height}
+                    </span>
+                  </Tile>
+                );
+              })}
             </div>
-          </div>
-        </div>
-        {introLayoutNote && (
-          <p className="-mt-2 flex items-start gap-1.5 px-1 text-2xs leading-snug text-ink-3" data-testid="export-layout-note">
-            <Info size={12} className="mt-px shrink-0 text-accent-hover" />
-            <span>{introLayoutNote}</span>
-          </p>
-        )}
+          </Row>
 
-        <Row label={t('export.kind.label')}>
-          <Segmented<ExportKind>
-            fullWidth
-            size="md"
-            value={kind}
-            onChange={(v) => patch({ kind: v })}
-            aria-label={t('export.kind.label')}
-            options={[
-              { value: 'image', label: t('export.kind.image'), icon: <ImageIcon size={14} /> },
-              { value: 'video', label: t('export.kind.video'), icon: <Film size={14} />, disabled: !anim, title: anim ? undefined : t('export.kind.noAnimation') },
-            ]}
-          />
-        </Row>
+          <Row label={t('export.aspect.label')} hint={prefs.quality === 'window' ? t('export.aspect.windowHint') : undefined}>
+            <div role="radiogroup" aria-label={t('export.aspect.label')} className="grid grid-cols-3 gap-2">
+              {ASPECTS.map((a) => {
+                const g = ASPECT_GLYPH[a];
+                const selected = prefs.quality !== 'window' && prefs.aspect === a;
+                return (
+                  <Tile key={a} selected={selected} disabled={prefs.quality === 'window'} onClick={() => patch({ aspect: a })} testId={`export-aspect-${a}`} row>
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center">
+                      <span
+                        className={cn('block rounded-[3px] border-[1.5px]', selected ? 'border-accent-hover bg-accent/20' : 'border-ink-3')}
+                        style={{ width: g.w, height: g.h }}
+                      />
+                    </span>
+                    <span className="flex min-w-0 flex-col items-start leading-tight">
+                      <span className="text-xs font-semibold">{a}</span>
+                      <span className="max-w-full truncate text-2xs text-ink-3">{aspectName(a)}</span>
+                    </span>
+                  </Tile>
+                );
+              })}
+            </div>
+          </Row>
 
-        <Row label={t('export.quality.label')}>
-          <div role="radiogroup" aria-label={t('export.quality.label')} className="grid grid-cols-4 gap-2">
-            {QUALITIES.map((q) => {
-              const d = qualityDims(q);
-              return (
-                <Tile key={q} selected={prefs.quality === q} onClick={() => patch({ quality: q })} testId={`export-quality-${q}`}>
-                  <span className="truncate text-xs font-semibold">{qualityName(q)}</span>
-                  <span className="font-mono text-2xs tabular-nums text-ink-3">
-                    {d.width}×{d.height}
-                  </span>
-                </Tile>
-              );
-            })}
-          </div>
-        </Row>
-
-        <Row label={t('export.aspect.label')} hint={prefs.quality === 'window' ? t('export.aspect.windowHint') : undefined}>
-          <div role="radiogroup" aria-label={t('export.aspect.label')} className="grid grid-cols-3 gap-2">
-            {ASPECTS.map((a) => {
-              const g = ASPECT_GLYPH[a];
-              const selected = prefs.quality !== 'window' && prefs.aspect === a;
-              return (
-                <Tile key={a} selected={selected} disabled={prefs.quality === 'window'} onClick={() => patch({ aspect: a })} testId={`export-aspect-${a}`} row>
-                  <span className="flex h-6 w-6 shrink-0 items-center justify-center">
-                    <span
-                      className={cn('block rounded-[3px] border-[1.5px]', selected ? 'border-accent-hover bg-accent/20' : 'border-ink-3')}
-                      style={{ width: g.w, height: g.h }}
-                    />
-                  </span>
-                  <span className="flex min-w-0 flex-col items-start leading-tight">
-                    <span className="text-xs font-semibold">{a}</span>
-                    <span className="truncate text-2xs text-ink-3">{aspectName(a)}</span>
-                  </span>
-                </Tile>
-              );
-            })}
-          </div>
-        </Row>
-
-        {isVideo && anim && (
-          <>
+          {isVideo && anim && (
             <Row label={t('export.fps.label')} hint={t('export.fps.hint')}>
               <Segmented<string>
                 fullWidth
@@ -325,22 +422,41 @@ export default function ExportDialog({ open, onClose, target }: ExportDialogProp
                 options={FPS_OPTIONS.map((f) => ({ value: String(f), label: `${f} fps` }))}
               />
             </Row>
-            <div className="grid grid-cols-2 gap-x-4 gap-y-2 rounded-lg bg-surface-1 px-3 py-2.5 text-2xs ring-1 ring-inset ring-line">
-              <div className="flex flex-col gap-0.5">
-                <span className="text-ink-3">{t('export.animation')}</span>
-                <span className="font-mono tabular-nums text-ink-1">{t('export.durationFrames', { duration: formatDuration(frames / prefs.fps), frames })}</span>
+          )}
+
+          {/* The chosen content in full (the list truncates its detail) and what the file will be. */}
+          {content && (
+            <div className="flex flex-col gap-2 rounded-lg bg-surface-1 px-3 py-2.5 text-2xs ring-1 ring-inset ring-line" data-testid="export-summary">
+              <div className="flex min-w-0 flex-col gap-0.5">
+                <span className="text-xs font-medium text-ink-1">{content.label}</span>
+                {content.detail && <span className="leading-snug text-ink-3">{content.detail}</span>}
               </div>
-              <div className="flex flex-col gap-0.5">
-                <span className="text-ink-3">{t('export.estimate')}</span>
-                <span className="font-mono tabular-nums text-ink-1">≈ {formatBytes(estimateVideoBytes(size, prefs.fps, anim.duration))}</span>
-              </div>
-              <div className="col-span-2 flex flex-col gap-0.5 border-t border-line pt-2">
-                <span className="text-ink-3">{t('export.encoder.label')}</span>
-                <span data-testid="export-encoder">{encoderLine}</span>
-              </div>
+              {isVideo && anim ? (
+                <div className="grid grid-cols-2 gap-x-4 gap-y-2 border-t border-line pt-2">
+                  <div className="flex min-w-0 flex-col gap-0.5">
+                    <span className="text-ink-3">{t('export.animation')}</span>
+                    <span className="font-mono tabular-nums text-ink-1">{t('export.durationFrames', { duration: formatDuration(frames / prefs.fps), frames })}</span>
+                  </div>
+                  <div className="flex min-w-0 flex-col gap-0.5">
+                    <span className="text-ink-3">{t('export.estimate')}</span>
+                    <span className="font-mono tabular-nums text-ink-1">≈ {formatBytes(estimateVideoBytes(size, prefs.fps, anim.duration))}</span>
+                  </div>
+                  <div className="col-span-2 flex flex-col gap-0.5 border-t border-line pt-2">
+                    <span className="text-ink-3">{t('export.encoder.label')}</span>
+                    <span data-testid="export-encoder">{encoderLine}</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between gap-3 border-t border-line pt-2">
+                  <span className="text-ink-3">{t('export.format')}</span>
+                  <span className="font-mono tabular-nums text-ink-1">
+                    PNG · {size.width}×{size.height}
+                  </span>
+                </div>
+              )}
             </div>
-          </>
-        )}
+          )}
+        </div>
       </div>
     </Dialog>
   );

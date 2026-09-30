@@ -48,6 +48,8 @@ export interface VideoExportOptions {
   onPlan?: (plan: VideoPlan) => void;
   /** Called synchronously with each rendered frame (e.g. to draw a live preview). */
   onFrame?: (canvas: HTMLCanvasElement, index: number) => void;
+  /** Video content to export (docs/adr/0010 addendum); undefined = the view's one animation. */
+  content?: string;
 }
 
 export interface VideoResult {
@@ -131,18 +133,18 @@ export async function planVideo(sizeIn: ExportSize, fps: number, force: VideoFor
  * Output name of the video. The animation may be named differently from the static view (2D
  * sweep, 3D intro of record A in a side-by-side layout), so the animation's own name wins.
  */
-export function videoBaseName(target: ExportTarget): string {
+export function videoBaseName(target: ExportTarget, content?: string): string {
   let anim: ReturnType<ExportTarget['animation']> = null;
   try {
-    anim = target.animation();
+    anim = target.animation(content);
   } catch {
     /* fall back to the view name */
   }
-  return anim?.fileName?.trim() ? safeFileName(anim.fileName) : target.fileName('video');
+  return anim?.fileName?.trim() ? safeFileName(anim.fileName) : target.fileName('video', content);
 }
 
-export function videoFileName(target: ExportTarget, size: ExportSize, fps: number, container: VideoContainer): string {
-  return `${videoBaseName(target)}_${size.width}x${size.height}_${fps}fps.${container}`;
+export function videoFileName(target: ExportTarget, size: ExportSize, fps: number, container: VideoContainer, content?: string): string {
+  return `${videoBaseName(target, content)}_${size.width}x${size.height}_${fps}fps.${container}`;
 }
 
 /**
@@ -200,7 +202,7 @@ async function waitForQueue(encoder: VideoEncoder, max: number) {
 
 /** Render + encode the target's animation. Always calls target.end() (also on error / cancel). */
 export async function exportVideo(target: ExportTarget, opts: VideoExportOptions): Promise<VideoResult> {
-  const anim = target.animation();
+  const anim = target.animation(opts.content);
   if (!anim) throw new Error('This view has no animation');
   const size = evenSize(opts.size);
   const fps = opts.fps;
@@ -212,7 +214,7 @@ export async function exportVideo(target: ExportTarget, opts: VideoExportOptions
   throwIfAborted(opts.signal);
   opts.onPlan?.(plan);
   // Named from the state the export starts from (the view may change once it is released).
-  const fileName = videoFileName(target, size, fps, plan.container);
+  const fileName = videoFileName(target, size, fps, plan.container, opts.content);
 
   const blob = plan.method === 'webcodecs' ? await encodeWebCodecs(target, plan, size, fps, anim.duration, total, opts) : await encodeRecorder(target, plan, size, fps, anim.duration, total, opts);
   return { blob, fileName, plan, size, fps, frames: total, duration: total / fps };
@@ -258,11 +260,11 @@ async function encodeWebCodecs(
   let lastYield = performance.now();
   try {
     encoder.configure(config);
-    await target.begin(size);
+    await target.begin(size, opts.content);
     for (let i = 0; i < total; i++) {
       throwIfAborted(opts.signal);
       if (encodeError) throw encodeError;
-      const canvas = await target.renderFrame(frameTime(i, fps, duration));
+      const canvas = await target.renderFrame(frameTime(i, fps, duration), opts.content);
       // Synchronously after rendering: the WebGL drawing buffer is still valid here.
       let src = canvas;
       if (canvas.width !== size.width || canvas.height !== size.height) {
@@ -329,9 +331,9 @@ async function encodeRecorder(
     await stopped;
   };
   try {
-    await target.begin(size);
+    await target.begin(size, opts.content);
     // Frame 0 is on the canvas before recording starts.
-    copyFrame(await target.renderFrame(frameTime(0, fps, duration)), copy);
+    copyFrame(await target.renderFrame(frameTime(0, fps, duration), opts.content), copy);
     opts.onFrame?.(copy, 0);
     const started = new Promise<void>((resolve) => {
       recorder.onstart = () => resolve();
@@ -354,7 +356,7 @@ async function encodeRecorder(
       throwIfAborted(opts.signal);
       if (recError) throw recError;
       const i = Math.min(total - 1, Math.max(last + 1, Math.floor(((performance.now() - t0) * fps) / 1000)));
-      copyFrame(await target.renderFrame(frameTime(i, fps, duration)), copy);
+      copyFrame(await target.renderFrame(frameTime(i, fps, duration), opts.content), copy);
       track.requestFrame();
       opts.onFrame?.(copy, i);
       opts.onProgress?.({ phase: 'render', done: i + 1, total });

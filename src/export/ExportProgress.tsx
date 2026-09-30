@@ -57,8 +57,14 @@ export default function ExportProgress() {
       <div role="dialog" aria-modal="true" aria-live="polite" className="w-full max-w-[448px] overflow-hidden rounded-xl bg-surface-2 shadow-panel ring-1 ring-line">
         <div className="flex items-center gap-2 border-b border-line px-5 py-3.5">
           {isVideo ? <Film size={15} className="text-accent-hover" /> : <ImageIcon size={15} className="text-accent-hover" />}
-          <h2 className="flex-1 text-sm font-semibold text-ink-1">{isVideo ? t('export.progress.titleVideo') : t('export.progress.titleImage')}</h2>
-          <span className="font-mono text-2xs tabular-nums text-ink-3">
+          <h2 className="min-w-0 flex-1 truncate text-sm font-semibold text-ink-1" data-testid="export-progress-title">
+            {job.label
+              ? t('export.progress.titleContent', { title: isVideo ? t('export.progress.titleVideo') : t('export.progress.titleImage'), content: job.label })
+              : isVideo
+                ? t('export.progress.titleVideo')
+                : t('export.progress.titleImage')}
+          </h2>
+          <span className="shrink-0 font-mono text-2xs tabular-nums text-ink-3">
             {job.size.width}×{job.size.height}
             {isVideo ? ` · ${job.fps} fps` : ''}
           </span>
