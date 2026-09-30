@@ -2,15 +2,16 @@ import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useSta
 import { LineChart, Play, Square, Table2 } from 'lucide-react';
 import { useAppStore, getAppState } from '../store/appStore';
 import { useRecordStyles } from '../store/hooks';
-import { translate, useT } from '../i18n';
+import { useT } from '../i18n';
 import { Button, IconButton, cn } from '../ui';
 import { useRegisterActiveTimeline, useTimeline } from '../timeline/timeline';
 import { TimelineBar } from '../timeline/TimelineBar';
-import { registerExportTarget, safeFileName } from '../export/registry';
+import { registerExportTarget } from '../export/registry';
 import { exclusionSummary } from '../data/anomalies';
 import { buildScene, CHART_BG, exclusionText, sliceParam, sweepProgressOf, titleText, type ChartInputs, type SceneOptions } from './scene';
 import { exportScale, font, renderChart, screenScale, type LegendHit } from './render';
-import { easeInOutSine, fmtLevel, GRAY_SWEEP, LEVEL_SWEEP, SWEEP_DURATION } from './slices';
+import { easeInOutSine, SWEEP_DURATION } from './slices';
+import { chart2dContents, contentSliceMode, isSliceContent, isSweepContent, sliceFileName, sweepAnimation, sweepFileName } from './exportContents';
 import { ChartTooltip } from './tooltip';
 import { DataTablePanel } from './DataTablePanel';
 
@@ -450,23 +451,47 @@ export default function Chart2DView() {
   // ---------------------------------------------------------------- export (docs/adr/0010)
   useEffect(() => {
     let canvas: HTMLCanvasElement | null = null;
+    /** Content of the running export (begin → end). */
+    let active: string | undefined;
+    /** Chart inputs of a content: the other slice mode is rendered by overriding it (never the store). */
+    const inputsFor = (content: string | undefined): ChartInputs => {
+      const mode = contentSliceMode(content);
+      const i = inputsRef.current;
+      return mode && mode !== i.sliceMode ? { ...i, sliceMode: mode } : i;
+    };
+    const optionsFor = (content: string | undefined, time: number | null): SceneOptions => {
+      if (isSliceContent(content)) return { t: null, interactive: false };
+      if (isSweepContent(content)) return { t: time ?? 0, interactive: false };
+      // The frame on screen (legacy: t = the view's sweep).
+      return time === null ? frameOptions(false) : { t: time, interactive: false };
+    };
     return registerExportTarget({
       id: 'chart2d',
-      /**
-       * kind 'video' = the sweep: SVM_2D_sweep_G255-G50 / SVM_2D_sweep_500-2nits. Otherwise the
-       * frame on screen, named after its own gray / level (mid-sweep too).
-       */
-      fileName: (kind?: 'image' | 'video') => {
+      // docs/adr/0010 addendum: the frame on screen, both slices at their current values and both
+      // sweep videos (whatever slice mode is on screen), with the current axes / records / styles.
+      contents: () => {
         const i = inputsRef.current;
-        if (kind === 'video') {
-          return safeFileName(i.sliceMode === 'gray' ? `SVM_2D_sweep_G${GRAY_SWEEP[0]}-G${GRAY_SWEEP[1]}` : `SVM_2D_sweep_${LEVEL_SWEEP[0]}-${LEVEL_SWEEP[1]}nits`);
-        }
-        const p = buildScene(i, frameOptions(false)).param;
-        return safeFileName(`SVM_2D_${i.sliceMode === 'gray' ? `G${Math.round(p)}` : `${fmtLevel(p)}nits`}`);
+        const o = frameOptions(false);
+        const animatedParam = o.t === null && !o.blend ? null : buildScene(i, o).param;
+        return chart2dContents({ lang: i.lang, sliceMode: i.sliceMode, sliceGray: i.sliceGray, sliceNits: i.sliceNits, axisMode: i.axisMode, animatedParam });
       },
-      animation: () => {
+      /**
+       * Sweeps: SVM_2D_sweep_G255-G50 / SVM_2D_sweep_500-2nits. Slices: SVM_2D_G127 /
+       * SVM_2D_100nits. The frame on screen is named after its own gray / level (mid-sweep too).
+       */
+      fileName: (kind, content) => {
         const i = inputsRef.current;
-        return { duration: SWEEP_DURATION, label: translate(i.lang, sweepLabelKey(i.sliceMode)) };
+        if (isSweepContent(content)) return sweepFileName(contentSliceMode(content)!);
+        if (content === 'graySlice') return sliceFileName('gray', i.sliceGray);
+        if (content === 'levelSlice') return sliceFileName('brightness', i.sliceNits);
+        if (kind === 'video' && content === undefined) return sweepFileName(i.sliceMode);
+        return sliceFileName(i.sliceMode, buildScene(i, frameOptions(false)).param);
+      },
+      animation: (content) => {
+        const i = inputsRef.current;
+        if (isSweepContent(content)) return sweepAnimation(i.lang, contentSliceMode(content)!);
+        // Legacy (no content): the sweep of the slice mode on screen.
+        return content === undefined ? { ...sweepAnimation(i.lang, i.sliceMode), fileName: undefined } : null;
       },
       // "Current view" preset (C5): the on-screen drawing buffer in device px (the view's aspect).
       viewSize: () => {
@@ -474,14 +499,16 @@ export default function Chart2DView() {
         const r = rt.current;
         return { width: cv?.width || Math.round(r.w * r.dpr), height: cv?.height || Math.round(r.h * r.dpr) };
       },
-      begin: async ({ width, height }) => {
+      begin: async ({ width, height }, content) => {
+        active = content;
         await ensureFonts();
-        buildScene(inputsRef.current, { t: 0, interactive: false }); // warm the sweep's range track
+        // Warm the sweep's range track (moving adaptive / free axes) of the mode to be rendered.
+        if (isSweepContent(content) || content === undefined) buildScene(inputsFor(content), { t: 0, interactive: false });
         canvas = document.createElement('canvas');
         canvas.width = Math.max(1, Math.round(width));
         canvas.height = Math.max(1, Math.round(height));
       },
-      renderFrame: async (time) => {
+      renderFrame: async (time, content = active) => {
         if (!canvas) {
           // renderFrame without begin(): fall back to the on-screen size
           const r = rt.current;
@@ -491,11 +518,12 @@ export default function Chart2DView() {
         }
         const ctx = canvas.getContext('2d')!;
         ctx.setTransform(1, 0, 0, 1, 0, 0);
-        const scene = buildScene(inputsRef.current, time === null ? frameOptions(false) : { t: time, interactive: false });
+        const scene = buildScene(inputsFor(content), optionsFor(content, time));
         renderChart(ctx, canvas.width, canvas.height, exportScale(canvas.width, canvas.height), scene, { emptyMessage: true });
         return canvas;
       },
       end: () => {
+        active = undefined;
         canvas = null;
       },
     });

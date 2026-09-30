@@ -14,6 +14,7 @@ import { Engine, setDebugClock, type EngineSettings, type HoverInfo } from './en
 import { INTRO_CHAPTERS, INTRO_DURATION } from './engine/intro';
 import type { ModelResult } from './engine/model';
 import { SceneTooltip } from './SceneTooltip';
+import { scene3dContents, sceneForContent } from './exportContents';
 
 const BG = '#07090d';
 /** Bottom room (CSS px) reserved for the timeline bar / viewport controls in the workbench. */
@@ -326,27 +327,57 @@ export default function Scene3DView() {
   // --- export ---------------------------------------------------------------------------
   useEffect(() => {
     let copy: HTMLCanvasElement | null = null;
+    /** Content of the running export (begin → end). */
+    let active: string | undefined;
+    const introAnim = () => {
+      const st = getAppState();
+      const a = selectActiveRecord(st);
+      const t = getT();
+      // The intro always renders record A alone: say so in side-by-side / difference layouts.
+      const label = st.layout !== 'single' && a ? t('scene3d.export.introOnlyA', { name: recordLabel(a, st.lang) }) : t('scene3d.export.intro');
+      return { duration: INTRO_DURATION, label, fileName: safeFileName(engine.introExportName()) };
+    };
     return registerExportTarget({
       id: 'scene3d',
-      // The intro video is named after the record it shows (A alone in every layout, C6); a PNG
-      // taken while the intro is on screen after the intro frame it shows (…_开场动画_5.0s).
-      fileName: (kind?: 'image' | 'video') => safeFileName(kind === 'video' ? engine.introExportName() : engine.imageExportName()),
-      animation: () => {
+      // docs/adr/0010 addendum: the frame on screen, the layout in top view / default 3D pose, the
+      // comparison side by side / the difference map (top view) and the intro video of record A.
+      contents: () => {
         const st = getAppState();
-        const a = selectActiveRecord(st);
-        const t = getT();
-        // The intro always renders record A alone: say so in side-by-side / difference layouts.
-        const label = st.layout !== 'single' && a ? t('scene3d.export.introOnlyA', { name: recordLabel(a, st.lang) }) : t('scene3d.export.intro');
-        const anim = { duration: INTRO_DURATION, label, fileName: safeFileName(engine.introExportName()) };
-        return anim;
+        return scene3dContents({
+          lang: st.lang,
+          layout: st.layout,
+          view: st.view,
+          representation: st.representation,
+          a: selectActiveRecord(st),
+          b: selectCompareRecord(st),
+          extras: selectCompareExtras(st).length,
+          renders: !!engine.model,
+          canRender: (l) => engine.canRenderLayout(l),
+          introTime: engine.introTime(),
+          adjusted: engine.viewAdjusted(),
+        });
       },
+      // The intro video is named after the record it shows (A alone in every layout, C6); a PNG
+      // taken while the intro is on screen after the intro frame it shows (…_开场动画_5.0s); the
+      // other contents after the layout / view they render (…_曲面_俯视, diff_…, A_vs_B_+2_…).
+      fileName: (kind, content) => {
+        if (content === 'intro' || (content === undefined && kind === 'video')) return safeFileName(engine.introExportName());
+        const scene = sceneForContent(content);
+        return safeFileName(scene ? engine.exportName(scene) : engine.imageExportName());
+      },
+      animation: (content) => (content === undefined || content === 'intro' ? introAnim() : null),
       // "Current view" preset (C5): the canvas drawing buffer as shown on screen.
       viewSize: () => engine.screenSize(),
-      begin: async ({ width, height }) => {
-        engine.beginExport(Math.round(width), Math.round(height));
+      begin: async ({ width, height }, content) => {
+        active = content;
+        // Other layouts / view presets are rendered offscreen (engine export scene), never by
+        // changing the store; endExport() restores the screen exactly.
+        engine.beginExport(Math.round(width), Math.round(height), sceneForContent(content));
       },
-      renderFrame: async (time) => {
-        engine.renderExport(time);
+      renderFrame: async (time, content = active) => {
+        if (content === 'intro') engine.renderExport(time ?? INTRO_DURATION);
+        else if (sceneForContent(content)) engine.renderExport(null, true);
+        else engine.renderExport(time);
         const src = engine.gl?.domElement;
         if (!copy) copy = document.createElement('canvas');
         if (!src) return copy;
@@ -360,6 +391,7 @@ export default function Scene3DView() {
         return copy;
       },
       end: () => {
+        active = undefined;
         engine.endExport(introOpenRef.current ? tl : null);
         engine.invalidate();
       },

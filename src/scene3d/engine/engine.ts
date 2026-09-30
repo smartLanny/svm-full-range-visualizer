@@ -39,7 +39,7 @@ import {
 import { captionLines, commonPrefixLength, titleLines, wrapParts } from './fitText';
 import { easeInOutCubic, smoothstep, Tween } from './easing';
 import { makeFrameParams, type FrameParams } from './frame';
-import { DEFAULT_PHI, DEFAULT_THETA, ViewControls, defaultUserView } from './controls';
+import { DEFAULT_PHI, DEFAULT_THETA, ViewControls, defaultUserView, type UserView } from './controls';
 import { IntroPlan, INTRO_DURATION } from './intro';
 
 export interface EngineSettings {
@@ -65,6 +65,23 @@ export interface EngineSettings {
    * sits there, see appStore.presentSafeLeft); 0 otherwise. Ignored in exports.
    */
   safeLeft?: number;
+}
+
+/**
+ * What an export renders instead of the scene on screen (docs/adr/0010, addendum "export
+ * contents"): applied in beginExport(), removed in endExport(). The store and the on-screen state
+ * are never changed; a view preset is rendered at its default pose (the user's zoom / pan / orbit
+ * belong to the screen).
+ */
+export interface ExportScene {
+  layout?: SceneLayout;
+  view?: ViewPreset;
+}
+
+/** The export scene applied to the on-screen settings. */
+export function exportSettings(s: EngineSettings, scene: ExportScene | null): EngineSettings {
+  if (!scene) return s;
+  return { ...s, layout: scene.layout ?? s.layout, view: scene.view ?? s.view };
 }
 
 export interface HoverInfo {
@@ -247,6 +264,14 @@ export class Engine {
   // export
   exporting = false;
   private exportSaved: { vp: Viewport; cssW: number; cssH: number; pxScale: number; dpr: number } | null = null;
+  /** Export scene in effect (see ExportScene); `settings` then holds exportSettings(screenSettings). */
+  private exportScene: ExportScene | null = null;
+  /** The on-screen settings while an export scene is applied (store updates keep arriving here). */
+  private screenSettings: EngineSettings | null = null;
+  /** On-screen camera state to put back after an export scene (preset + the user's view). */
+  private exportRestore: { preset: ViewPreset; view: UserView } | null = null;
+  /** The model was rebuilt while exporting (React is told once, after the export). */
+  private exportRebuilt = false;
 
   hoverCell: { panel: number; r: number; c: number } | null = null;
   /** Export of the intro while another layout is shown renders a single-layout model. */
@@ -538,7 +563,11 @@ export class Engine {
     this.rebuildModel();
   }
 
-  sync(s: EngineSettings) {
+  sync(input: EngineSettings) {
+    // An export scene is in effect: the screen's settings are kept for endExport(), the export
+    // renders them with the scene's layout / view.
+    if (this.exportScene) this.screenSettings = input;
+    const s = exportSettings(input, this.exportScene);
     const prev = this.settings;
     const t = now();
     const modelKey = this.modelKeyFor(s);
@@ -701,7 +730,10 @@ export class Engine {
       this.buildViews(m);
       this.panels[0]?.heightGroup.add(this.hover);
     }
-    this.onModel(res);
+    // Exports rebuild offscreen (layout overrides, export-size depth): the React overlay (empty
+    // state, tooltip) must not follow them — it is told once, after the export (endExport).
+    if (this.exporting) this.exportRebuilt = true;
+    else this.onModel(res);
   }
 
   /** Height cap changed: update heights in place, re-frame smoothly (no rebuild, no crossfade). */
@@ -1266,6 +1298,8 @@ export class Engine {
   onValuesHint: (hidden: boolean) => void = () => {};
 
   private updateValuesHint() {
+    // Export frames (other size / view) must not toggle the on-screen hint.
+    if (this.exporting) return;
     const s = this.settings;
     const show = !!s && !!this.model && s.overlays.values && s.view === 'top' && !this.introDriving && this.valuesNone;
     if (show !== this.valuesHintShown) {
@@ -2545,17 +2579,33 @@ export class Engine {
 
   // ------------------------------------------------------------------ export
 
-  beginExport(width: number, height: number) {
+  /**
+   * Resize rendering to exactly width×height px for an export. `scene` renders another layout /
+   * view preset than the one on screen (offscreen: nothing changes on screen, endExport() restores
+   * everything, the store is never touched).
+   */
+  beginExport(width: number, height: number, scene: ExportScene | null = null) {
     const gl = this.gl;
     if (!gl) return;
     this.exportSaved = { vp: { ...this.vp }, cssW: this.cssW, cssH: this.cssH, pxScale: this.pxScale, dpr: gl.getPixelRatio() };
     this.exporting = true;
+    this.exportRebuilt = false;
     gl.setPixelRatio(1);
     gl.setSize(width, height, false);
     this.vp = { width, height };
     this.pxScale = Math.max(0.75, Math.min(width, height) / 800);
     this.cssW = width / this.pxScale;
     this.cssH = height / this.pxScale;
+    if (scene && this.settings) {
+      // The user's camera belongs to the screen: saved here, put back in endExport().
+      const v = this.controls.view;
+      this.exportRestore = { preset: this.preset, view: { theta: v.theta, phi: v.phi, zoom: v.zoom, pan: v.pan.clone() } };
+      const screen = this.settings;
+      this.exportScene = scene;
+      this.sync(screen);
+      // A view preset is exported at its default pose (also when it is the preset on screen).
+      if (scene.view) this.controls.reset(defaultUserView());
+    }
     this.onViewportChanged();
     // Finish static transitions instantly.
     this.camTransition = null;
@@ -2574,14 +2624,17 @@ export class Engine {
   /**
    * Render one export frame synchronously; t = intro time (video) or null = exactly what is on
    * screen: the static view, or the intro frame at the current timeline time while the intro is
-   * open (paused / scrubbed) — never the static view behind it.
+   * open (paused / scrubbed) — never the static view behind it. `still` = the static view of the
+   * export scene, also while the intro is open (export contents other than the screen / intro).
    */
-  renderExport(t: number | null): void {
+  renderExport(t: number | null, still = false): void {
     if (!this.gl || !this.settings) return;
     let fp: FrameParams;
     this.introFrame = false;
     this.lastFrameOnScreen = false;
-    if (t === null) {
+    if (still) {
+      fp = this.staticFrame(now());
+    } else if (t === null) {
       const plan = this.introShowing() ? this.ensurePlan() : null;
       fp = plan ? this.liveHud(plan.evaluate(Math.min(INTRO_DURATION, Math.max(0, this.intro!.tl.time)), this.frame)) : this.staticFrame(now());
       this.introFrame = !!plan;
@@ -2617,12 +2670,56 @@ export class Engine {
     }
     this.layoutOverride = null;
     if (this.intro && !this.intro.tl) this.intro = restoreIntro ? { tl: restoreIntro, plan: null, planKey: '' } : null;
-    if (this.settings) this.sync(this.settings);
+    // Remove the export scene: back to the screen's settings (while still `exporting`: no
+    // cross-fade, no animated camera move), then the user's own camera.
+    const screen = this.exportScene ? this.screenSettings : this.settings;
+    this.exportScene = null;
+    this.screenSettings = null;
+    if (screen) this.sync(screen);
+    const restore = this.exportRestore;
+    this.exportRestore = null;
+    if (restore) {
+      this.preset = restore.preset;
+      this.controls.reset(restore.view);
+      this.camTransition = null;
+    }
     this.onViewportChanged();
     this.exporting = false;
     // Free the export-sized render targets; the next frame is drawn fresh at screen size.
     this.disposeSnapshot();
+    // The model was rebuilt offscreen (and back): the React overlay learns the screen's result.
+    if (this.exportRebuilt && this.modelResult) this.onModel(this.modelResult);
+    this.exportRebuilt = false;
     this.invalidate();
+  }
+
+  /** The user has zoomed, panned or orbited away from the preset's default pose. */
+  viewAdjusted(): boolean {
+    const v = this.exportRestore?.view ?? this.controls.view;
+    const d = defaultUserView();
+    const orbit = this.preset === 'perspective' && (Math.abs(v.theta - d.theta) > 1e-3 || Math.abs(v.phi - d.phi) > 1e-3);
+    return orbit || Math.abs(v.zoom) > 1e-3 || v.pan.lengthSq() > 1e-8;
+  }
+
+  /** The intro is on screen (playing, paused or scrubbed before its end). */
+  introOnScreen(): boolean {
+    return this.introShowing();
+  }
+
+  /** Current intro time (s) while the intro is on screen, else null. */
+  introTime(): number | null {
+    const tl = this.intro?.tl;
+    return tl && this.introShowing() ? Math.min(INTRO_DURATION, Math.max(0, tl.time)) : null;
+  }
+
+  /**
+   * Whether `layout` can be rendered with the current records / settings (side-by-side and the
+   * difference map need B; the difference map needs overlapping data). Pure data, no GPU work.
+   */
+  canRenderLayout(layout: SceneLayout): boolean {
+    const s = this.screenSettings ?? this.settings;
+    if (!s) return false;
+    return buildModel({ layout, a: s.a, b: s.b, extras: s.extras, clipLowGray: s.clipLowGray, maxNits: s.maxNits, colorMax: s.colorMax, heightCap: s.heightCap }).ok;
   }
 
   /** Drop the cross-fade snapshot and its texture. */
@@ -2665,19 +2762,20 @@ export class Engine {
    * with N extra panels — or "并排对比_6条" / "side-by-side_6" when the record names would make
    * the name too long for safeFileName (80 characters, the view part must survive).
    */
-  exportName(): string {
-    const s = this.settings;
-    const m = this.model;
-    if (!s || !m) return 'svm-3d';
+  exportName(scene: ExportScene | null = null): string {
+    // Named from the screen's settings with the scene applied (callable before beginExport()).
+    const s = exportSettings(this.screenSettings ?? this.settings ?? ({} as EngineSettings), scene);
+    if (!this.settings || !this.model || !s.a) return 'svm-3d';
     const t = (k: string, v?: Record<string, string | number>) => translate(s.lang, k, v);
-    const label = (i: number) => recordLabel(m.panels[i].record, s.lang);
+    const label = (r: SvmRecord) => recordLabel(r, s.lang);
     let base: string;
-    if (m.layout === 'diff') base = `diff_${label(0)}_vs_${recordLabel(m.panels[0].other!, s.lang)}`;
-    else if (m.layout === 'sideBySide') {
-      const n = m.panels.length;
-      base = `${label(0)}_vs_${label(1)}${n > 2 ? `_+${n - 2}` : ''}`;
+    if (s.layout === 'diff' && s.b) base = `diff_${label(s.a)}_vs_${label(s.b)}`;
+    else if (s.layout === 'sideBySide' && s.b) {
+      // The panels buildModel lays out: A, B and the extras C–F (at most MAX_COMPARE_PANELS).
+      const n = Math.min(MAX_COMPARE_PANELS, 2 + (s.extras?.length ?? 0));
+      base = `${label(s.a)}_vs_${label(s.b)}${n > 2 ? `_+${n - 2}` : ''}`;
       if (n > 2 && base.length > 56) base = t('scene3d.export.sideBySideN', { n });
-    } else base = label(0);
+    } else base = label(s.a);
     return `${base}_${t(`scene3d.representation.${s.representation}`)}_${t(`scene3d.views.${s.view}`)}`;
   }
 

@@ -1,17 +1,36 @@
 /**
  * Export contract between views and the export module (docs/adr/0010).
  *
- * A view that can be exported (3D terrain, 2D chart) registers an ExportTarget while mounted.
- * The exporter drives it offscreen:
+ * A view that can be exported (3D terrain, 2D chart, later the stats page) registers an
+ * ExportTarget while mounted. It lists what it can export — its CONTENTS (addendum 2026-09-30):
+ * the frame on screen, other renderings of the same data (the 3D layout in top view, the other 2D
+ * slice, …) and its animations. The dialog shows that list for the active tab; the exporter then
+ * drives the chosen content offscreen:
  *
- *   await target.begin({ width, height });            // resize rendering to exactly width×height px
- *   const canvas = await target.renderFrame(null);    // PNG of exactly what is on screen now
- *   for (i...) await target.renderFrame(i / fps);     // animation frame at t seconds
- *   target.end();                                     // restore interactive rendering
+ *   const list = target.contents?.() ?? legacy;       // [{ id: 'current', kind: 'image', … }, …]
+ *   await target.begin({ width, height }, id);         // resize rendering to exactly width×height px
+ *                                                      // and apply the content's overrides
+ *   const canvas = await target.renderFrame(null, id); // image content: its still frame
+ *   for (i...) await target.renderFrame(i / fps, id);  // video content: frame at t seconds
+ *   target.end();                                      // remove the overrides, restore the view
  *
- * Frames must be a pure function of t (never dependent on wall-clock), so video export is
- * deterministic and smooth regardless of machine speed. Everything that should appear in
- * the video (title, legend, colorbar, axes) must be drawn INTO the returned canvas.
+ * Rules every target keeps:
+ * - Frames are a pure function of (content, t) — never dependent on wall-clock — so video export
+ *   is deterministic and smooth regardless of machine speed.
+ * - Everything that should appear in the file (title, legend, colorbar, axes) is drawn INTO the
+ *   returned canvas. The canvas may come from WebGL, Canvas2D or a DOM snapshot drawn into a 2D
+ *   canvas: the exporter only reads its pixels synchronously after renderFrame() resolves.
+ * - A content that renders something other than the screen (another view preset, layout, slice
+ *   mode) does so through overrides applied in begin() and removed in end(). It never changes the
+ *   app store or persisted settings, and the on-screen view is exactly what it was after end()
+ *   (no flash while exporting, no state change afterwards).
+ * - Content ids are stable strings per view (the dialog remembers the last choice per view);
+ *   CURRENT_CONTENT = exactly what is on screen now.
+ *
+ * Backward compatibility: a target without contents() exports two implicit contents — the frame on
+ * screen (CURRENT_CONTENT) and, if animation() returns one, its animation (ANIMATION_CONTENT) —
+ * and every method may ignore the content argument, which is undefined for legacy callers
+ * (image = the frame on screen, video = the view's animation).
  */
 import type { MainTab } from '../types';
 
@@ -35,30 +54,67 @@ export interface ExportAnimation {
 
 export type ExportKindHint = 'image' | 'video';
 
+/** Id of the content "exactly what is on screen now" (every target has it, legacy ones implicitly). */
+export const CURRENT_CONTENT = 'current';
+/** Id of a legacy target's (one) animation, see ExportTarget.contents. */
+export const ANIMATION_CONTENT = 'animation';
+
+/** Glyph the dialog shows next to a content (a generic one when omitted). */
+export type ExportContentIcon = 'screen' | 'top' | 'perspective' | 'sideBySide' | 'diff' | 'intro' | 'slice' | 'sweep' | 'table' | 'chart';
+
+/** One exportable content of a view (docs/adr/0010, addendum "export contents"). */
+export interface ExportContent {
+  /** Stable id within the view, e.g. 'current', 'top', 'intro', 'graySweep'. */
+  id: string;
+  kind: ExportKindHint;
+  /** Short name in the dialog, e.g. "俯视热力图" / "Top-view heatmap" (UI language). */
+  label: string;
+  /** One-line description of what exactly is rendered (UI language). */
+  detail?: string;
+  /** Seconds of video (kind 'video'); the exporter uses animation(id).duration. */
+  duration?: number;
+  /**
+   * The content shows exactly what is on screen now (the dialog's default when nothing is
+   * remembered). CURRENT_CONTENT always does.
+   */
+  current?: boolean;
+  icon?: ExportContentIcon;
+}
+
 export interface ExportTarget {
   id: MainTab;
   /**
-   * Base filename without extension (safe characters only). The exporter passes what is being
-   * exported; targets whose video differs from the static view can branch on it (or set
-   * ExportAnimation.fileName, which takes precedence for videos).
+   * What this view can export right now, in display order, CURRENT_CONTENT first. Called each time
+   * the dialog opens (the list follows the view's state: layout, records, slice mode, …). Optional
+   * for backward compatibility (see the module comment).
    */
-  fileName(kind?: ExportKindHint): string;
-  /** The view's animation, or null if it has none. */
-  animation(): ExportAnimation | null;
-  begin(size: ExportSize): Promise<void>;
+  contents?(): ExportContent[];
   /**
-   * Render one frame. t = seconds into the animation (video export); null = PNG export of
-   * exactly what the user sees right now. If the view's animation is open (playing, paused or
-   * scrubbed), null must render the animation at its current timeline time, not the static
-   * view. The exporter pauses a playing timeline before calling begin(), so that time is stable.
+   * Base filename without extension (safe characters only) of the content (`content`, undefined =
+   * legacy: the frame on screen for images, the animation for videos). `kind` says what is being
+   * exported; ExportAnimation.fileName takes precedence for videos.
    */
-  renderFrame(t: number | null): Promise<HTMLCanvasElement>;
+  fileName(kind?: ExportKindHint, content?: string): string;
+  /** The animation of a video content (undefined = the view's one animation), or null if none. */
+  animation(content?: string): ExportAnimation | null;
+  /** Prepare an export of `content` at exactly `size` (apply its offscreen overrides). */
+  begin(size: ExportSize, content?: string): Promise<void>;
+  /**
+   * Render one frame of `content`. t = seconds into the content's animation (video export); null =
+   * the content's still image. For CURRENT_CONTENT (and legacy undefined) null is exactly what the
+   * user sees right now: if the view's animation is open (playing, paused or scrubbed), the
+   * animation at its current timeline time, not the static view. The exporter pauses a playing
+   * timeline before calling begin(), so that time is stable.
+   */
+  renderFrame(t: number | null, content?: string): Promise<HTMLCanvasElement>;
+  /** Remove every override of begin() and restore interactive rendering (always called). */
   end(): void;
   /**
    * The view's current on-screen drawing-buffer size in device pixels (canvas.width/height),
    * used for the "当前视图 / Current view" preset so the export matches what the user sees
    * (size AND aspect). Both built-in views implement it. Optional only for backward
    * compatibility: without it the exporter falls back to the browser window × devicePixelRatio.
+   * A DOM-based target returns its element's size × devicePixelRatio.
    */
   viewSize?(): ExportSize;
 }

@@ -4,7 +4,12 @@ import type { StringsModule } from '../index';
 const strings: StringsModule = {
   zh: {
     button: '导出',
-    buttonTitle: '导出图片或视频',
+    buttonTitle: '导出图片或视频：先选择导出内容，再选分辨率和画幅',
+    buttonTitleView: {
+      scene3d: '导出 3D 地形：当前画面、俯视热力图、立体图、并排对比、差值图或开场动画视频',
+      chart2d: '导出 2D 截面：当前画面、灰阶截面、亮度截面或扫描动画视频',
+      stats: '导出统计：可选择导出内容',
+    },
     unavailableStats: '统计页没有可导出的画面，请切换到 3D 或 2D 视图',
     unavailableView: '当前视图还没有可导出的画面',
     unavailableEmpty: '还没有记录：请先导入数据，或在“设置”中恢复内置记录',
@@ -19,6 +24,16 @@ const strings: StringsModule = {
       image: '图片 PNG',
       video: '视频',
       noAnimation: '当前视图没有动画，只能导出图片',
+    },
+    content: {
+      label: '导出内容',
+      hint: '{view} · {n} 项可选',
+      current: '当前画面',
+      currentDetail: '与屏幕上看到的完全一致',
+      image: '图片',
+      video: '视频',
+      onScreen: '屏幕上',
+      onScreenTitle: '这一项就是屏幕上现在的画面',
     },
     aspect: {
       label: '画幅',
@@ -59,6 +74,7 @@ const strings: StringsModule = {
     progress: {
       titleImage: '正在导出图片',
       titleVideo: '正在导出视频',
+      titleContent: '{title} · {content}',
       prepare: '准备中…',
       render: '渲染第 {done} / {total} 帧',
       finalize: '正在封装文件…',
@@ -84,7 +100,12 @@ const strings: StringsModule = {
   },
   en: {
     button: 'Export',
-    buttonTitle: 'Export image or video',
+    buttonTitle: 'Export an image or video: choose what to export, then size and aspect',
+    buttonTitleView: {
+      scene3d: 'Export the 3D terrain: current view, top-view heatmap, 3D view, side by side, difference map or intro video',
+      chart2d: 'Export the 2D cross-section: current view, gray slice, brightness slice or sweep videos',
+      stats: 'Export the stats: choose what to export',
+    },
     unavailableStats: 'Nothing to export on the stats page — switch to the 3D or 2D view',
     unavailableView: 'This view has nothing to export yet',
     unavailableEmpty: 'No records yet: import data, or restore the bundled records in Settings',
@@ -99,6 +120,16 @@ const strings: StringsModule = {
       image: 'Image PNG',
       video: 'Video',
       noAnimation: 'This view has no animation — image export only',
+    },
+    content: {
+      label: 'What to export',
+      hint: '{view} · {n} options',
+      current: 'Current view',
+      currentDetail: 'Exactly what is on screen',
+      image: 'Image',
+      video: 'Video',
+      onScreen: 'On screen',
+      onScreenTitle: 'This option is what the screen shows now',
     },
     aspect: {
       label: 'Aspect',
@@ -139,6 +170,7 @@ const strings: StringsModule = {
     progress: {
       titleImage: 'Exporting image',
       titleVideo: 'Exporting video',
+      titleContent: '{title} · {content}',
       prepare: 'Preparing…',
       render: 'Rendering frame {done} / {total}',
       finalize: 'Finalizing file…',

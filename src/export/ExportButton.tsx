@@ -14,9 +14,10 @@ if (import.meta.env.DEV) {
 }
 
 /**
- * Header entry point for PNG / video export (docs/adr/0010). Exports the active tab's view;
- * disabled with a hint on the stats tab, when there are no records, or while the view has not
- * registered an ExportTarget.
+ * Header entry point for PNG / video export (docs/adr/0010). Opens the dialog for the active tab's
+ * view, which offers that view's export contents (the frame on screen, other renderings, videos).
+ * Disabled with a hint when there are no records or while the view has not registered an
+ * ExportTarget (the stats page until it has one).
  */
 export default function ExportButton() {
   const t = useT();
@@ -26,8 +27,9 @@ export default function ExportButton() {
   const empty = useAppStore((s) => s.records.length === 0);
   const [open, setOpen] = useState(false);
 
-  const reason =
-    tab === 'stats' ? t('export.unavailableStats') : empty ? t('export.unavailableEmpty') : !target ? t('export.unavailableView') : null;
+  const reason = empty ? t('export.unavailableEmpty') : !target ? (tab === 'stats' ? t('export.unavailableStats') : t('export.unavailableView')) : null;
+  // The tooltip says what the dialog offers for this view (it lists the view's export contents).
+  const title = reason ?? t(`export.buttonTitleView.${tab}`);
 
   // Close the dialog if its target disappears (tab switch, view unmount) or the last record goes.
   useEffect(() => {
@@ -54,13 +56,14 @@ export default function ExportButton() {
   return (
     <>
       {/* Wrapper carries the tooltip: disabled buttons do not receive pointer events. */}
-      <span title={reason ?? t('export.buttonTitle')} className="inline-flex">
+      <span title={title} className="inline-flex">
         <Button
           size="sm"
           variant="secondary"
           icon={<Download size={14} />}
           disabled={!!reason || busy}
           onClick={() => setOpen(true)}
+          aria-haspopup="dialog"
           data-testid="export-button"
         >
           {t('export.button')}

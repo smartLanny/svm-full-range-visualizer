@@ -60,6 +60,17 @@ const strings: StringsModule = {
     exclusion: {
       gaps: '剔除处曲线断开，以点线示意（不做插值）',
     },
+    // Export contents of the 2D view (docs/adr/0010 addendum).
+    export: {
+      currentStatic: '{slice} · {axis}',
+      currentSweep: '扫描动画当前帧 · {slice}',
+      graySlice: '灰阶截面 G{v}',
+      graySliceDetail: 'SVM 随实测亮度变化 · {axis}',
+      levelSlice: '亮度截面 {v} nits',
+      levelSliceDetail: 'SVM 随灰阶变化（按档位亮度对齐）· {axis}',
+      graySweepDetail: '灰阶从 G255 连续降到 G50 · {axis}',
+      levelSweepDetail: '档位亮度从 500 连续降到 2 nits · {axis}',
+    },
     aria: '2D 截面对比图：{title}',
   },
   en: {
@@ -118,6 +129,17 @@ const strings: StringsModule = {
     },
     exclusion: {
       gaps: 'The curve breaks at excluded points, shown dotted (not interpolated)',
+    },
+    // Export contents of the 2D view (docs/adr/0010 addendum).
+    export: {
+      currentStatic: '{slice} · {axis}',
+      currentSweep: 'Sweep frame on screen · {slice}',
+      graySlice: 'Gray slice G{v}',
+      graySliceDetail: 'SVM vs measured luminance · {axis}',
+      levelSlice: 'Brightness slice {v} nits',
+      levelSliceDetail: 'SVM vs gray level (aligned by level luminance) · {axis}',
+      graySweepDetail: 'Gray level from G255 down to G50 · {axis}',
+      levelSweepDetail: 'Level luminance from 500 down to 2 nits · {axis}',
     },
     aria: '2D cross-section chart: {title}',
   },
