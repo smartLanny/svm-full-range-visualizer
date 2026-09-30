@@ -43,15 +43,21 @@ export const TRACK_SPEED = 1;
 
 /** Samples of a glide's range track along its progress p (0..1). */
 export const GLIDE_SAMPLES = 48;
-/** Hold / kernel half-width of a glide track, in samples. */
-const GLIDE_HOLD = 2;
+/** Hold / kernel half-width of a glide track, in samples (≈ 0.08 of the glide). */
+const GLIDE_HOLD = 4;
+/** Speed limit of a glide's bounds: share of the span per unit of progress p (a ≈ 1 s glide: per s). */
+const GLIDE_SPEED = 1.5;
+
+/** Opacity from which a point counts fully in the weighted range: anything clearly visible stays in the plot. */
+export const FULL_WEIGHT_ALPHA = 0.15;
+const weightOf = (a: number) => Math.min(1, Math.max(0, a / FULL_WEIGHT_ALPHA));
 
 const ax = (mode: SliceMode, x: number) => (mode === 'gray' ? Math.log10(x) : x);
 
 /**
  * Opacity-weighted extent of the points of a frame, in axis units. Every point is pulled toward
- * the frame's opacity-weighted centre by (1 − a): an opaque point counts fully, a fading one
- * partly, an invisible one not at all. For an all-opaque frame (every static slice) this is the
+ * the frame's weighted centre by (1 − w), w = min(1, a / FULL_WEIGHT_ALPHA): a (nearly) opaque
+ * point counts fully, a fading one partly, an invisible one not at all. For an all-opaque frame (every static slice) this is the
  * plain extent. Continuous in every point's position and opacity (min / max of continuous terms
  * around a continuous centre), so a fade never moves the range in one frame. null = no point.
  */
@@ -61,7 +67,7 @@ export function weightedRange(mode: SliceMode, slices: CurvePoint[][]): URange |
   let my = 0;
   for (const s of slices) {
     for (const p of s) {
-      const w = Math.min(1, Math.max(0, p.a));
+      const w = weightOf(p.a);
       if (!(w > 0) || !(p.x > 0 || mode !== 'gray') || !Number.isFinite(p.svm)) continue;
       sw += w;
       mx += w * ax(mode, p.x);
@@ -74,7 +80,7 @@ export function weightedRange(mode: SliceMode, slices: CurvePoint[][]): URange |
   const r: URange = { x0: Infinity, x1: -Infinity, y0: Infinity, y1: -Infinity };
   for (const s of slices) {
     for (const p of s) {
-      const w = Math.min(1, Math.max(0, p.a));
+      const w = weightOf(p.a);
       if (!(w > 0) || !(p.x > 0 || mode !== 'gray') || !Number.isFinite(p.svm)) continue;
       const x = mx + w * (ax(mode, p.x) - mx);
       const y = my + w * (p.svm - my);
@@ -132,6 +138,15 @@ function limitAndSmooth(held: Float64Array, upper: boolean, step: Float64Array |
   const out = cosineSmooth(d, kernel);
   if (sg < 0) for (let i = 0; i < n; i++) out[i] = -out[i];
   return out;
+}
+
+/**
+ * A non-negative series held at its running max over ±hold samples, then smoothed with a raised
+ * cosine of ±hold samples: never below the input, slow to let go (used for edge speeds, which
+ * widen the tick fades: a decelerating edge narrows them gently instead of at once).
+ */
+export function holdSmooth(v: ArrayLike<number>, hold: number): Float64Array {
+  return cosineSmooth(holdBound(v, true, hold), hold);
 }
 
 /** Zero-phase raised-cosine smoothing over ±kernel samples (ends held). */
@@ -258,7 +273,7 @@ export function sweepTrack(records: SvmRecord[], mode: SliceMode, clipLowGray: b
 export function glideTrack(mode: SliceMode, frameAt: (p: number) => CurvePoint[][], a: URange | null, b: URange | null): ((p: number) => URange | null) | null {
   const raw: (URange | null)[] = [];
   for (let i = 0; i <= GLIDE_SAMPLES; i++) raw.push(weightedRange(mode, frameAt(i / GLIDE_SAMPLES)));
-  const tr = smoothTrack(raw, 1 / GLIDE_SAMPLES, GLIDE_HOLD / GLIDE_SAMPLES, GLIDE_HOLD / GLIDE_SAMPLES, Infinity);
+  const tr = smoothTrack(raw, 1 / GLIDE_SAMPLES, GLIDE_HOLD / GLIDE_SAMPLES, GLIDE_HOLD / GLIDE_SAMPLES, GLIDE_SPEED);
   if (!tr) return !a && !b ? null : (p) => (p < 0.5 ? (a ?? b) : (b ?? a));
   const g0 = trackAt(tr, 0);
   const g1 = trackAt(tr, 1);

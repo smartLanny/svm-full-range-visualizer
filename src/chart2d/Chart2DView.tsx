@@ -132,14 +132,16 @@ export default function Chart2DView() {
       const r = rt.current;
       const ph = r.phase;
       const now = performance.now() / 1000;
+      // dp/dt of the eased glide progress (moving axes widen their edge fades with it)
+      const rate = (q: number, dur: number) => ((Math.PI / 2) * Math.sin(Math.PI * Math.min(1, Math.max(0, q)))) / dur;
       if (ph.kind === 'enter') {
         const p = (now - ph.start) / ph.dur;
-        if (p < 1) return { t: tl.time, interactive, blend: { from: ph.from, p: easeInOutSine(p) } };
+        if (p < 1) return { t: tl.time, interactive, blend: { from: ph.from, p: easeInOutSine(p), rate: rate(p, ph.dur) } };
         r.phase = { kind: 'sweep' };
         if (!tl.playing && tl.time === 0) tl.play();
       } else if (ph.kind === 'exit') {
         const p = (now - ph.start) / ph.dur;
-        if (p < 1) return { t: null, interactive, blend: { from: ph.from, p: easeInOutSine(p) } };
+        if (p < 1) return { t: null, interactive, blend: { from: ph.from, p: easeInOutSine(p), rate: rate(p, ph.dur) } };
         r.phase = { kind: 'static' };
         tl.seek(0);
       }

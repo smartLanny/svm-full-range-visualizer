@@ -11,7 +11,7 @@ import { translate } from '../i18n';
 import { buildAxes, fmtTickNits, tickLevel, xDomain, yDomain, X_COUNT, Y_COUNT, type AxisMotion, type Axes } from './scales';
 import { buildCurve, evalCurve, type Curve } from './spline';
 import { fmtLevel, settleSlice, sliceFor, slicesExtent, staticSliceFor, sweepParam, SWEEP_DURATION, type CurvePoint, type Extent } from './slices';
-import { glideTrack, levelTrack, seriesAt, sweepTrack, trackAt, TRACK_DT, type RangeTrack, type URange } from './axisTrack';
+import { GLIDE_SAMPLES, glideTrack, holdSmooth, levelTrack, seriesAt, sweepTrack, trackAt, TRACK_DT, TRACK_HOLD, type RangeTrack, type URange } from './axisTrack';
 
 export interface ChartInputs {
   /** All records in store order (legend lists hidden ones in the interactive view). */
@@ -163,13 +163,14 @@ interface TrackMemo {
   probeAxes: Map<AxisMode, Axes[]>;
   reserve: Map<AxisMode, string[]>;
   levels: Map<AxisMode, { x: Float64Array; y: Float64Array }>;
+  speeds: Map<AxisMode, Float64Array[]>;
 }
 let trackMemo: TrackMemo[] = [];
 function memoTrack(recs: SvmRecord[], mode: SliceMode, clip: boolean): TrackMemo {
   const key = `${mode}|${clip}`;
   const hit = trackMemo.find((m) => m.key === key && sameRecs(m.recs, recs));
   if (hit) return hit;
-  const value: TrackMemo = { key, recs, track: sweepTrack(recs, mode, clip), probeAxes: new Map(), reserve: new Map(), levels: new Map() };
+  const value: TrackMemo = { key, recs, track: sweepTrack(recs, mode, clip), probeAxes: new Map(), reserve: new Map(), levels: new Map(), speeds: new Map() };
   trackMemo = [value, ...trackMemo].slice(0, 3);
   return value;
 }
@@ -211,6 +212,40 @@ function sweepLevels(m: TrackMemo, mode: SliceMode, axisMode: AxisMode): { x: Fl
   return v;
 }
 
+/**
+ * Edge speeds of the domains along a range function sampled at n points `step` apart: share of the
+ * span per unit of the sample coordinate, per edge [x0, x1, y0, y1], held and smoothed over ±hold
+ * samples (axisTrack.holdSmooth).
+ */
+function speedSeries(mode: SliceMode, axisMode: AxisMode, n: number, step: number, at: (i: number) => Extent | null, hold: number): Float64Array[] {
+  const doms = Array.from({ length: n }, (_, i) => {
+    const e = at(i);
+    return [...xDomain(mode, axisMode, e), ...yDomain(axisMode, e)];
+  });
+  const out = [0, 1, 2, 3].map(() => new Float64Array(n));
+  for (let i = 0; i < n; i++) {
+    const a = doms[Math.max(0, i - 1)];
+    const b = doms[Math.min(n - 1, i + 1)];
+    const dt = (Math.min(n - 1, i + 1) - Math.max(0, i - 1)) * step || 1;
+    for (let k = 0; k < 4; k++) {
+      const span = k < 2 ? doms[i][1] - doms[i][0] : doms[i][3] - doms[i][2];
+      out[k][i] = Math.abs(b[k] - a[k]) / dt / Math.max(1e-9, span);
+    }
+  }
+  return out.map((v) => holdSmooth(v, hold));
+}
+
+/** Edge speeds over a sweep (share of the span per second), memoised with its track. */
+function sweepSpeeds(m: TrackMemo, mode: SliceMode, axisMode: AxisMode): Float64Array[] {
+  let v = m.speeds.get(axisMode);
+  if (!v) {
+    const tr = m.track;
+    v = tr ? speedSeries(mode, axisMode, tr.x0.length, TRACK_DT, (i) => toExtent(mode, trackAt(tr, i * TRACK_DT)), Math.round(TRACK_HOLD / TRACK_DT)) : [0, 1, 2, 3].map(() => new Float64Array(1));
+    m.speeds.set(axisMode, v);
+  }
+  return v;
+}
+
 /** Visual width proxy of a range value in tabular digits (reserve strings). */
 const valueWidth = (v: string) => [...v].reduce((a, ch) => a + (ch >= '0' && ch <= '9' ? 1 : ch === '.' ? 0.45 : 0.9), 0);
 const widest = (vs: string[]) => vs.reduce((a, b) => (valueWidth(b) > valueWidth(a) ? b : a), '');
@@ -238,9 +273,13 @@ function sweepReserve(m: TrackMemo, mode: SliceMode, axisMode: AxisMode): string
   return v;
 }
 
-/** Range function of a glide (axisTrack.glideTrack), memoised per glide. */
-let glideMemo: { key: string; recs: SvmRecord[]; value: ((p: number) => URange | null) | null }[] = [];
-function memoGlide(recs: SvmRecord[], key: string, make: () => ((p: number) => URange | null) | null) {
+/** A glide's range function (axisTrack.glideTrack) and edge speeds (per unit of p), memoised per glide. */
+interface GlideMemo {
+  range: ((p: number) => URange | null) | null;
+  speeds: Float64Array[] | null;
+}
+let glideMemo: { key: string; recs: SvmRecord[]; value: GlideMemo }[] = [];
+function memoGlide(recs: SvmRecord[], key: string, make: () => GlideMemo): GlideMemo {
   const hit = glideMemo.find((m) => m.key === key && sameRecs(m.recs, recs));
   if (hit) return hit.value;
   const value = make();
@@ -321,9 +360,10 @@ export interface SceneOptions {
    * Eased transition from another frame (`from`: sweep time or null = static slice) to the frame
    * at `t`; p = progress 0..1 (already eased). Used for the pre-roll into a sweep and the way
    * back when it is closed, so starting / ending a sweep never hard-cuts (values, axes, legend
-   * position and title width all move continuously).
+   * position and title width all move continuously). `rate` = dp/dt (1/s) of the eased progress,
+   * for the edge fades of moving axes (default 1).
    */
-  blend?: { from: number | null; p: number };
+  blend?: { from: number | null; p: number; rate?: number };
 }
 
 /** Build the scene for the frame described by `opts`. */
@@ -332,7 +372,7 @@ export function buildScene(inputs: ChartInputs, opts: SceneOptions): Scene {
   const tr = (k: string, v?: Record<string, string | number>) => translate(lang, k, v);
   const hidden = new Set(inputs.hiddenIds);
   const visible = inputs.records.filter((r) => !hidden.has(r.id));
-  const blend = opts.blend && opts.blend.p < 1 ? { from: opts.blend.from, p: Math.max(0, opts.blend.p) } : null;
+  const blend = opts.blend && opts.blend.p < 1 ? { from: opts.blend.from, p: Math.max(0, opts.blend.p), rate: opts.blend.rate ?? 1 } : null;
   const paramTo = sliceParam(inputs, opts.t);
   const paramFrom = blend ? sliceParam(inputs, blend.from) : paramTo;
   const param = blend ? mixParam(mode, paramFrom, paramTo, blend.p) : paramTo;
@@ -392,20 +432,29 @@ export function buildScene(inputs: ChartInputs, opts: SceneOptions): Scene {
     if (!moving) extent = staticExtent(param);
     else if (!blend) {
       extent = toExtent(mode, endRange(opts.t, paramTo));
-      motion = { settle: 0, from: null, level: endLevels(opts.t, paramTo) };
+      const tt = opts.t!;
+      const tr = tm!.track;
+      const sp = tr ? sweepSpeeds(tm!, mode, axisMode).map((a) => seriesAt(a, TRACK_DT, tt)) : null;
+      const spd: AxisMotion['speed'] = sp ? { x: [sp[0], sp[1]], y: [sp[2], sp[3]] } : undefined;
+      motion = { settle: 0, from: null, level: endLevels(tt, paramTo), speed: spd };
     } else {
       const bl = blend;
       const key = `${mode}|${clipLowGray}|${bl.from}|${paramFrom}|${opts.t}|${paramTo}`;
-      const glide = memoGlide(visible, key, () => {
+      const gm = memoGlide(visible, `${key}|${axisMode}`, () => {
         const w = (p: number) => staticW(bl.from) + (staticW(opts.t) - staticW(bl.from)) * p;
         const frameAt = (p: number) => visible.map((r) => framePoints(r, mixParam(mode, paramFrom, paramTo, p), w(p)));
-        return glideTrack(mode, frameAt, endRange(bl.from, paramFrom), endRange(opts.t, paramTo));
+        const range = glideTrack(mode, frameAt, endRange(bl.from, paramFrom), endRange(opts.t, paramTo));
+        const speeds = range ? speedSeries(mode, axisMode, GLIDE_SAMPLES + 1, 1 / GLIDE_SAMPLES, (i) => toExtent(mode, range(i / GLIDE_SAMPLES)), 4) : null;
+        return { range, speeds };
       });
+      const glide = gm.range;
       extent = toExtent(mode, glide ? glide(bl.p) : null);
       staticEnd = bl.from === null ? staticExtent(paramFrom) : opts.t === null ? staticExtent(paramTo) : null;
       const la = endLevels(bl.from, paramFrom);
       const lb = endLevels(opts.t, paramTo);
-      motion = { settle, from: staticEnd, level: { x: la.x + (lb.x - la.x) * bl.p, y: la.y + (lb.y - la.y) * bl.p } };
+      const sp = gm.speeds ? gm.speeds.map((a) => seriesAt(a, 1 / GLIDE_SAMPLES, bl.p) * bl.rate) : null;
+      const spd: AxisMotion['speed'] = sp ? { x: [sp[0], sp[1]], y: [sp[2], sp[3]] } : undefined;
+      motion = { settle, from: staticEnd, level: { x: la.x + (lb.x - la.x) * bl.p, y: la.y + (lb.y - la.y) * bl.p }, speed: spd };
     }
   }
   const axes = buildAxes(mode, axisMode, extent, motion);

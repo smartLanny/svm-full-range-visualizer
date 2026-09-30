@@ -29,6 +29,9 @@ export interface AxisMotionState {
   /** Domain at the static end of a glide (= the domain itself when there is none). */
   s0: number;
   s1: number;
+  /** Speed of the lower / upper edge (share of the span per second): widens the edge fades. */
+  v0: number;
+  v1: number;
 }
 
 export interface Axis {
@@ -127,6 +130,8 @@ export interface AxisMotion {
   settle: number;
   /** Extent at the static end of a glide (settle > 0), else null. */
   from: Extent | null;
+  /** Speed of each axis's lower / upper edge (share of the span per second); default 0. */
+  speed?: { x: [number, number]; y: [number, number] };
   /**
    * Tick density of each axis as a continuous level (see tickLevel; between two integers = a
    * cross-fade of both tick sets). The sweep's levels come from its range track, quantised with
@@ -136,8 +141,8 @@ export interface AxisMotion {
   level?: { x: number; y: number };
 }
 
-/** x domain (axis units) for a slice + axis mode; `extent` in data units (nits or gray). */
-export function xDomain(slice: SliceMode, mode: AxisMode, extent: Extent | null): [number, number] {
+/** x range in data units (nits or gray) for a slice + axis mode; `extent` in data units. */
+function xRange(slice: SliceMode, mode: AxisMode, extent: Extent | null): [number, number] {
   if (slice === 'gray') {
     let lo = STANDARD_NITS[0];
     let hi = STANDARD_NITS[1];
@@ -148,10 +153,16 @@ export function xDomain(slice: SliceMode, mode: AxisMode, extent: Extent | null)
       lo = Math.pow(10, a - pad);
       hi = Math.pow(10, b + pad);
     }
-    return [Math.log10(lo), Math.log10(hi)];
+    return [lo, hi];
   }
   if (mode !== 'standard' && extent) return [extent.xMin, Math.max(extent.xMax, extent.xMin + 1)];
   return [STANDARD_GRAY[0], STANDARD_GRAY[1]];
+}
+
+/** x domain (axis units: log10 nits or gray) for a slice + axis mode; `extent` in data units. */
+export function xDomain(slice: SliceMode, mode: AxisMode, extent: Extent | null): [number, number] {
+  const [lo, hi] = xRange(slice, mode, extent);
+  return slice === 'gray' ? [Math.log10(lo), Math.log10(hi)] : [lo, hi];
 }
 
 /** y (SVM) domain: 0–6 unless the axes are free (data extent, padded by 10 %, not below 0). */
@@ -209,7 +220,8 @@ export function buildAxes(slice: SliceMode, mode: AxisMode, extent: Extent | nul
   let x: Axis;
   if (moving) {
     const [s0, s1] = xDomain(slice, mode, from);
-    const m = { settle, s0, s1 };
+    const [v0, v1] = motion!.speed?.x ?? [0, 0];
+    const m = { settle, s0, s1, v0, v1 };
     const lam = motion!.level?.x ?? tickLevel(slice === 'gray', xu1 - xu0, X_COUNT);
     const ticks =
       slice === 'gray'
@@ -217,7 +229,8 @@ export function buildAxes(slice: SliceMode, mode: AxisMode, extent: Extent | nul
         : linearMotionTicks(xu0, xu1, X_COUNT, m, lam, (v) => String(Math.round(v)), (v) => String(Math.round(v)));
     x = { log: slice === 'gray', u0: xu0, u1: xu1, ticks, motion: m };
   } else if (slice === 'gray') {
-    x = { log: true, u0: xu0, u1: xu1, ticks: logAxisTicks(Math.pow(10, xu0), Math.pow(10, xu1), mode === 'standard') };
+    const [lo, hi] = xRange(slice, mode, extent);
+    x = { log: true, u0: xu0, u1: xu1, ticks: logAxisTicks(lo, hi, mode === 'standard') };
   } else {
     const ticks =
       mode === 'standard'
@@ -231,7 +244,8 @@ export function buildAxes(slice: SliceMode, mode: AxisMode, extent: Extent | nul
   let y: Axis;
   if (moving && mode === 'free') {
     const [s0, s1] = yDomain(mode, from);
-    const m = { settle, s0, s1 };
+    const [v0, v1] = motion!.speed?.y ?? [0, 0];
+    const m = { settle, s0, s1, v0, v1 };
     const lam = motion!.level?.y ?? tickLevel(false, y1 - y0, Y_COUNT);
     y = { log: false, u0: y0, u1: y1, ticks: linearMotionTicks(y0, y1, Y_COUNT, m, lam, (v, step) => fmtLinear(v, step), fmtShort), motion: m };
   } else {
@@ -243,12 +257,14 @@ export function buildAxes(slice: SliceMode, mode: AxisMode, extent: Extent | nul
 // ---------------------------------------------------------------------------------------------
 // Moving axes (docs/adr/0006, fix round 3).
 //
-// Nothing on a moving axis pops. Ticks fade near the domain's edges (gridlines just inside,
-// labels just outside, where they slide off), continuously in the domain. The tick density is a
-// continuous level λ (tickLevel): between two integer levels both tick sets cross-fade (a log
-// axis's 2 / 5 labels and minor gridlines, a linear axis's next 1-2-5 step); λ changes over a
-// few hundred ms around a level switch and is an integer otherwise. Labels are formatted per value
-// (a value's label never changes format while the axis moves).
+// Nothing on a moving axis pops. Ticks fade near the domain's edges, continuously in the domain:
+// a gridline fades out just inside an edge, a label fades out just beyond it (where it slides off;
+// a label on an edge that does not move, like SVM 0, stays fully visible). The faster an edge
+// moves, the wider its fade reaches inside, so every fade lasts at least FADE_TIME whatever the
+// zoom speed. The tick density is a continuous level λ (tickLevel): between two integer levels
+// both tick sets cross-fade (a log axis's 2 / 5 labels and minor gridlines, a linear axis's next
+// 1-2-5 step); λ changes over a few hundred ms around a level switch and is an integer otherwise.
+// Labels are formatted per value (a value's label never changes format while the axis moves).
 //
 // A static frame keeps the exact static ticks (buildAxes without motion). A glide from / to a
 // static slice starts / ends on them: an opacity is its moving value plus settle × (static edge
@@ -256,10 +272,12 @@ export function buildAxes(slice: SliceMode, mode: AxisMode, extent: Extent | nul
 // at the static end it equals the static tick set exactly and it becomes the moving value as
 // settle → 0.
 
-/** Gridlines fade out within this share of the span inside the domain's edges. */
+/** Gridlines fade out within this share of the span inside the domain's edges (at least). */
 const GRID_EDGE = 0.02;
-/** Labels fade out within this share of the span outside the domain's edges. */
+/** Labels fade out within this share of the span beyond the domain's edges. */
 const LABEL_EDGE = 0.03;
+/** A moving edge's fades reach speed × FADE_TIME inside (s): no fade is shorter than this. */
+const FADE_TIME = 0.15;
 
 const smooth01 = (u: number) => {
   const v = Math.min(1, Math.max(0, u));
@@ -269,15 +287,16 @@ const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
 
 /** Still-axis visibility: inside the domain (strict: not on its edges). */
 const hardIn = (u: number, a: number, b: number, strict = false) => (strict ? u > a && u < b : u >= a - 1e-9 && u <= b + 1e-9) ? 1 : 0;
-/** Moving gridline visibility: fades out just inside the edges. */
-const softLine = (u: number, a: number, b: number) => {
-  const f = GRID_EDGE * (b - a) || 1e-9;
-  return smooth01((u - a) / f) * smooth01((b - u) / f);
+/** Moving gridline visibility: fades out inside the edges (wider at a fast edge). */
+const softLine = (u: number, a: number, b: number, m: AxisMotionState) => {
+  const span = b - a || 1e-9;
+  return smooth01((u - a) / (Math.max(GRID_EDGE, m.v0 * FADE_TIME) * span)) * smooth01((b - u) / (Math.max(GRID_EDGE, m.v1 * FADE_TIME) * span));
 };
-/** Moving label visibility: fades out just outside the edges. */
-const softLabel = (u: number, a: number, b: number) => {
-  const f = LABEL_EDGE * (b - a) || 1e-9;
-  return smooth01((u - a) / f + 1) * smooth01((b - u) / f + 1);
+/** Moving label visibility: fades out from speed × FADE_TIME inside to LABEL_EDGE beyond the edges. */
+const softLabel = (u: number, a: number, b: number, m: AxisMotionState) => {
+  const span = b - a || 1e-9;
+  const out = LABEL_EDGE * span;
+  return smooth01((u - a + out) / (out + m.v0 * FADE_TIME * span)) * smooth01((b - u + out) / (out + m.v1 * FADE_TIME * span));
 };
 
 /**
@@ -289,7 +308,7 @@ export function edgeAlpha(axis: Axis, u: number, kind: 'line' | 'label', strict 
   const m = axis.motion;
   if (!m) return hardIn(u, axis.u0, axis.u1, strict);
   const soft = kind === 'line' ? softLine : softLabel;
-  return clamp01(soft(u, axis.u0, axis.u1) + m.settle * (hardIn(u, m.s0, m.s1, strict) - soft(u, m.s0, m.s1)));
+  return clamp01(soft(u, axis.u0, axis.u1, m) + m.settle * (hardIn(u, m.s0, m.s1, strict) - soft(u, m.s0, m.s1, m)));
 }
 
 /**
@@ -298,9 +317,9 @@ export function edgeAlpha(axis: Axis, u: number, kind: 'line' | 'label', strict 
  */
 function tickAlphas(u: number, a: number, b: number, d: number, m: AxisMotionState, hS: number) {
   const pin = m.settle * hS;
-  const g = pin > 0 ? pin * (hardIn(u, m.s0, m.s1) - softLine(u, m.s0, m.s1)) : 0;
-  const l = pin > 0 ? pin * (hardIn(u, m.s0, m.s1) - softLabel(u, m.s0, m.s1)) : 0;
-  return { alpha: clamp01(d * softLine(u, a, b) + g), labelAlpha: clamp01(d * softLabel(u, a, b) + l) };
+  const g = pin > 0 ? pin * (hardIn(u, m.s0, m.s1) - softLine(u, m.s0, m.s1, m)) : 0;
+  const l = pin > 0 ? pin * (hardIn(u, m.s0, m.s1) - softLabel(u, m.s0, m.s1, m)) : 0;
+  return { alpha: clamp01(d * softLine(u, a, b, m) + g), labelAlpha: clamp01(d * softLabel(u, a, b, m) + l) };
 }
 
 /** Log-axis ticks of a moving (non-standard) axis over the domain [u0, u1] (log10 nits), density λ ∈ [0, 2]. */
