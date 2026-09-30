@@ -8,7 +8,21 @@ import { SVM_AT_NITS } from '../data/stats';
 import { SCENARIO_IDS, usedMean, weightShares, type ScenarioConfig } from '../data/scenarios';
 import { useT } from '../i18n';
 import { IconButton, cn } from '../ui';
-import { fmtNitsOrDash, fmtPct, markOf, metricByKey, scenarioRenormalised, SCENARIO_METRIC, type MetricKey, type Ranking, type ScenarioMetricKey, type SortDir, type SortKey, type StatsRow } from './model';
+import {
+  fmtNitsOrDash,
+  fmtPct,
+  markOf,
+  metricByKey,
+  scenarioRenormalised,
+  SCENARIO_METRIC,
+  SCENARIO_METRIC_KEYS,
+  type MetricKey,
+  type Ranking,
+  type ScenarioMetricKey,
+  type SortDir,
+  type SortKey,
+  type StatsRow,
+} from './model';
 import {
   CaveatMark,
   caveatText,
@@ -296,7 +310,7 @@ export function StatsTable({ rows, styles, lang, rank, scrolledX, sortKey, sortD
                 <td className="whitespace-nowrap px-2 py-2 pr-3 text-right group-hover:bg-surface-3">
                   <CoverageValue stats={s} caveat={caveat} className="px-1.5 py-0.5" />
                 </td>
-                {(['scenario', ...SCENARIO_IDS.map((id) => SCENARIO_METRIC[id])] as ScenarioMetricKey[]).map((k) => (
+                {SCENARIO_METRIC_KEYS.map((k) => (
                   <ScenarioCell key={k} row={row} k={k} mark={markFor(k, row)} config={scenarios} className={cn('group-hover:bg-surface-3', k === 'scOutdoor' && 'pr-3')} />
                 ))}
                 <td className={cn('px-1 py-2 text-right group-hover:bg-surface-3', last && 'rounded-br-xl')}>
