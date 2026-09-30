@@ -417,8 +417,12 @@ export function buildScene(inputs: ChartInputs, opts: SceneOptions): Scene {
   // during a glide, the glide's own frames, pinned to the exact ranges of its two ends.
   const moving = axisMode !== 'standard' && (opts.t !== null || !!blend);
   const tm = moving && (opts.t !== null || (blend && blend.from !== null)) ? memoTrack(visible, mode, clipLowGray) : null;
-  const staticExtent = (prm: number): Extent | null =>
-    prm === param && settle === 1 ? slicesExtent(series.map((se) => se.points)) : slicesExtent(visible.map((r) => staticSliceFor(r, mode, prm, clipLowGray)));
+  const staticExtents = new Map<number, Extent | null>();
+  const staticExtent = (prm: number): Extent | null => {
+    if (!staticExtents.has(prm))
+      staticExtents.set(prm, prm === param && settle === 1 ? slicesExtent(series.map((se) => se.points)) : slicesExtent(visible.map((r) => staticSliceFor(r, mode, prm, clipLowGray))));
+    return staticExtents.get(prm)!;
+  };
   const endRange = (tt: number | null, prm: number): URange | null => (tt === null ? toRange(mode, staticExtent(prm)) : tm?.track ? trackAt(tm.track, tt) : null);
   const endLevels = (tt: number | null, prm: number) => {
     if (tt === null || !tm) return domainLevels(mode, axisMode, staticExtent(prm));

@@ -313,7 +313,10 @@ export default function Chart2DView() {
     tl.seek(0);
     const dq = sweepProgressOf(inp.sliceMode, sliceParam(inp, from));
     warmUp({ t: 0, interactive: !inp.presenting, blend: { from, p: 0 } });
-    r.phase = Math.abs(dq) < 1e-3 ? { kind: 'sweep' } : { kind: 'enter', start: performance.now() / 1000, dur: glideDuration(dq), from };
+    // Already at the sweep start: no glide, except that moving adaptive / free axes still glide
+    // from the static slice's range to the sweep's (never switch in one frame).
+    const still = Math.abs(dq) < 1e-3 && (inp.axisMode === 'standard' || from !== null);
+    r.phase = still ? { kind: 'sweep' } : { kind: 'enter', start: performance.now() / 1000, dur: glideDuration(dq), from };
     if (r.phase.kind === 'sweep') tl.play();
     setSweeping(true);
     requestDraw();
