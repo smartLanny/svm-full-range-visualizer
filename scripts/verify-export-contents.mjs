@@ -668,7 +668,7 @@ if (run('stats')) {
   d = await page.evaluate(([a, b]) => window.__vx.diff(a, b, 540), [b64(table.file), ref.png.split(',')[1]]);
   ok(d.mean < 0.5, `stats-table-portrait: equals the render of known layout (mean diff ${d.mean.toFixed(3)})`);
   ok(
-    ref.info.bands.length === 2 && ref.info.bands[0].cols[0] === 'record' && ref.info.bands[1].cols.join(',') === 'record,at0,at1,at2,at3,coverage',
+    ref.info.bands.length === 2 && ref.info.bands[0].cols[0] === 'record' && ref.info.bands[1].cols.join(',') === 'record,at0,at1,at2,at3,coverage,scenario,scNight,scIndoor,scOutdoor',
     `stats-table-portrait: two bands (${ref.info.bands.map((b) => b.cols.length).join(' + ')} columns, record column repeated)`,
   );
   for (const [bi, b] of ref.info.bands.entries()) {
@@ -679,7 +679,7 @@ if (run('stats')) {
   const tableLand = await exportContent(page, 'table', { tag: 'stats-table' });
   await checkPng(page, tableLand.file, { width: 1920, height: 1080 }, 'stats-table', { minSat: 0.01, minFg: 0.05 });
   ref = await known(1920, 1080, 'table');
-  ok(ref.info.bands.length === 1 && ref.info.bands[0].cols.length === 13, `stats-table: landscape = one band of ${ref.info.bands[0].cols.length} columns`);
+  ok(ref.info.bands.length === 1 && ref.info.bands[0].cols.length === 17, `stats-table: landscape = one band of ${ref.info.bands[0].cols.length} columns`);
 
   // remembered choice: the table again, though the cards are on screen
   await openDialog(page);
