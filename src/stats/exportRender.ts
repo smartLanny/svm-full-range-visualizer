@@ -69,9 +69,10 @@ export interface StatsRenderInfo {
   strip: Box | null;
   /** Output px per design px of the cards / table. */
   scale: number;
-  /** Cards: grid and each card's rectangle (in row order). */
+  /** Cards: grid and each card's rectangle (in row order), and its heatmap's (null: none). */
   grid?: CardGrid;
   cards?: Box[];
+  heatmaps?: (Box | null)[];
   /** Table: the bands (column keys) and their rectangles. */
   bands?: { cols: string[]; box: Box }[];
 }
@@ -258,6 +259,8 @@ interface Env {
   views: Map<string, GridView>;
   /** Heatmap canvases drawn during this render (their backing stores are released at the end). */
   scratch: HTMLCanvasElement[];
+  /** Heatmap rectangle of the card last drawn (card design px), null without a thumbnail. */
+  heat?: Box | null;
 }
 
 function viewOf(e: Env, row: StatsRow): GridView {
@@ -545,6 +548,7 @@ function cardPass(p: Pen, e: Env, row: StatsRow, cw: number, h: number | null): 
       return c;
     });
     p.ring(52, hy, avail, TH, 6, C.line);
+    e.heat = { x: 52, y: hy, w: avail, h: TH };
     for (const g of thumbGrayLabels(extent, sliceGray, TH)) {
       p.text(`G${g.g}`, 44, hy + g.top, 14, 10, g.accent ? 500 : 400, g.accent ? C.accentHover : C.ink3, 'right');
     }
@@ -1016,16 +1020,20 @@ export function renderStatsExport(canvas: HTMLCanvasElement, input: StatsExportI
     const gx = body.x + (body.w - grid.width) / 2;
     const gy = body.y + (body.h - grid.height) / 2;
     const cards: Box[] = [];
+    const heatmaps: (Box | null)[] = [];
     rows.forEach((r, i) => {
       const col = i % grid.cols;
       const row = Math.floor(i / grid.cols);
       const x = Math.round(gx + col * (grid.cardW + 16) * s);
       const y = Math.round(gy + row * (grid.cardH + 16) * s);
       ctx.setTransform(s, 0, 0, s, x, y);
+      e.heat = null;
       cardPass(pen, e, r, grid.cardW, grid.cardH);
       cards.push({ x, y, w: grid.cardW * s, h: grid.cardH * s });
+      const hb = e.heat as Box | null;
+      heatmaps.push(hb ? { x: x + hb.x * s, y: y + hb.y * s, w: hb.w * s, h: hb.h * s } : null);
     });
-    Object.assign(info, { scale: s, grid, cards });
+    Object.assign(info, { scale: s, grid, cards, heatmaps });
   } else if (P.fit) {
     const fit: TableFit = P.fit;
     const s = fit.scale;

@@ -597,10 +597,12 @@ if (run('stats')) {
   ok(head.bright > 0.01, `stats-cards: title / scope text in the header band (${(head.bright * 100).toFixed(1)} % text px)`);
   let textOk = 0;
   let heatOk = 0;
-  for (const c of ref.info.cards) {
+  for (const [i, c] of ref.info.cards.entries()) {
     const name = await region(cards.file, { x: c.x + 66 * s, y: c.y + 14 * s, w: c.w - 82 * s, h: 20 * s });
     const hero = await region(cards.file, { x: c.x + 16 * s, y: c.y + 80 * s, w: 80 * s, h: 40 * s });
-    const heat = await region(cards.file, { x: c.x + 60 * s, y: c.y + c.h * 0.58, w: c.w - 80 * s, h: 60 * s });
+    // The heatmap's own rectangle (its height follows the card width: the plate aspect).
+    const hb = ref.info.heatmaps?.[i];
+    const heat = await region(cards.file, hb ? { x: hb.x + 4 * s, y: hb.y + hb.h * 0.1, w: hb.w - 8 * s, h: hb.h * 0.8 } : { x: c.x + 60 * s, y: c.y + c.h * 0.58, w: c.w - 80 * s, h: 60 * s });
     if (name.bright > 0.04 && hero.bright > 0.08) textOk++;
     if (heat.sat > 0.3) heatOk++;
   }
