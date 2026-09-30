@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { SvmRecord } from '../types';
 import { ColormapType } from '../types';
-import { DEFAULT_SETTINGS, useAppStore } from './appStore';
-import { sanitizeSettings, sanitizeUserRecords } from './bootstrap';
+import { cleanExtras, DEFAULT_SETTINGS, fillPanelIds, nextPanelCandidate, selectComparePanelIds, selectComparePanels, useAppStore } from './appStore';
+import { sanitizePrefs, sanitizeSettings, sanitizeUserRecords } from './bootstrap';
 import { applyBundledEdit, bundledEditsOf } from './persistence';
 
 const rec = (id: string, extra: Partial<SvmRecord> = {}): SvmRecord => ({
@@ -71,7 +71,7 @@ describe('bundled edits', () => {
 });
 
 describe('appStore records', () => {
-  beforeEach(() => useAppStore.setState({ records: [], activeId: null, compareId: null, hiddenIds: [], layout: 'single' }));
+  beforeEach(() => useAppStore.setState({ records: [], activeId: null, compareId: null, compareExtraIds: [], hiddenIds: [], layout: 'single' }));
 
   it('importing into an empty app fills A and B', () => {
     useAppStore.getState().addRecords([rec('x'), rec('y')]);
@@ -103,5 +103,131 @@ describe('appStore records', () => {
     expect(s.records.map((r) => r.id)).toEqual(['x', 'y', 'z']);
     expect(s.compareId).toBe('y');
     expect(s.hiddenIds).toContain('y');
+  });
+});
+
+describe('side-by-side panels (A, B + extras C–F)', () => {
+  const ids = ['r0', 'r1', 'r2', 'r3', 'r4', 'r5', 'r6', 'r7'];
+  const st = () => useAppStore.getState();
+  beforeEach(() => {
+    useAppStore.setState({ records: [], activeId: null, compareId: null, compareExtraIds: [], hiddenIds: [], layout: 'single' });
+    st().setRecords(ids.map((id) => rec(id)));
+  });
+
+  /** Every invariant of the panel list; returns the violations (empty = fine). */
+  const violations = () => {
+    const s = st();
+    const known = new Set(s.records.map((r) => r.id));
+    const out: string[] = [];
+    const panels = selectComparePanelIds(s);
+    if (s.compareExtraIds.length > 4) out.push('more than 4 extras');
+    if (new Set(s.compareExtraIds).size !== s.compareExtraIds.length) out.push('duplicate extra');
+    if (s.compareExtraIds.some((x) => x === s.activeId || x === s.compareId)) out.push('extra equals A or B');
+    if (s.compareExtraIds.some((x) => !known.has(x))) out.push('unknown extra');
+    if (s.activeId !== null && s.activeId === s.compareId) out.push('A equals B');
+    if (s.records.length >= 2 && (panels.length < 2 || panels.length > 6)) out.push(`panel count ${panels.length}`);
+    return out;
+  };
+
+  it('adds up to four extra panels (six in all), each record once, never A or B', () => {
+    st().addComparePanel('r0'); // A
+    st().addComparePanel('r1'); // B
+    for (const id of ids.slice(2)) st().addComparePanel(id);
+    st().addComparePanel('r2'); // already a panel
+    expect(selectComparePanelIds(st())).toEqual(['r0', 'r1', 'r2', 'r3', 'r4', 'r5']);
+    expect(selectComparePanels(st()).map((r) => r.id)).toEqual(['r0', 'r1', 'r2', 'r3', 'r4', 'r5']);
+    expect(violations()).toEqual([]);
+  });
+
+  it('promoting an extra to A / B swaps it with the record it replaces (the compared set stays)', () => {
+    st().setComparePanels(['r0', 'r1', 'r2', 'r3']);
+    st().setActive('r3');
+    expect(selectComparePanelIds(st())).toEqual(['r3', 'r1', 'r2', 'r0']);
+    st().setCompare('r2');
+    expect(selectComparePanelIds(st())).toEqual(['r3', 'r2', 'r1', 'r0']);
+    // A record outside the comparison replaces A (the old A leaves), as before.
+    st().setActive('r7');
+    expect(selectComparePanelIds(st())).toEqual(['r7', 'r2', 'r1', 'r0']);
+    expect(violations()).toEqual([]);
+  });
+
+  it('setComparePanel puts a record in a panel; a record already shown swaps panels', () => {
+    st().setComparePanels(['r0', 'r1', 'r2']);
+    st().setComparePanel(3, 'r5'); // appends D
+    st().setComparePanel(2, 'r5'); // D -> C: C and D swap
+    expect(selectComparePanelIds(st())).toEqual(['r0', 'r1', 'r5', 'r2']);
+    st().setComparePanel(2, 'r0'); // A -> C: A and C swap
+    expect(selectComparePanelIds(st())).toEqual(['r5', 'r1', 'r0', 'r2']);
+    st().setComparePanel(6, 'r6'); // beyond F: ignored
+    st().setComparePanel(5, 'r6'); // gap after D: ignored
+    expect(selectComparePanelIds(st())).toEqual(['r5', 'r1', 'r0', 'r2']);
+  });
+
+  it('removing panels: extras close, A / B are replaced by the next panel, never below two', () => {
+    st().setComparePanels(['r0', 'r1', 'r2', 'r3']);
+    st().removeComparePanel('r2');
+    expect(selectComparePanelIds(st())).toEqual(['r0', 'r1', 'r3']);
+    st().removeComparePanel('r0');
+    expect(selectComparePanelIds(st())).toEqual(['r1', 'r3']);
+    st().removeComparePanel('r1');
+    expect(selectComparePanelIds(st())).toEqual(['r1', 'r3']);
+  });
+
+  it('deleting a record drops it from the panels; undo puts it back in its panel', () => {
+    st().setComparePanels(['r0', 'r1', 'r2', 'r3', 'r4']);
+    const r3 = st().records[3];
+    st().removeRecord('r3');
+    expect(selectComparePanelIds(st())).toEqual(['r0', 'r1', 'r2', 'r4']);
+    st().insertRecord(r3, 3, { extra: 1 });
+    expect(selectComparePanelIds(st())).toEqual(['r0', 'r1', 'r2', 'r3', 'r4']);
+    // Deleting A: the new A (first record other than B) leaves the extras.
+    st().removeRecord('r0');
+    expect(violations()).toEqual([]);
+    expect(st().activeId).toBe('r2');
+    expect(st().compareExtraIds).toEqual(['r3', 'r4']);
+  });
+
+  it('keeps every invariant through a random sequence of operations', () => {
+    let seed = 7;
+    const rnd = (n: number) => {
+      seed = (seed * 1103515245 + 12345) % 2147483648;
+      return seed % n;
+    };
+    const bad: string[] = [];
+    const all = ids.map((id) => rec(id));
+    for (let step = 0; step < 600; step++) {
+      const id = ids[rnd(ids.length)];
+      const op = rnd(8);
+      const s = st();
+      if (op === 0) s.addComparePanel(id);
+      else if (op === 1) s.removeComparePanel(id);
+      else if (op === 2) s.setComparePanel(rnd(7), id);
+      else if (op === 3) s.setActive(id);
+      else if (op === 4) s.setCompare(id);
+      else if (op === 5) s.setComparePanels([...ids].sort(() => rnd(3) - 1).slice(0, rnd(9)));
+      else if (op === 6 && s.records.length > 2) s.removeRecord(id);
+      else if (op === 7 && !s.records.some((r) => r.id === id)) s.insertRecord(all.find((r) => r.id === id)!, rnd(s.records.length + 1), { extra: rnd(4) });
+      for (const v of violations()) bad.push(`step ${step} op ${op}: ${v}`);
+    }
+    expect(bad.slice(0, 5)).toEqual([]);
+  });
+
+  it('fill from the visible records keeps the visible panels first, then list order, six at most', () => {
+    expect(fillPanelIds(['r3', 'r1'], ids)).toEqual(['r3', 'r1', 'r0', 'r2', 'r4', 'r5']);
+    expect(fillPanelIds(['r3', 'r1', 'r6'], ['r1', 'r2'])).toEqual(['r1', 'r2']);
+    expect(fillPanelIds(['r3', 'r1'], ['r5'])).toEqual(['r3', 'r1']);
+    st().setHidden(['r2'], true);
+    expect(nextPanelCandidate(st(), ['r0', 'r1'])).toBe('r3');
+    expect(nextPanelCandidate(st(), ids.filter((x) => x !== 'r2'))).toBe('r2');
+    expect(nextPanelCandidate(st(), ids)).toBeNull();
+  });
+
+  it('cleanExtras / sanitizePrefs: unknown, duplicate, A / B and excess ids are dropped', () => {
+    const known = new Set(ids);
+    expect(cleanExtras(['r2', 'x', 'r2', 'r0', 'r3', 'r4', 'r5', 'r6'], known, 'r0', 'r1')).toEqual(['r2', 'r3', 'r4', 'r5']);
+    const same = ['r2', 'r3'];
+    expect(cleanExtras(same, known, 'r0', 'r1')).toBe(same);
+    expect(sanitizePrefs({ activeId: 'r0', compareId: 'r1', compareExtraIds: ['r1', 'r2', 7, 'gone', 'r2', 'r3'] }, known).compareExtraIds).toEqual(['r2', 'r3']);
+    expect(sanitizePrefs({ compareExtraIds: 'r2' }, known).compareExtraIds).toEqual([]);
   });
 });

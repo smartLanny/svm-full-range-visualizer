@@ -1,7 +1,7 @@
 import { loadBundledRecords } from '../data/bundled';
 import { validateDataset } from '../data/records';
 import { ColormapType, type SvmRecord } from '../types';
-import { DEFAULT_SETTINGS, useAppStore, type Overlays, type RecordPrefs, type Settings } from './appStore';
+import { cleanExtras, DEFAULT_SETTINGS, useAppStore, type Overlays, type RecordPrefs, type Settings } from './appStore';
 import { applyBundledEdit, loadPersisted, setBundledManifest, startAutoSave } from './persistence';
 
 let started = false;
@@ -100,17 +100,25 @@ export function sanitizeUserRecords(saved: unknown): { records: SvmRecord[]; dro
   return { records, dropped };
 }
 
-function sanitizePrefs(saved: unknown, ids: Set<string>): Partial<RecordPrefs> {
+/**
+ * Persisted record roles, checked against the loaded records: unknown ids are dropped; the extra
+ * side-by-side panels are made unique, never A or B, at most four (setRecords re-checks them
+ * against the final A / B).
+ */
+export function sanitizePrefs(saved: unknown, ids: Set<string>): Partial<RecordPrefs> {
   const p = (saved && typeof saved === 'object' ? saved : {}) as Record<string, unknown>;
   const strings = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []);
   const colors: Record<string, string> = {};
   if (p.deviceColors && typeof p.deviceColors === 'object')
     for (const [k, v] of Object.entries(p.deviceColors as Record<string, unknown>)) if (typeof v === 'string' && /^#[0-9a-f]{3,8}$/i.test(v)) colors[k] = v;
   const id = (v: unknown) => (typeof v === 'string' && ids.has(v) ? v : null);
+  const activeId = id(p.activeId);
+  const compareId = id(p.compareId);
   return {
     hiddenIds: strings(p.hiddenIds).filter((h) => ids.has(h)),
-    activeId: id(p.activeId),
-    compareId: id(p.compareId),
+    activeId,
+    compareId,
+    compareExtraIds: cleanExtras(strings(p.compareExtraIds), ids, activeId, compareId),
     deviceColors: colors,
   };
 }

@@ -5,7 +5,7 @@
  */
 import * as THREE from 'three';
 import type { Lang, LightingMode, Representation, SceneLayout, SvmRecord, ViewPreset } from '../../types';
-import { ColormapType } from '../../types';
+import { ColormapType, MAX_COMPARE_PANELS, PANEL_LETTERS } from '../../types';
 import type { Overlays } from '../../store/appStore';
 import { deviceLabel, modeLabel, recordLabel } from '../../data/records';
 import { translate } from '../../i18n';
@@ -20,8 +20,23 @@ import { Axes, CAPTION_STYLE, type AxisLabelSpec } from './axes';
 import { captionLineHeight, drawCaptionTexture, drawColorbarTexture, drawTitleTexture, HUD_SUBTITLE_STYLE, HUD_TITLE_STYLE, Hud, SUBTITLE_LINE, TITLE_LINE, type ColorbarSpec, type Rect } from './hud';
 import { measureText, TextCache, type TextTexture } from './text';
 import { chooseValueFont, drawValuesTexture, measureValueCells } from './values';
-import { approxCellAspect, presetFit, regionAt, splitCells, splitModeFor, viewOffsetFor, type Cell, type CellLayout, type SplitMode } from './cells';
-import { captionLines, titleLines, wrapParts } from './fitText';
+import {
+  approxCellAspect,
+  depthScaleFor,
+  fillDepthScale,
+  gridFor,
+  gridPlotSize,
+  presetFit,
+  regionAt,
+  SINGLE_GRID,
+  splitCells,
+  viewOffsetFor,
+  type Cell,
+  type CellLayout,
+  type GridMetrics,
+  type GridShape,
+} from './cells';
+import { captionLines, commonPrefixLength, titleLines, wrapParts } from './fitText';
 import { easeInOutCubic, smoothstep, Tween } from './easing';
 import { makeFrameParams, type FrameParams } from './frame';
 import { DEFAULT_PHI, DEFAULT_THETA, ViewControls, defaultUserView } from './controls';
@@ -31,6 +46,8 @@ export interface EngineSettings {
   lang: Lang;
   a: SvmRecord | null;
   b: SvmRecord | null;
+  /** Side-by-side panels C–F after A and B (docs/adr/0002); the other layouts ignore them. */
+  extras?: SvmRecord[];
   clipLowGray: boolean;
   maxNits: number | null;
   representation: Representation;
@@ -98,12 +115,21 @@ const PRESET_ORIENT: Record<Exclude<ViewPreset, 'perspective'>, { theta: number;
   side: { theta: Math.PI / 2, phi: Math.PI / 2 },
 };
 
-/** Side-by-side cells: room right of panel A's plot (B's own left gutter follows), CSS px. */
+/** Side-by-side cells: room right of a panel's plot (the next column's left gutter follows), CSS px. */
 const CELL_PAD = 24;
-/** Stacked cells: band under each plot for its luminance axis labels, CSS px. */
+/** Several rows of cells: band under each plot for its luminance axis labels, CSS px. */
 const LUM_BAND = 62;
-/** Stacked cells: extra room between a plot's axis labels and the next panel's caption, CSS px. */
+/**
+ * Grids of 3–6 panels (small multiples): axis titles only on the outer panels (luminance title on
+ * the last row, gray title on the first panel of each row), so the band under an inner row holds
+ * just its tick labels, CSS px.
+ */
+const LUM_BAND_GRID = 34;
+/** Several rows of cells: extra room between a plot's axis labels and the next row's captions, CSS px. */
 const STACK_PAD = 12;
+
+/** Same records in the same order (side-by-side extras). */
+const sameRecords = (p: readonly SvmRecord[] = [], q: readonly SvmRecord[] = []) => p.length === q.length && p.every((r, i) => r === q[i]);
 
 /**
  * One rendered view: a cell of the frame with its own camera and axes. Single / difference: one
@@ -344,6 +370,7 @@ export class Engine {
   /** Fonts finished loading: redraw all text textures. */
   refreshText() {
     this.text.clear();
+    this.gridCache.clear();
     for (const t of this.captionTex.values()) t.texture.dispose();
     this.captionTex.clear();
     this.captionCache = null;
@@ -355,6 +382,8 @@ export class Engine {
     this.colorbarTex = null;
     this.contourKey = '';
     this.valuesKey = '';
+    // Caption widths (and so the side-by-side grid) were measured with the fallback font.
+    this.refreshModelForViewport();
     this.invalidate();
   }
 
@@ -384,25 +413,107 @@ export class Engine {
   }
 
   /**
-   * Depth stretch of the gray axis for the current cell shape (the frame, or one panel's cell in
-   * side-by-side): 1 for landscape / square, deeper for portrait (9:16 → 1.5) so the plate, the
+   * Depth stretch of the gray axis for the cell shape of a layout (the frame, or one panel's cell
+   * side by side): 1 for landscape / square, deeper for narrow cells (9:16 → 1.5) so the plate, the
    * terrain and the heatmap fill a tall cell instead of a thin band. Quantised, so resizing only
    * rebuilds the scene at a few thresholds.
    */
-  private depthScale(layout: SceneLayout): number {
-    const aspect = this.cellAspect(layout);
-    const k = Math.min(1.5, Math.max(1, 0.85 / Math.max(0.1, aspect)));
-    return Math.floor(k * 4 + 1e-6) / 4;
+  private depthScale(s: EngineSettings | null, layout: SceneLayout): number {
+    const n = this.panelsFor(s, layout);
+    const g = this.gridOf(n, s);
+    // Grids of 3–6 panels: deepen the plate to fill the (nominal) plot area of a cell.
+    if (n >= 3) {
+      const m = this.gridMetrics(n, g, s);
+      return fillDepthScale(gridPlotSize(this.vp, m.ins, g, m.opt));
+    }
+    return depthScaleFor(approxCellAspect(g, this.vp.width / Math.max(1, this.vp.height)));
   }
 
-  /** Frame split of a layout for the current frame shape (side-by-side: side / stacked cells). */
-  private splitMode(layout: SceneLayout = this.model?.layout ?? this.settings?.layout ?? 'single'): SplitMode {
-    return splitModeFor(layout === 'sideBySide', this.vp.width / Math.max(1, this.vp.height));
+  /** Panels a layout shows side by side (A, B + extras, ≤ 6); 1 = a single view. */
+  private panelsFor(s: EngineSettings | null, layout: SceneLayout): number {
+    if (layout !== 'sideBySide' || !s) return 1;
+    return Math.min(MAX_COMPARE_PANELS, 2 + (s.extras?.length ?? 0));
+  }
+
+  /** Panels of the current model's views (side by side: one view each). */
+  private viewPanels(): number {
+    const m = this.model;
+    if (m) return m.layout === 'sideBySide' ? m.panels.length : 1;
+    return this.panelsFor(this.settings, this.layoutOverride ?? this.settings?.layout ?? 'single');
+  }
+
+  /**
+   * Grid of n side-by-side views in the current frame (cells.ts gridFor), chosen from nominal
+   * insets (the exact ones depend on the captions, which depend on the grid).
+   */
+  private gridOf(n: number, s: EngineSettings | null = this.settings): GridShape {
+    if (n <= 1) return SINGLE_GRID;
+    const key = this.gridMetricsKey(n, s);
+    const hit = this.gridCache.get(key);
+    if (hit) return hit;
+    const g = gridFor(n, this.vp, (c) => this.gridMetrics(n, c, s));
+    if (this.gridCache.size > 32) this.gridCache.clear();
+    this.gridCache.set(key, g);
+    return g;
+  }
+  private readonly gridCache = new Map<string, GridShape>();
+
+  private gridMetricsKey(n: number, s: EngineSettings | null): string {
+    const ov = s?.overlays;
+    const ids = [s?.a?.id, s?.b?.id, ...(s?.extras ?? []).map((r) => r.id)].slice(0, n).join(',');
+    return `${n}|${this.vp.width}x${this.vp.height}|${this.pxScale}|${ov?.title}|${ov?.colorbar}|${this.exporting ? 0 : this.uiInset}|${s?.lang}|${ids}`;
+  }
+
+  /**
+   * Nominal frame insets and cell bands (px) of a candidate grid, for choosing the grid and the
+   * plate depth before the model exists: a typical title / colorbar / axis band, the floating
+   * controls, and the caption band the panels' captions would need in cells of that width (one
+   * line, or two when a caption does not fit).
+   */
+  private gridMetrics(n: number, g: GridShape, s: EngineSettings | null): GridMetrics {
+    const S = this.pxScale;
+    const ov = s?.overlays;
+    const cb = ov?.colorbar ?? true;
+    const portrait = this.portrait;
+    const right = (cb && !portrait ? 110 : 30) * S;
+    const pad = CELL_PAD * S;
+    const recs = s ? [s.a, s.b, ...(s.extras ?? [])].slice(0, n) : [];
+    const capW = (g.cols > 1 ? (this.vp.width - right + pad) / g.cols : this.vp.width) - 8 * S;
+    const twoLines = recs.some((r, i) => {
+      if (!r || !s) return false;
+      const mode = modeLabel(r, s.lang);
+      const one = `${PANEL_LETTERS[i]} · ${deviceLabel(r, s.lang)}${mode ? ` · ${mode}` : ''}`;
+      return measureText(one, CAPTION_STYLE, S) > capW;
+    });
+    const cap = 26 + (twoLines ? captionLineHeight(CAPTION_STYLE.size) : 0) + (g.rows > 1 ? STACK_PAD : 0);
+    return {
+      ins: {
+        top: (((ov?.title ?? true) ? 84 : 30) + cap) * S,
+        right,
+        bottom: (62 + (cb && portrait ? this.portraitColorbarRoom(n) : 0) + (this.exporting ? 0 : this.uiInset)) * S,
+        left: 70 * S,
+      },
+      opt: { pad, capBand: cap * S, lumBand: (n >= 3 ? LUM_BAND_GRID : LUM_BAND) * S },
+    };
+  }
+
+  /**
+   * Portrait frames: room under the plot's axis band for the horizontal colorbar (CSS px). Grids of
+   * 3–6 panels fill their cells (no centering slack below the plot), so they reserve the colorbar's
+   * full height; single / two-panel frames keep their layout.
+   */
+  private portraitColorbarRoom(n: number): number {
+    return n >= 3 ? 80 : 64;
+  }
+
+  /** Grid of the current model's views. */
+  private grid(): GridShape {
+    return this.gridOf(this.viewPanels());
   }
 
   /** Approximate aspect of one view's cell (before HUD insets): drives plate depth / orientation. */
-  private cellAspect(layout?: SceneLayout): number {
-    return approxCellAspect(this.splitMode(layout), this.vp.width / Math.max(1, this.vp.height));
+  private cellAspect(): number {
+    return approxCellAspect(this.grid(), this.vp.width / Math.max(1, this.vp.height));
   }
 
   /**
@@ -411,7 +522,9 @@ export class Engine {
    */
   private modelKeyFor(s: EngineSettings): string {
     const layout = this.layoutOverride ?? s.layout;
-    return [layout, s.a?.id, s.b?.id, s.clipLowGray, s.maxNits, s.lang, this.depthScale(layout), this.splitMode(layout)].join('|');
+    const extras = layout === 'sideBySide' ? (s.extras ?? []).map((r) => r.id).join(',') : '';
+    const g = this.gridOf(this.panelsFor(s, layout), s);
+    return [layout, s.a?.id, s.b?.id, extras, s.clipLowGray, s.maxNits, s.lang, this.depthScale(s, layout), `${g.cols}x${g.rows}`].join('|');
   }
 
   /** The frame shape changed the model (portrait depth): rebuild, cross-fading on screen. */
@@ -429,7 +542,8 @@ export class Engine {
     const prev = this.settings;
     const t = now();
     const modelKey = this.modelKeyFor(s);
-    const recordsChanged = !prev || prev.a !== s.a || prev.b !== s.b;
+    const recordsChanged =
+      !prev || prev.a !== s.a || prev.b !== s.b || ((this.layoutOverride ?? s.layout) === 'sideBySide' && !sameRecords(prev.extras, s.extras));
     const needModel = modelKey !== this.modelKey || recordsChanged;
     const animate = !!prev && this.hasRendered && !this.introDriving && !this.exporting;
     const visualChange =
@@ -563,11 +677,12 @@ export class Engine {
       layout,
       a: s.a,
       b: s.b,
+      extras: s.extras,
       clipLowGray: s.clipLowGray,
       maxNits: s.maxNits,
       colorMax: s.colorMax,
       heightCap: s.heightCap,
-      depthScale: this.depthScale(layout),
+      depthScale: this.depthScale(s, layout),
     });
     this.modelResult = res;
     this.model = res.ok ? res.model : null;
@@ -653,7 +768,8 @@ export class Engine {
    * move between presets (a preset's few extra px go into its fit insets).
    */
   cellLayout(): CellLayout {
-    const key = `${this.vp.width}x${this.vp.height}|${this.pxScale}|${this.uiInset}|${this.exporting}|${this.splitMode()}`;
+    const g = this.grid();
+    const key = `${this.vp.width}x${this.vp.height}|${this.pxScale}|${this.uiInset}|${this.exporting}|${this.viewPanels()}|${g.cols}x${g.rows}`;
     if (this.cellCache?.key === key) return this.cellCache.layout;
     const layout = this.cellsFor(this.frameInsets('top'));
     this.cellCache = { key, layout };
@@ -663,10 +779,12 @@ export class Engine {
 
   private cellsFor(ins: Insets): CellLayout {
     const S = this.pxScale;
-    // Stacked: the caption band of B also keeps A's luminance axis title clear of B's caption.
-    const mode = this.splitMode();
-    const capBand = this.captionBand() + (mode === 'stack' ? STACK_PAD : 0);
-    return splitCells(this.vp, ins, mode, { pad: CELL_PAD * S, capBand: capBand * S, lumBand: LUM_BAND * S });
+    // Several rows: the caption band of a lower row also keeps the luminance axis title of the
+    // row above clear of its captions.
+    const grid = this.grid();
+    const capBand = this.captionBand() + (grid.rows > 1 ? STACK_PAD : 0);
+    const n = this.viewPanels();
+    return splitCells(this.vp, ins, n, grid, { pad: CELL_PAD * S, capBand: capBand * S, lumBand: (n >= 3 ? LUM_BAND_GRID : LUM_BAND) * S });
   }
 
   /** Size of a view's cell: the viewport every camera pose is fitted in (all cells are congruent). */
@@ -685,7 +803,7 @@ export class Engine {
     const b = this.fitBounds();
     const plotH = (b.z1 - b.z0) / (fit.h / cell.h);
     const contentH = cell.h - lay.fit.top - lay.fit.bottom;
-    const rows = lay.mode === 'stack' ? lay.cells.length : 1;
+    const rows = lay.rows;
     this.shiftCache = Math.max(0, (rows * (contentH - plotH)) / 2);
     return this.shiftCache;
   }
@@ -708,12 +826,12 @@ export class Engine {
     // Landscape: the plot keeps clear of the colorbar's visible width (wider for ΔSVM / the
     // "no data" chip), so the colorbar never overlaps the heatmap.
     const right = cb && !portrait ? this.rightInsetCss() : 30;
-    const captions = this.model?.layout === 'sideBySide' ? this.captionBand() + (this.splitMode() === 'stack' ? STACK_PAD : 0) : 0;
+    const captions = this.model?.layout === 'sideBySide' ? this.captionBand() + (this.grid().rows > 1 ? STACK_PAD : 0) : 0;
     // A title wrapped to two lines (device / mode) pushes the plot down by one line.
     const tt = title ? this.titleText() : null;
     const titleExtra = tt ? (tt.lines.length - 1) * Math.ceil(TITLE_LINE) + Math.max(0, tt.subLines.length - 1) * Math.ceil(SUBTITLE_LINE) : 0;
     let top = (title ? 84 + titleExtra : 30) + captions;
-    let bottom = 62 + (cb && portrait ? 64 : 0);
+    let bottom = 62 + (cb && portrait ? this.portraitColorbarRoom(this.viewPanels()) : 0);
     let left = 70;
     if (preset === 'perspective') {
       top += 6;
@@ -744,6 +862,8 @@ export class Engine {
     this.uiInset = bottomCss;
     this.clearFits();
     if (this.intro) this.intro.planKey = '';
+    // The room left for the plots can change the side-by-side grid (and so the plate depth).
+    this.refreshModelForViewport();
     if (this.hasRendered && !this.introDriving && !this.exporting && this.model) {
       this.camTransition = { from: clonePose(this.lastPose), t0: now(), dur: CAM_DUR * 0.7, clip: !!this.clip };
     }
@@ -1176,7 +1296,7 @@ export class Engine {
       p.target.add(shift);
     }
     const cam = applyPose(p, { width: cell.w, height: cell.h }, persp, ortho, this.sceneRadius()) as THREE.PerspectiveCamera | THREE.OrthographicCamera;
-    if (lay.mode === 'single') {
+    if (lay.cells.length <= 1) {
       if (cam.view?.enabled) cam.clearViewOffset();
     } else {
       const o = viewOffsetFor(cell, this.vp);
@@ -1727,7 +1847,8 @@ export class Engine {
 
   /**
    * Caption lines per side-by-side panel ("A · device · mode"), fitted to the panel's cell: one
-   * line, or device / mode on two lines; the device is shortened before the mode.
+   * line, or device / mode on two lines; the device is shortened before the mode, and a mode too
+   * long for the cell keeps the part that tells it apart from the most similar other panel's mode.
    */
   private captionTexts(): string[][] {
     const m = this.model;
@@ -1735,16 +1856,29 @@ export class Engine {
     if (!m || !s || m.layout !== 'sideBySide') return [];
     const S = this.pxScale;
     const rightPx = this.rightInsetCss() * S;
-    const mode = this.splitMode();
-    const key = `${this.modelKey}|${this.vp.width}|${S}|${rightPx}|${mode}|${this.portrait}|${s.overlays.colorbar}`;
+    const grid = this.grid();
+    const key = `${this.modelKey}|${this.vp.width}|${S}|${rightPx}|${grid.cols}x${grid.rows}|${this.portrait}|${s.overlays.colorbar}`;
     if (this.captionCache?.key === key) return this.captionCache.lines;
-    const lay = splitCells(this.vp, { left: 70 * S, right: rightPx, top: 0, bottom: 0 }, mode, { pad: CELL_PAD * S, capBand: 0, lumBand: 0 });
+    const lay = splitCells(this.vp, { left: 70 * S, right: rightPx, top: 0, bottom: 0 }, m.panels.length, grid, { pad: CELL_PAD * S, capBand: 0, lumBand: 0 });
     const measure = (t: string) => measureText(t, CAPTION_STYLE, S);
+    const modes = m.panels.map((p) => modeLabel(p.record, s.lang));
+    // The other panel whose mode shares the longest beginning with this one ("…Pro off" / "…Pro on").
+    const nearest = (i: number): string | null => {
+      let best: string | null = null;
+      let k = -1;
+      modes.forEach((md, j) => {
+        const c = j === i ? -1 : commonPrefixLength(modes[i], md);
+        if (c > k) {
+          k = c;
+          best = md;
+        }
+      });
+      return best;
+    };
     const fitAll = (two: boolean) =>
       m.panels.map((p, i) => {
         const r = this.captionRegion(i, lay, rightPx);
-        const other = m.panels[i === 0 ? 1 : 0];
-        return captionLines(p.id, deviceLabel(p.record, s.lang), modeLabel(p.record, s.lang), other ? modeLabel(other.record, s.lang) : null, r.x1 - r.x0, measure, two);
+        return captionLines(p.id, deviceLabel(p.record, s.lang), modes[i], nearest(i), r.x1 - r.x0, measure, two);
       });
     let lines = fitAll(false);
     // Same shape for every panel: if one caption needs two lines, all use two (aligned rows).
@@ -1778,7 +1912,7 @@ export class Engine {
       for (const t of this.captionTex.values()) t.texture.dispose();
       this.captionTex.clear();
     }
-    const rows: { tt: TextTexture & { inset: number }; rect: Rect }[] = [];
+    const rows: { tt: TextTexture & { inset: number }; rect: Rect; row: number }[] = [];
     this.views.forEach((v, i) => {
       const lines = texts[v.panels[0]];
       if (!lines) return;
@@ -1827,16 +1961,22 @@ export class Engine {
       cx = reg.x1 - reg.x0 <= w ? (reg.x0 + reg.x1) / 2 : Math.min(reg.x1 - w / 2, Math.max(reg.x0 + w / 2, cx));
       // Clear of the plot's top tick labels (e.g. gray 255 at the top-left corner in top view).
       let y0 = maxY + 15 * S;
-      // Below the title (when it spans the caption's column) and inside the frame.
+      // Below the title (when it spans the caption's column) and inside the frame; in a grid of
+      // 3–6 panels a lower row's caption never climbs past the axis band of the row above (a tall
+      // perspective terrain would otherwise push it there).
+      const g = lay.regions[i] ?? cell;
       let yMax = H - 4 * S;
+      if (this.views.length >= 3) yMax = Math.min(yMax, g.y + g.h + (STACK_PAD - 2) * S);
       if (titleRect && titleRect.x1 > cx - w / 2 && titleRect.x0 < cx + w / 2) yMax = Math.min(yMax, titleRect.y0 - 6 * S);
       y0 = Math.max(cell.y + 4 * S, Math.min(y0, yMax - h));
-      rows.push({ tt, rect: { x0: cx - w / 2, y0, x1: cx + w / 2, y1: y0 + h } });
+      rows.push({ tt, rect: { x0: cx - w / 2, y0, x1: cx + w / 2, y1: y0 + h }, row: lay.slots[i]?.row ?? 0 });
     });
-    // Side by side: one caption row (the cells are congruent; only the title clamp differs).
-    if (lay.mode === 'side' && rows.length > 1) {
-      const y0 = Math.min(...rows.map((r) => r.rect.y0));
-      for (const r of rows) {
+    // One caption line per grid row (the cells are congruent; only the title clamp differs).
+    for (const row of new Set(rows.map((r) => r.row))) {
+      const inRow = rows.filter((r) => r.row === row);
+      if (inRow.length < 2) continue;
+      const y0 = Math.min(...inRow.map((r) => r.rect.y0));
+      for (const r of inRow) {
         r.rect.y1 += y0 - r.rect.y0;
         r.rect.y0 = y0;
       }
@@ -1958,6 +2098,7 @@ export class Engine {
     };
 
     // Per-view context (camera, axes, clip, axis visibility, label directions, tick extents).
+    const lay = this.cellLayout();
     const ctxs = this.views.map((view, vi) => {
       this.activeCam = view.cam;
       const ax = view.axes;
@@ -1974,8 +2115,12 @@ export class Engine {
       };
       const lz = e.lumFront ? b.z1 : b.z0;
       const gxE = e.grayLeft ? b.x0 : b.x1;
-      const lumVis = smoothstep(50, 140, axisLen(new THREE.Vector3(b.x0, 0, lz), new THREE.Vector3(b.x1, 0, lz)));
-      const grayVis = smoothstep(50, 140, axisLen(new THREE.Vector3(gxE, 0, b.z0), new THREE.Vector3(gxE, 0, b.z1)));
+      // Small multiples (3–6 panels) have small plates, not degenerate axes: the length thresholds
+      // scale with the cell (a cell under 400 CSS px scales them down).
+      const cell = lay.cells[vi] ?? lay.cells[0];
+      const k = this.views.length >= 3 ? Math.min(1, Math.min(cell.w, cell.h) / S / 400) : 1;
+      const lumVis = smoothstep(50 * k, 140 * k, axisLen(new THREE.Vector3(b.x0, 0, lz), new THREE.Vector3(b.x1, 0, lz)));
+      const grayVis = smoothstep(50 * k, 140 * k, axisLen(new THREE.Vector3(gxE, 0, b.z0), new THREE.Vector3(gxE, 0, b.z1)));
       // The value axis fades only when it collapses; seen end-on is the polar-angle factor (alphaOf).
       // Never by its length: a low height cap or a small side-by-side cell makes it short, not
       // degenerate — its title stays and the tick collision pass thins crowded ticks.
@@ -2015,9 +2160,19 @@ export class Engine {
         tickExtent[key] = Math.max(tickExtent[key] ?? 0, Math.abs(d.x) * tt.w + Math.abs(d.y) * tt.h);
       }
       const topGray = m.grayTicks.length ? m.grayTicks[m.grayTicks.length - 1] : 255;
+      // Small multiples (3–6 panels): an axis title only on the outer panels of the grid. A title
+      // below / above its axis (a horizontal axis on screen) shows on the last / first row; one
+      // left / right of it (a vertical axis) on the first / last panel of each row.
+      const slot = lay.slots[vi];
+      const showsTitle = (_spec: AxisLabelSpec, d: { x: number; y: number }) => {
+        if (this.views.length < 3 || !slot) return true;
+        if (Math.abs(d.y) >= Math.abs(d.x)) return d.y <= 0 ? slot.row === lay.rows - 1 : slot.row === 0;
+        return d.x <= 0 ? slot.first : slot.last;
+      };
       return {
         view,
-        region: this.views.length > 1 ? this.cellLayout().regions[vi] : null,
+        showsTitle,
+        region: this.views.length > 1 ? lay.regions[vi] : null,
         clip: this.clips[vi] ?? null,
         specs,
         dirFor,
@@ -2042,6 +2197,7 @@ export class Engine {
           const anchorW = c.anchorOf(spec);
           const tt = this.text.get(spec.text, spec.style, S);
           const d = c.dirFor(spec);
+          if (pass === 'title' && !c.showsTitle(spec, d)) continue;
           const a = this.project(anchorW);
           if (!a.ok) continue;
           // Plot clipped (zoomed / panned): in orthographic views the axes are pinned to the clip
@@ -2504,13 +2660,24 @@ export class Engine {
     return this.exportName();
   }
 
-  /** Label / info for export file names (static view). */
+  /**
+   * Label / info for export file names (static view): "<A>_vs_<B>" side by side, "<A>_vs_<B>_+N"
+   * with N extra panels — or "并排对比_6条" / "side-by-side_6" when the record names would make
+   * the name too long for safeFileName (80 characters, the view part must survive).
+   */
   exportName(): string {
     const s = this.settings;
     const m = this.model;
     if (!s || !m) return 'svm-3d';
-    const base = m.layout === 'diff' ? `diff_${recordLabel(m.panels[0].record, s.lang)}_vs_${recordLabel(m.panels[0].other!, s.lang)}` : m.layout === 'sideBySide' ? `${recordLabel(m.panels[0].record, s.lang)}_vs_${recordLabel(m.panels[1].record, s.lang)}` : recordLabel(m.panels[0].record, s.lang);
-    const t = (k: string) => translate(s.lang, k);
+    const t = (k: string, v?: Record<string, string | number>) => translate(s.lang, k, v);
+    const label = (i: number) => recordLabel(m.panels[i].record, s.lang);
+    let base: string;
+    if (m.layout === 'diff') base = `diff_${label(0)}_vs_${recordLabel(m.panels[0].other!, s.lang)}`;
+    else if (m.layout === 'sideBySide') {
+      const n = m.panels.length;
+      base = `${label(0)}_vs_${label(1)}${n > 2 ? `_+${n - 2}` : ''}`;
+      if (n > 2 && base.length > 56) base = t('scene3d.export.sideBySideN', { n });
+    } else base = label(0);
     return `${base}_${t(`scene3d.representation.${s.representation}`)}_${t(`scene3d.views.${s.view}`)}`;
   }
 

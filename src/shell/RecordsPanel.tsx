@@ -1,8 +1,26 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { AlertTriangle, ArrowUpDown, ChevronRight, Eye, EyeOff, FileDown, FolderOpen, MoreHorizontal, PanelLeftClose, PanelLeftOpen, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
+import {
+  AlertTriangle,
+  ArrowUpDown,
+  ChevronRight,
+  Eye,
+  EyeOff,
+  FileDown,
+  FolderOpen,
+  LayoutGrid,
+  MoreHorizontal,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Pencil,
+  Plus,
+  Search,
+  SquareMinus,
+  Trash2,
+  X,
+} from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
-import { useAppStore } from '../store/appStore';
+import { selectComparePanelIds, useAppStore } from '../store/appStore';
 import { useRecordStyles } from '../store/hooks';
 import { useLang, useT, type TFunction } from '../i18n';
 import { deviceLabel, modeLabel, recordLabel } from '../data/records';
@@ -10,7 +28,7 @@ import { deviceOrder } from '../data/colors';
 import { exclusionSummary, type ExclusionSummary } from '../data/anomalies';
 import { reasonsText } from './screening';
 import type { RecordStyle } from '../data/colors';
-import type { Lang, SvmRecord } from '../types';
+import { MAX_COMPARE_PANELS, PANEL_LETTERS, type Lang, type SvmRecord } from '../types';
 import { Button, ColorSwatch, MenuItem, cn, toast } from '../ui';
 import { IconButton } from './IconBtn';
 import { ConfirmDialog } from './ShellDialogs';
@@ -237,12 +255,16 @@ function RecordsPanelBody() {
   );
 }
 
-/** Delete a record; the toast offers Undo (re-inserted at its index with its A / B / hidden state). */
+/**
+ * Delete a record; the toast offers Undo (re-inserted at its index with its A / B / side-by-side
+ * panel / hidden state).
+ */
 function removeWithUndo(rec: SvmRecord, t: TFunction, lang: Lang) {
   const st = useAppStore.getState();
   const index = st.records.findIndex((r) => r.id === rec.id);
   if (index < 0) return;
-  const roles = { a: st.activeId === rec.id, b: st.compareId === rec.id, hidden: st.hiddenIds.includes(rec.id) };
+  const extra = st.compareExtraIds.indexOf(rec.id);
+  const roles = { a: st.activeId === rec.id, b: st.compareId === rec.id, hidden: st.hiddenIds.includes(rec.id), extra: extra >= 0 ? extra : undefined };
   const layout = st.layout;
   st.removeRecord(rec.id);
   toast(t('shell.remove.done', { name: recordLabel(rec, lang) }), 'info', 8000, {
@@ -363,13 +385,17 @@ function RecordRow({
   onMenu: (id: string, x: number, y: number, align: 'start' | 'end') => void;
 }) {
   const t = useT();
-  const { isA, isB, single } = useAppStore(
+  const { isA, isB, single, extra, side } = useAppStore(
     useShallow((s) => ({
       isA: s.activeId === rec.id,
       isB: s.compareId === rec.id,
       single: s.layout === 'single',
+      /** Index of the record's extra side-by-side panel (C = 0), or -1. */
+      extra: s.compareExtraIds.indexOf(rec.id),
+      side: s.layout === 'sideBySide',
     })),
   );
+  const panel = extra >= 0 ? PANEL_LETTERS[extra + 2] : null;
   const label = modeLabel(rec, lang) || rec.name || t('shell.sidebar.untitledMode');
   const nominal = rec.matrix.rows.length * rec.matrix.cols.length;
   const valid = rec.data.length;
@@ -448,6 +474,19 @@ function RecordRow({
             )}
           >
             B
+          </span>
+        ) : panel ? (
+          // Extra side-by-side panel C–F (docs/adr/0002): shown like B, hollow while the layout
+          // does not show the panels.
+          <span
+            title={t(side ? 'shell.sidebar.isPanel' : 'shell.sidebar.isPanelUnused', { p: panel })}
+            data-testid="record-panel-badge"
+            className={cn(
+              'inline-flex h-[18px] w-[18px] items-center justify-center rounded text-[10px] font-bold',
+              side ? 'bg-ink-2 text-canvas' : 'text-ink-3 ring-1 ring-inset ring-line-strong',
+            )}
+          >
+            {panel}
           </span>
         ) : (
           <button
@@ -554,6 +593,9 @@ function RowMenu({
   const { isA, isB, hasA, hasB } = useAppStore(
     useShallow((s) => ({ isA: s.activeId === rec.id, isB: s.compareId === rec.id, hasA: s.activeId !== null, hasB: s.compareId !== null })),
   );
+  const panels = useAppStore(useShallow(selectComparePanelIds));
+  const inPanels = panels.includes(rec.id);
+  const full = panels.length >= MAX_COMPARE_PANELS;
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState({ left: x, top: y });
   useLayoutEffect(() => {
@@ -590,7 +632,7 @@ function RowMenu({
     fn();
   };
   return createPortal(
-    <div ref={ref} role="menu" data-testid="record-menu" className="fixed z-50 w-48 rounded-xl bg-surface-2 p-1.5 shadow-panel ring-1 ring-line" style={pos}>
+    <div ref={ref} role="menu" data-testid="record-menu" className="fixed z-50 w-52 rounded-xl bg-surface-2 p-1.5 shadow-panel ring-1 ring-line" style={pos}>
       <MenuItem role="menuitem" icon={<RoleIcon role="A" />} disabled={isA} onClick={run(() => useAppStore.getState().setActive(rec.id))} data-testid="menu-set-a">
         {t('shell.sidebar.setA')}
       </MenuItem>
@@ -608,6 +650,32 @@ function RowMenu({
         data-testid="menu-swap"
       >
         {t('shell.sidebar.swap')}
+      </MenuItem>
+      <MenuItem
+        role="menuitem"
+        icon={<LayoutGrid size={14} />}
+        disabled={inPanels || full || !hasB}
+        title={!inPanels && full ? t('shell.sidebar.compareFull') : undefined}
+        hint={inPanels ? undefined : `${panels.length}/${MAX_COMPARE_PANELS}`}
+        onClick={run(() => {
+          const s = useAppStore.getState();
+          s.addComparePanel(rec.id);
+          // The comparison is what the user asked to see.
+          if (s.layout !== 'sideBySide') s.set('layout', 'sideBySide');
+        })}
+        data-testid="menu-add-compare"
+      >
+        {t('shell.sidebar.addToCompare')}
+      </MenuItem>
+      <MenuItem
+        role="menuitem"
+        icon={<SquareMinus size={14} />}
+        disabled={!inPanels || panels.length <= 2}
+        title={inPanels && panels.length <= 2 ? t('shell.sidebar.compareMin') : undefined}
+        onClick={run(() => useAppStore.getState().removeComparePanel(rec.id))}
+        data-testid="menu-remove-compare"
+      >
+        {t('shell.sidebar.removeFromCompare')}
       </MenuItem>
       <div className="mx-2 my-1 h-px bg-line" />
       <MenuItem role="menuitem" icon={<Pencil size={14} />} onClick={run(onEdit)}>

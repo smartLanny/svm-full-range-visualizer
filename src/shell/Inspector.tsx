@@ -9,10 +9,12 @@ import {
   Eye,
   EyeOff,
   Info,
+  LayoutGrid,
   Layers,
   Palette,
   PanelRightClose,
   PanelRightOpen,
+  Plus,
   Ruler,
   SlidersHorizontal,
   Sigma,
@@ -20,13 +22,25 @@ import {
   X,
 } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
-import { useAppStore, type AnimTab, type Overlays } from '../store/appStore';
+import { fillPanelIds, nextPanelCandidate, selectComparePanelIds, useAppStore, type AnimTab, type Overlays } from '../store/appStore';
 import { useLang, useT } from '../i18n';
 import { deviceLabel, modeLabel, recordLabel } from '../data/records';
 import { fmtLevel, sweepParam } from '../chart2d/slices';
 import { useActiveTimeline } from '../timeline/timeline';
 import { colormapGradientCss } from '../colormaps';
-import { ColormapType, type SvmRecord, type AxisMode, type LightingMode, type Representation, type SceneLayout, type SliceMode, type ViewPreset } from '../types';
+import {
+  ColormapType,
+  MAX_COMPARE_PANELS,
+  PANEL_LETTERS,
+  type AxisMode,
+  type LightingMode,
+  type PanelLetter,
+  type Representation,
+  type SceneLayout,
+  type SliceMode,
+  type SvmRecord,
+  type ViewPreset,
+} from '../types';
 import { Button, Field, Kbd, Section, Segmented, Select, Slider, Switch, cn } from '../ui';
 import { IconButton } from './IconBtn';
 import { DataRangeControls } from './SettingsPanel';
@@ -121,7 +135,7 @@ function AnimationInfo({ tab, hint }: { tab: AnimTab; hint: string }) {
 }
 
 /**
- * A / B record picker: grouped by device, and the closed control shows device and mode on two
+ * Record picker of a panel (A, B, side-by-side C–F): grouped by device, and the closed control shows device and mode on two
  * lines so records of one device (which differ only at the end of the mode) stay distinguishable.
  * A transparent native <select> on top keeps keyboard and screen-reader behaviour.
  */
@@ -132,7 +146,7 @@ function RecordSelect({
   records,
   placeholder,
 }: {
-  role: 'A' | 'B';
+  role: PanelLetter;
   value: string | null;
   onChange: (id: string) => void;
   records: SvmRecord[];
@@ -178,7 +192,7 @@ function RecordSelect({
   );
 }
 
-function RoleTag({ role }: { role: 'A' | 'B' }) {
+function RoleTag({ role }: { role: PanelLetter }) {
   return (
     <span
       className={cn(
@@ -188,6 +202,85 @@ function RoleTag({ role }: { role: 'A' | 'B' }) {
     >
       {role}
     </span>
+  );
+}
+
+/**
+ * Side-by-side panels C–F (docs/adr/0002): a picker and a remove button per extra panel, under the
+ * A / B pickers. A record picked that is already in another panel swaps with it (setComparePanel).
+ */
+function ComparePanelRows() {
+  const t = useT();
+  const records = useAppStore((st) => st.records);
+  const extras = useAppStore((st) => st.compareExtraIds);
+  const { removeComparePanel, setComparePanel } = useAppStore.getState();
+  return (
+    <>
+      {extras.map((id, i) => {
+        const role = PANEL_LETTERS[i + 2];
+        return (
+          // Same columns as the A / B rows (the remove button sits in the swap button's column).
+          <div key={role} className="flex items-center gap-1.5" data-testid={`compare-panel-${role}`}>
+            <div className="flex min-w-0 flex-1 items-center gap-2">
+              <RoleTag role={role} />
+              <RecordSelect role={role} value={id} onChange={(v) => setComparePanel(i + 2, v)} records={records} placeholder={t('shell.inspector.scene3d.pickPanel', { p: role })} />
+            </div>
+            <IconButton
+              size="sm"
+              label={t('shell.inspector.scene3d.removePanel', { p: role })}
+              icon={<X size={14} />}
+              data-testid={`remove-panel-${role}`}
+              onClick={() => removeComparePanel(id)}
+            />
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
+/** "Add record" (up to six panels), a quick fill with the visible records, and the panel count. */
+function ComparePanelActions() {
+  const t = useT();
+  const records = useAppStore((st) => st.records);
+  const panels = useAppStore(useShallow(selectComparePanelIds));
+  const hiddenIds = useAppStore((st) => st.hiddenIds);
+  const { addComparePanel, setComparePanels } = useAppStore.getState();
+  const next = useMemo(() => nextPanelCandidate({ records, hiddenIds }, panels), [records, hiddenIds, panels]);
+  const visible = useMemo(() => records.filter((r) => !hiddenIds.includes(r.id)).map((r) => r.id), [records, hiddenIds]);
+  const filled = useMemo(() => fillPanelIds(panels, visible), [panels, visible]);
+  const full = panels.length >= MAX_COMPARE_PANELS;
+  const fillSame = filled.length === panels.length && filled.every((id, i) => id === panels[i]);
+  return (
+    <>
+      <div className="grid grid-cols-2 gap-1.5">
+        <Button
+          size="sm"
+          variant="secondary"
+          icon={<Plus size={13} />}
+          disabled={full || !next}
+          title={full ? t('shell.inspector.scene3d.panelsFull') : undefined}
+          onClick={() => next && addComparePanel(next)}
+          data-testid="add-panel"
+        >
+          {t('shell.inspector.scene3d.addPanel')}
+        </Button>
+        <Button
+          size="sm"
+          variant="secondary"
+          icon={<LayoutGrid size={13} />}
+          disabled={fillSame}
+          title={t('shell.inspector.scene3d.fillVisibleHint')}
+          onClick={() => setComparePanels(filled)}
+          data-testid="fill-panels"
+        >
+          {t('shell.inspector.scene3d.fillVisible')}
+        </Button>
+      </div>
+      <p className="-mt-1 text-2xs leading-snug text-ink-3" data-testid="compare-count">
+        {t('shell.inspector.scene3d.panelsHint', { n: panels.length, max: MAX_COMPARE_PANELS })}
+      </p>
+    </>
   );
 }
 
@@ -281,35 +374,40 @@ function Inspector3D() {
             },
           ]}
         />
-        <div className="flex items-stretch gap-1.5">
-          <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-            <div className="flex items-center gap-2">
-              <RoleTag role="A" />
-              {records.length > 0 ? (
-                <RecordSelect role="A" value={s.activeId} onChange={setActive} records={records} placeholder={t('shell.inspector.scene3d.pickA')} />
-              ) : (
-                <span className="text-xs text-ink-4">{t('common.none')}</span>
+        {/* A / B (+ side-by-side C–F): one column of pickers, 6 px apart. */}
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-stretch gap-1.5">
+            <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+              <div className="flex items-center gap-2">
+                <RoleTag role="A" />
+                {records.length > 0 ? (
+                  <RecordSelect role="A" value={s.activeId} onChange={setActive} records={records} placeholder={t('shell.inspector.scene3d.pickA')} />
+                ) : (
+                  <span className="text-xs text-ink-4">{t('common.none')}</span>
+                )}
+              </div>
+              {showB && (
+                <div className="flex items-center gap-2">
+                  <RoleTag role="B" />
+                  <RecordSelect role="B" value={s.compareId} onChange={setCompare} records={records} placeholder={t('shell.inspector.scene3d.pickB')} />
+                </div>
               )}
             </div>
             {showB && (
-              <div className="flex items-center gap-2">
-                <RoleTag role="B" />
-                <RecordSelect role="B" value={s.compareId} onChange={setCompare} records={records} placeholder={t('shell.inspector.scene3d.pickB')} />
-              </div>
+              <IconButton
+                size="sm"
+                label={t('shell.inspector.scene3d.swap')}
+                icon={<ArrowUpDown size={14} />}
+                className="self-center"
+                data-testid="swap-ab"
+                disabled={!s.activeId || !s.compareId}
+                onClick={() => s.compareId && setActive(s.compareId)}
+              />
             )}
           </div>
-          {showB && (
-            <IconButton
-              size="sm"
-              label={t('shell.inspector.scene3d.swap')}
-              icon={<ArrowUpDown size={14} />}
-              className="self-center"
-              data-testid="swap-ab"
-              disabled={!s.activeId || !s.compareId}
-              onClick={() => s.compareId && setActive(s.compareId)}
-            />
-          )}
+          {s.layout === 'sideBySide' && <ComparePanelRows />}
         </div>
+        {s.layout === 'sideBySide' && <ComparePanelActions />}
         {s.layout === 'diff' && <p className="text-2xs leading-snug text-ink-3">{t('shell.inspector.scene3d.diffHint')}</p>}
       </Section>
 

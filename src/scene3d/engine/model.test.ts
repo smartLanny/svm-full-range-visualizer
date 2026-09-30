@@ -58,6 +58,30 @@ describe('scene model', () => {
     expect(b.id).toBe('B');
   });
 
+  it('side by side takes up to six panels (A–F) on one shared domain, in a row that never overlaps', () => {
+    const recs = [mate, iphone, mateLow, x18off, x17dc, x17ltpo];
+    const panelCount = (extras: SvmRecord[], layout: 'single' | 'sideBySide' | 'diff' = 'sideBySide') => {
+      const res = buildModel({ layout, a: mate, b: iphone, extras, clipLowGray: true, maxNits: 500, colorMax: 4, heightCap: 6 });
+      return res.ok ? res.model.panels.length : res.reason;
+    };
+    expect([0, 1, 2, 3, 4, 5].map((k) => panelCount(recs.slice(2, 2 + k)))).toEqual([2, 3, 4, 5, 6, 6]);
+    // Extras only matter side by side.
+    expect([panelCount(recs.slice(2), 'single'), panelCount(recs.slice(2), 'diff')]).toEqual([1, 1]);
+    const res = buildModel({ layout: 'sideBySide', a: mate, b: iphone, extras: recs.slice(2), clipLowGray: true, maxNits: 500, colorMax: 4, heightCap: 6 });
+    if (!res.ok) throw new Error(res.reason);
+    const m = res.model;
+    expect(m.panels.map((p) => p.id).join('')).toBe('ABCDEF');
+    expect(m.panels.map((p) => p.record)).toEqual(recs);
+    // Congruent spacing, centered on the single-panel mapping; each panel inside its slot.
+    const step = m.panels[1].offsetX - m.panels[0].offsetX;
+    const bad = m.panels.filter((p, i) => Math.abs(p.offsetX - (i - 2.5) * step) > 1e-9 || (i > 0 && p.rect.x0 <= m.panels[i - 1].rect.x1));
+    expect(bad).toEqual([]);
+    expect(m.bounds.x0).toBeCloseTo(Math.min(...m.panels.map((p) => p.rect.x0)), 9);
+    expect(m.bounds.x1).toBeCloseTo(Math.max(...m.panels.map((p) => p.rect.x1)), 9);
+    // Shared value scale: plotMax over every panel.
+    expect(m.plotMax).toBe(Math.min(6, Math.max(...m.panels.map((p) => p.maxValue))));
+  });
+
   it('diff uses a symmetric range and reports missing B', () => {
     const res = buildModel({ layout: 'diff', a: mate, b: mateLow, clipLowGray: true, maxNits: 500, colorMax: 4, heightCap: 6 });
     expect(res.ok).toBe(true);
