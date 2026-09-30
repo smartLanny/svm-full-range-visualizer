@@ -132,6 +132,26 @@ describe('processRecord (synthetic)', () => {
     const n = processRecord(ds, { denoise: true }).noteAt(128, 70)!;
     expect(n).toMatchObject({ kind: 'readingNotUpdated', also: 'lumNotUpdated', action: 'interpolated' });
   });
+  it('a non-positive SVM reading is unusable and says so', () => {
+    const ds = panel();
+    set(ds, 96, 50, { svm: 0 });
+    const n = processRecord(ds, { denoise: true }).noteAt(96, 50)!;
+    expect(n).toMatchObject({ kind: 'svmSpike', reason: 'svmInvalid', action: 'interpolated', via: 'gray' });
+    expect(n.value!.svm).toBeGreaterThan(0);
+  });
+  it('a run of whole readings repeated down a column is caught cell by cell', () => {
+    const ds = panel();
+    const src = ds.matrix.grid[at(ds, 160, 70).r][at(ds, 160, 70).c]!;
+    set(ds, 128, 70, { nits: src.nits * 1.004, svm: src.svm * 1.002 });
+    set(ds, 96, 70, { nits: src.nits * 1.008, svm: src.svm * 1.004 });
+    const pr = processRecord(ds, { denoise: true });
+    expect([128, 96].map((g) => pr.noteAt(g, 70)?.kind)).toEqual(['readingNotUpdated', 'readingNotUpdated']);
+    // Two-cell gap along gray: filled between G160 and G64.
+    expect([128, 96].map((g) => pr.noteAt(g, 70)?.from?.map((f) => f.gray))).toEqual([
+      [64, 160],
+      [64, 160],
+    ]);
+  });
   it('re-estimates a level whose G255 reading is bad', () => {
     const ds = panel();
     const { c } = at(ds, 255, 60);

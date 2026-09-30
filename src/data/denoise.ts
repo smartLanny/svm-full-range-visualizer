@@ -62,13 +62,14 @@ export const DENOISE_ACTIONS: DenoiseAction[] = ['interpolated', 'noData', 'lumE
  *  nonPositive  — 亮度读数 {nits} nits ≤ 0，测不到亮度
  *  blackLevel   — 亮度 {nits} nits 不高于黑场噪声 {floor} nits，和全黑分不开
  *  svmSpike     — SVM {svm} 与周围读数（约 {typical}）相差超过 {ratio} 倍
+ *  svmInvalid   — SVM 读数 {svm} 无效（≤ 0）
  *  duplicateColumn — {pct}% 列与 {twinPct}% 列完全相同（源表复制错误）
  *  duplicateRow — G{gray} 行与 G{twinGray} 行完全相同（源表复制错误）
  *  readingNotUpdated — 亮度和 SVM 都与相邻格（G{twinGray} · {twinPct}%）几乎相同，读数疑似未更新
  *  lumNotUpdated — 亮度 {nits} nits 与相邻格（G{twinGray} · {twinPct}%）几乎相同，比整表规律推算的约 {expected} nits 偏 {dev}
  *  lumOffPattern — 亮度 {nits} nits 比整表规律推算的约 {expected} nits 偏 {dev}
  */
-export type DenoiseReason = 'nonPositive' | 'blackLevel' | 'svmSpike' | 'duplicateColumn' | 'duplicateRow' | 'readingNotUpdated' | 'lumNotUpdated' | 'lumOffPattern';
+export type DenoiseReason = 'nonPositive' | 'blackLevel' | 'svmSpike' | 'svmInvalid' | 'duplicateColumn' | 'duplicateRow' | 'readingNotUpdated' | 'lumNotUpdated' | 'lumOffPattern';
 
 export interface BlackLevel {
   /** Dark readings used (G ≤ 2 rows in the dim columns). */
@@ -236,6 +237,8 @@ const FROZEN_TREND = Math.log(1.1);
 const SPIKE_RATIO = Math.log(3);
 const SPIKE_ABS = 1.0;
 const SPIKE_EXTREME = Math.log(10);
+/** A stored level within 0.5 % of the G255 reading came from it. */
+const LEVEL_MATCH_TOL = 0.005;
 /** Interpolation sources lie this many black-noise spreads above the black level. */
 const SOURCE_SCALES = 3;
 /** Longest run of unusable cells an interpolation may bridge. */
@@ -498,7 +501,7 @@ function analyse(m: Dataset['matrix']): DenoiseAnalysis {
   for (const [r, c, twin] of frozen) setSvm(r, c, { kind: 'readingNotUpdated', twin });
   // A run of repeated readings: the twin of a frozen cell that repeats it back (and has an
   // unreliable luminance itself) is frozen too.
-  for (let queue = frozen.map(([r, c, twin]) => [twin[0], twin[1], [r, c]] as [number, number, [number, number]]); queue.length; ) {
+  for (let queue = frozen.flatMap(([r, c]) => frozenNeighbours(r, c)); queue.length; ) {
     const next: typeof queue = [];
     for (const [r, c, twin] of queue) {
       const f = flags[r][c];
@@ -546,7 +549,8 @@ function analyse(m: Dataset['matrix']): DenoiseAnalysis {
   const maxRow = rowOrd.length ? rowOrd[rowOrd.length - 1] : -1;
   const levels: LevelEstimate[] = m.headerNits.map((raw, c) => {
     const top = maxRow >= 0 ? cellOf(m, maxRow, c) : null;
-    const fromTop = !!top && Math.abs(top.nits - raw) <= 1e-9 * Math.max(1, Math.abs(raw));
+    // The stored level is the G255 reading (allowing for rounding in the source table).
+    const fromTop = !!top && Math.abs(top.nits - raw) <= LEVEL_MATCH_TOL * Math.max(0.01, Math.abs(raw));
     const f = maxRow >= 0 ? flags[maxRow][c] : null;
     const topBad = fromTop && (!!f?.lum || f?.svm?.kind === 'blackLevel');
     const bad = !(Number.isFinite(raw) && raw > 0) || topBad;
@@ -723,7 +727,7 @@ function build(m: Dataset['matrix'], a: DenoiseAnalysis): Built {
       let note: CellNote;
       if (f.svm) {
         const k = f.svm.kind;
-        note = { ...base, kind: k, reason: k === 'blackLevel' && p.nits <= 0 ? 'nonPositive' : k };
+        note = { ...base, kind: k, reason: k === 'blackLevel' && p.nits <= 0 ? 'nonPositive' : k === 'svmSpike' && !(p.svm > 0) ? 'svmInvalid' : k };
         if (f.lum) note.also = f.lum.kind;
         if (k === 'blackLevel') note.floor = a.blackLevel.ceiling;
         if (k === 'svmSpike' && f.svm.typical !== undefined) note.typical = f.svm.typical;
