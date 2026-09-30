@@ -108,7 +108,7 @@ export class ScenarioOverlay {
       const h = tt.h * k;
       sp.scale.set(w, h, 1);
       const fits = w + 2 * pad <= r.x1 - r.x0;
-      sp.position.set(fits ? r.x0 + pad + w / 2 : r.x1 - pad - w / 2, 0, r.z0 + pad * 0.5 + h / 2);
+      sp.position.set(fits ? r.x0 + pad + w / 2 : r.x1 - pad - w / 2, 0, r.z0 + pad + h / 2);
       sp.renderOrder = 10;
       this.sprites.push(sp);
       this.group.add(sp);

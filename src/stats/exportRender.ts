@@ -449,8 +449,11 @@ function scenarioBlock(p: Pen, e: Env, row: StatsRow, y: number, iw: number) {
     const rest = colW - nw - 4;
     if (v === null) p.text(ellipsize(t('stats.scenario.noData'), Math.max(0, rest), 10, 400, p.m), x + nw + 4, c2 - 7, 14, 10, 400, C.amber);
     else {
-      const best = markOf(input.rank, SCENARIO_METRIC[sc.id], row, v) === 'best';
-      gradeValue(p, t, v, x + nw + 4, c2, 11, 500, best ? C.accentHover : C.ink1, rest);
+      // value in the grade colour; the grade word only when it fits whole
+      const color = GRADE_COLORS[scenarioGrade(v)];
+      const vw = p.text(v.toFixed(2), x + nw + 4, c2 - 8, 16, 11, 500, color);
+      const word = gradeLabel(t, v);
+      if (nw + 4 + vw + 4 + p.m(word, 10, 500) <= colW) p.text(word, x + nw + 4 + vw + 4, c2 - 7, 14, 10, 500, color);
     }
   });
 }

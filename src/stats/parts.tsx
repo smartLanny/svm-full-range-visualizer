@@ -8,7 +8,7 @@ import { displayNotes } from '../data/denoise';
 import { countParts, kindParts } from '../data/denoiseText';
 import { useT, type TFunction } from '../i18n';
 import { cn } from '../ui';
-import { band, BAND_COLORS, fmtPct, GRADE_COLORS, markOf, scenarioRenormalised, SCENARIO_METRIC, type Ranking, type StatsRow } from './model';
+import { band, BAND_COLORS, fmtPct, GRADE_COLORS, markOf, scenarioRenormalised, type Ranking, type StatsRow } from './model';
 
 /** Device colour chip + a line sample in the record's mode dash (same encoding as the 2D chart). */
 export function RecordKey({ style, className }: { style: RecordStyle | undefined; className?: string }) {
@@ -268,15 +268,26 @@ export function ScenarioBlock({ row, rank, config }: { row: StatsRow; rank: Rank
       <div className="grid h-4 grid-cols-3 gap-2">
         {ref.scenarios.map((sc) => {
           const v = sc.used ? sc.mean : null;
-          const best = markOf(rank, SCENARIO_METRIC[sc.id], row, v) === 'best';
-          return (
-            <span key={sc.id} className="flex min-w-0 items-center gap-1 text-2xs" title={scenarioLine(sc, t)}>
-              <span className="shrink-0 text-ink-4">{t(`stats.scenario.name.${sc.id}`)}</span>
-              {v !== null ? (
-                <GradeValue v={v} best={best} className="text-[11px] font-medium" />
-              ) : (
+          const name = <span className="shrink-0 text-ink-4">{t(`stats.scenario.name.${sc.id}`)}</span>;
+          if (v === null)
+            return (
+              <span key={sc.id} className="flex min-w-0 items-center gap-1 text-2xs" title={scenarioLine(sc, t)}>
+                {name}
                 <span className="min-w-0 truncate text-amber-300">{t('stats.scenario.noData')}</span>
-              )}
+              </span>
+            );
+          const color = GRADE_COLORS[scenarioGrade(v)];
+          // The value carries the grade colour; the grade word follows when it fits the chip
+          // (otherwise it wraps onto a clipped second line: shown whole or not at all, never cut).
+          return (
+            <span key={sc.id} className="flex h-4 min-w-0 flex-wrap content-start items-center gap-x-1 overflow-hidden text-2xs leading-4" title={scenarioLine(sc, t)}>
+              {name}
+              <span className="shrink-0 text-[11px] font-medium tabular-nums" style={{ color }}>
+                {v.toFixed(2)}
+              </span>
+              <span className="shrink-0 whitespace-nowrap font-medium" style={{ color }}>
+                {t(`stats.scenario.grade.${scenarioGrade(v)}`)}
+              </span>
             </span>
           );
         })}
