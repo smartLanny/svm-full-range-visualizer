@@ -127,6 +127,13 @@ export interface AxisMotion {
   settle: number;
   /** Extent at the static end of a glide (settle > 0), else null. */
   from: Extent | null;
+  /**
+   * Tick density of each axis as a continuous level (see tickLevel; between two integers = a
+   * cross-fade of both tick sets). The sweep's levels come from its range track, quantised with
+   * hysteresis and smoothed over time (scene.ts), so a steady span never shows a mixed tick set.
+   * Default: the level of the current domain.
+   */
+  level?: { x: number; y: number };
 }
 
 /** x domain (axis units) for a slice + axis mode; `extent` in data units (nits or gray). */
@@ -164,11 +171,33 @@ const GRAY_STANDARD_TICKS = [0, 32, 64, 96, 128, 160, 192, 224, 255];
 const SVM_TICKS = [0, 1, 2, 3, 4, 5, 6];
 
 /**
+ * Tick density level of a domain of `span` axis units, as the still axes pick it: a linear axis
+ * with about `count` intervals → the index j of its 1-2-5 step (niceStep = levelStep(j)); the
+ * log axis of the adaptive / free modes → 0 (decades only, > 4.2 decades), 1 (1, 2, 5; > 0.9),
+ * 2 (every mantissa). `bias` (±1) nudges the span by the hysteresis margin (a sweep switches
+ * level only where both nudged spans agree on the new one).
+ */
+export function tickLevel(log: boolean, span: number, count: number, bias = 0): number {
+  if (log) {
+    const dec = span + 0.15 * bias;
+    return dec > 4.2 ? 0 : dec > 0.9 ? 1 : 2;
+  }
+  const raw = (Math.max(1e-12, span) * Math.pow(10, 0.04 * bias)) / Math.max(1, count);
+  const e = Math.floor(Math.log10(raw));
+  const f = raw / Math.pow(10, e);
+  return f < 1.5 ? 3 * e : f < 3 ? 3 * e + 1 : f < 7 ? 3 * e + 2 : 3 * e + 3;
+}
+
+/** Tick intervals of the linear axes (x = gray, y = SVM). */
+export const X_COUNT = 8;
+export const Y_COUNT = 6;
+
+/**
  * Axes for a slice mode + axis mode. `extent` is the data extent (x in data units: nits or
  * gray) used by adaptive / free modes: a static slice's, or the (smoothed) range of the sweep /
  * glide frame (axisTrack.ts). With `motion` (a sweep or glide frame) the adaptive / free axes are
- * built as moving axes: their ticks carry opacities that change continuously with the domain
- * (motionTicks); standard axes and adaptive's SVM axis never move.
+ * built as moving axes: their ticks carry opacities that change continuously (see below);
+ * standard axes and adaptive's SVM axis never move.
  */
 export function buildAxes(slice: SliceMode, mode: AxisMode, extent: Extent | null, motion?: AxisMotion): Axes {
   const moving = !!motion && mode !== 'standard' && !!extent;
@@ -181,10 +210,11 @@ export function buildAxes(slice: SliceMode, mode: AxisMode, extent: Extent | nul
   if (moving) {
     const [s0, s1] = xDomain(slice, mode, from);
     const m = { settle, s0, s1 };
+    const lam = motion!.level?.x ?? tickLevel(slice === 'gray', xu1 - xu0, X_COUNT);
     const ticks =
       slice === 'gray'
-        ? logMotionTicks(xu0, xu1, m)
-        : linearMotionTicks(xu0, xu1, 8, m, (v) => String(Math.round(v)), (v) => String(Math.round(v)));
+        ? logMotionTicks(xu0, xu1, m, lam)
+        : linearMotionTicks(xu0, xu1, X_COUNT, m, lam, (v) => String(Math.round(v)), (v) => String(Math.round(v)));
     x = { log: slice === 'gray', u0: xu0, u1: xu1, ticks, motion: m };
   } else if (slice === 'gray') {
     x = { log: true, u0: xu0, u1: xu1, ticks: logAxisTicks(Math.pow(10, xu0), Math.pow(10, xu1), mode === 'standard') };
@@ -192,7 +222,7 @@ export function buildAxes(slice: SliceMode, mode: AxisMode, extent: Extent | nul
     const ticks =
       mode === 'standard'
         ? GRAY_STANDARD_TICKS.map((v) => ({ u: v, label: String(v), major: true }))
-        : linearTicks(xu0, xu1, 8).map((t) => ({ ...t, label: t.label === null ? null : String(Math.round(t.u)) }));
+        : linearTicks(xu0, xu1, X_COUNT).map((t) => ({ ...t, label: t.label === null ? null : String(Math.round(t.u)) }));
     x = { log: false, u0: xu0, u1: xu1, ticks };
   }
 
@@ -202,9 +232,10 @@ export function buildAxes(slice: SliceMode, mode: AxisMode, extent: Extent | nul
   if (moving && mode === 'free') {
     const [s0, s1] = yDomain(mode, from);
     const m = { settle, s0, s1 };
-    y = { log: false, u0: y0, u1: y1, ticks: linearMotionTicks(y0, y1, 6, m, (v, step) => fmtLinear(v, step), fmtShort), motion: m };
+    const lam = motion!.level?.y ?? tickLevel(false, y1 - y0, Y_COUNT);
+    y = { log: false, u0: y0, u1: y1, ticks: linearMotionTicks(y0, y1, Y_COUNT, m, lam, (v, step) => fmtLinear(v, step), fmtShort), motion: m };
   } else {
-    y = { log: false, u0: y0, u1: y1, ticks: mode === 'free' ? linearTicks(y0, y1, 6) : SVM_TICKS.map((v) => ({ u: v, label: String(v), major: true })) };
+    y = { log: false, u0: y0, u1: y1, ticks: mode === 'free' ? linearTicks(y0, y1, Y_COUNT) : SVM_TICKS.map((v) => ({ u: v, label: String(v), major: true })) };
   }
   return { x, y };
 }
@@ -212,16 +243,18 @@ export function buildAxes(slice: SliceMode, mode: AxisMode, extent: Extent | nul
 // ---------------------------------------------------------------------------------------------
 // Moving axes (docs/adr/0006, fix round 3).
 //
-// A tick's opacity on a moving axis is a continuous function of the domain, so nothing pops while
-// the domain follows the data: ticks fade near the domain's edges (gridlines just inside,
-// labels just outside, where they slide off), and a denser tick level (the 2 / 5 labels of a log
-// axis, the next 1-2-5 step of a linear axis) cross-fades in as the span shrinks instead of
-// switching at a threshold. Labels are formatted per value (a value's label never changes format).
+// Nothing on a moving axis pops. Ticks fade near the domain's edges (gridlines just inside,
+// labels just outside, where they slide off), continuously in the domain. The tick density is a
+// continuous level λ (tickLevel): between two integer levels both tick sets cross-fade (a log
+// axis's 2 / 5 labels and minor gridlines, a linear axis's next 1-2-5 step); λ changes over a
+// few hundred ms around a level switch and is an integer otherwise. Labels are formatted per value
+// (a value's label never changes format while the axis moves).
 //
 // A static frame keeps the exact static ticks (buildAxes without motion). A glide from / to a
-// static slice starts / ends on them: every opacity is its "soft" moving value plus
-// settle × (static value − soft value), both taken at the glide's static-end domain, so at the
-// static end it equals the static tick set exactly and it becomes the moving value as settle → 0.
+// static slice starts / ends on them: an opacity is its moving value plus settle × (static edge
+// rule − moving edge fade) at the glide's static-end domain, and λ there is the static level, so
+// at the static end it equals the static tick set exactly and it becomes the moving value as
+// settle → 0.
 
 /** Gridlines fade out within this share of the span inside the domain's edges. */
 const GRID_EDGE = 0.02;
@@ -259,21 +292,22 @@ export function edgeAlpha(axis: Axis, u: number, kind: 'line' | 'label', strict 
   return clamp01(soft(u, axis.u0, axis.u1) + m.settle * (hardIn(u, m.s0, m.s1, strict) - soft(u, m.s0, m.s1)));
 }
 
-/** Combine a tick's moving density with its edge fade, pinned to the static rule (see above). */
-function tickAlphas(u: number, a: number, b: number, dR: number, m: AxisMotionState, dS: number, hS: number) {
-  const g = m.settle > 0 ? m.settle * (hS * hardIn(u, m.s0, m.s1) - dS * softLine(u, m.s0, m.s1)) : 0;
-  const l = m.settle > 0 ? m.settle * (hS * hardIn(u, m.s0, m.s1) - dS * softLabel(u, m.s0, m.s1)) : 0;
-  return { alpha: clamp01(dR * softLine(u, a, b) + g), labelAlpha: clamp01(dR * softLabel(u, a, b) + l) };
+/**
+ * A tick's gridline / label opacity: density d (at λ) × edge fade, plus the pin to the static rule
+ * (hS = the tick is in the static end's tick set, where its density is exactly hS).
+ */
+function tickAlphas(u: number, a: number, b: number, d: number, m: AxisMotionState, hS: number) {
+  const pin = m.settle * hS;
+  const g = pin > 0 ? pin * (hardIn(u, m.s0, m.s1) - softLine(u, m.s0, m.s1)) : 0;
+  const l = pin > 0 ? pin * (hardIn(u, m.s0, m.s1) - softLabel(u, m.s0, m.s1)) : 0;
+  return { alpha: clamp01(d * softLine(u, a, b) + g), labelAlpha: clamp01(d * softLabel(u, a, b) + l) };
 }
 
-/** Log axis: the 2 / 5 labels show below ~4.2 decades, every mantissa below ~0.9 (as logAxisTicks). */
-const w25 = (dec: number) => 1 - smooth01((dec - 3.9) / 0.6);
-const wAll = (dec: number) => 1 - smooth01((dec - 0.8) / 0.2);
-
-/** Log-axis ticks of a moving (non-standard) axis over the domain [u0, u1] (log10 nits). */
-function logMotionTicks(u0: number, u1: number, m: AxisMotionState): Tick[] {
-  const dec = u1 - u0;
-  const decS = m.s1 - m.s0;
+/** Log-axis ticks of a moving (non-standard) axis over the domain [u0, u1] (log10 nits), density λ ∈ [0, 2]. */
+function logMotionTicks(u0: number, u1: number, m: AxisMotionState, lam: number): Tick[] {
+  const w25 = clamp01(lam); // 2 / 5 labelled
+  const wAll = clamp01(lam - 1); // every mantissa labelled
+  const levelS = m.settle > 0 ? tickLevel(true, m.s1 - m.s0, 0) : -1;
   const lo = Math.min(u0, m.s0);
   const hi = Math.max(u1, m.s1);
   const out: Tick[] = [];
@@ -283,52 +317,26 @@ function logMotionTicks(u0: number, u1: number, m: AxisMotionState): Tick[] {
       const u = Math.log10(v);
       if (u < lo - LABEL_EDGE * (hi - lo) - 1e-9 || u > hi + LABEL_EDGE * (hi - lo) + 1e-9) continue;
       const cls = k === 1 ? 0 : k === 2 || k === 5 ? 1 : 2;
-      // moving densities (major = labelled gridline, minor = faint gridline) and the static rule
-      const majR = cls === 0 ? 1 : cls === 1 ? w25(dec) : wAll(dec);
-      const majS = cls === 0 ? 1 : cls === 1 ? w25(decS) : wAll(decS);
-      const majH = cls === 0 ? 1 : cls === 1 ? (decS > 4.2 ? 0 : 1) : decS > 0.9 ? 0 : 1;
-      const minR = cls === 0 ? 0 : cls === 1 ? 1 : w25(dec);
-      const minS = cls === 0 ? 0 : cls === 1 ? 1 : w25(decS);
-      const minH = cls === 0 ? 0 : cls === 1 ? (decS > 4.2 ? 1 : 0) : decS > 0.9 && decS <= 4.2 ? 1 : 0;
+      // major = labelled gridline, minor = faint gridline; densities at λ and the static set (logAxisTicks)
+      const majD = cls === 0 ? 1 : cls === 1 ? w25 : wAll;
+      const minD = cls === 0 ? 0 : cls === 1 ? 1 - w25 : w25 - wAll;
+      const majH = levelS < 0 ? 0 : cls === 0 ? 1 : cls === 1 ? (levelS >= 1 ? 1 : 0) : levelS >= 2 ? 1 : 0;
+      const minH = levelS < 0 ? 0 : cls === 1 ? (levelS === 0 ? 1 : 0) : cls === 2 && levelS === 1 ? 1 : 0;
       if (cls !== 0) {
-        const mi = tickAlphas(u, u0, u1, minR, m, minS, minH);
+        const mi = tickAlphas(u, u0, u1, minD, m, minH);
         if (mi.alpha > 0.004) out.push({ u, label: null, major: false, alpha: mi.alpha, labelAlpha: 0 });
       }
-      const ma = tickAlphas(u, u0, u1, majR, m, majS, majH);
+      const ma = tickAlphas(u, u0, u1, majD, m, majH);
       if (ma.alpha > 0.004 || ma.labelAlpha > 0.004) out.push({ u, label: fmtTickNits(v), major: true, alpha: ma.alpha, labelAlpha: ma.labelAlpha });
     }
   }
   return out;
 }
 
-/**
- * 1-2-5 step levels of a linear axis: level j = step [1, 2, 5][j mod 3] × 10^⌊j / 3⌋. niceStep
- * picks level j when L = log10(span / count) lies in [lo(j), hi(j)); a moving axis cross-fades
- * two neighbouring levels over ±STEP_FADE around each boundary instead.
- */
-const LOG15 = Math.log10(1.5);
-const LOG3 = Math.log10(3);
-const LOG7 = Math.log10(7);
-const STEP_FADE = 0.06;
-const levelStep = (j: number) => {
+/** 1-2-5 step of level j (tickLevel): [1, 2, 5][j mod 3] × 10^⌊j / 3⌋. */
+export const levelStep = (j: number) => {
   const e = Math.floor(j / 3);
   return Number(([1, 2, 5][j - 3 * e] * Math.pow(10, e)).toPrecision(12));
-};
-const levelBounds = (j: number): [number, number] => {
-  const e = Math.floor(j / 3);
-  const k = j - 3 * e;
-  return k === 0 ? [e - 1 + LOG7, e + LOG15] : k === 1 ? [e + LOG15, e + LOG3] : [e + LOG3, e + LOG7];
-};
-const levelOf = (L: number) => {
-  const e = Math.floor(L);
-  const f = L - e;
-  return f < LOG15 ? 3 * e : f < LOG3 ? 3 * e + 1 : f < LOG7 ? 3 * e + 2 : 3 * e + 3;
-};
-const ramp = (x: number) => smooth01((x + STEP_FADE) / (2 * STEP_FADE));
-/** Weight of level j at L (neighbouring levels' weights sum to 1). */
-const levelWeight = (j: number, L: number) => {
-  const [a, b] = levelBounds(j);
-  return ramp(L - a) * (1 - ramp(L - b));
 };
 const isMultiple = (v: number, step: number) => Math.abs(v / step - Math.round(v / step)) < 1e-6;
 
@@ -338,37 +346,31 @@ export function fmtShort(v: number): string {
 }
 
 /**
- * Linear-axis ticks of a moving axis over [u0, u1] (about `count` intervals). `fmtStatic(v,
- * step)` = the still axis's label (linearTicks), `fmtMoving(v)` = the per-value label; where they
- * differ, a glide cross-fades the two texts with settle.
+ * Linear-axis ticks of a moving axis over [u0, u1] at density level λ (tickLevel with `count`).
+ * `fmtStatic(v, step)` = the still axis's label (linearTicks), `fmtMoving(v)` = the per-value
+ * label; where they differ, a glide cross-fades the two texts with settle.
  */
-function linearMotionTicks(u0: number, u1: number, count: number, m: AxisMotionState, fmtStatic: (v: number, step: number) => string, fmtMoving: (v: number) => string): Tick[] {
-  const L = Math.log10(Math.max(1e-9, u1 - u0) / count);
-  const LS = Math.log10(Math.max(1e-9, m.s1 - m.s0) / count);
-  const stepS = niceStep(m.s1 - m.s0, count);
-  const levels = new Set<number>();
-  for (const j0 of [levelOf(L), levelOf(LS)]) for (const j of [j0 - 1, j0, j0 + 1]) if (levelWeight(j, L) > 0 || levelWeight(j, LS) > 0) levels.add(j);
+function linearMotionTicks(u0: number, u1: number, count: number, m: AxisMotionState, lam: number, fmtStatic: (v: number, step: number) => string, fmtMoving: (v: number) => string): Tick[] {
+  const levels = [Math.floor(lam), Math.ceil(lam)].filter((j, i, a) => a.indexOf(j) === i).map((j) => ({ j, w: Math.max(0, 1 - Math.abs(lam - j)), step: levelStep(j) }));
+  const stepS = m.settle > 0 ? levelStep(tickLevel(false, m.s1 - m.s0, count)) : 0;
   const lo = Math.min(u0, m.s0);
   const hi = Math.max(u1, m.s1);
   const margin = LABEL_EDGE * (hi - lo);
   const values = new Map<string, number>();
-  const steps = [...levels].map(levelStep);
-  if (m.settle > 0) steps.push(stepS);
+  const steps = levels.filter((l) => l.w > 0).map((l) => l.step);
+  if (stepS) steps.push(stepS);
   for (const step of steps) {
     for (let k = Math.ceil((lo - margin) / step - 1e-9); k * step <= hi + margin + step * 1e-9; k++) {
       const v = Number((k * step).toPrecision(12));
       values.set(String(v), Math.abs(v) < step * 1e-9 ? 0 : v);
     }
   }
-  const density = (v: number, at: number) => {
-    let d = 0;
-    for (const j of levels) if (isMultiple(v, levelStep(j))) d = Math.max(d, levelWeight(j, at));
-    return d;
-  };
   const out: Tick[] = [];
   for (const v of [...values.values()].sort((a, b) => a - b)) {
-    const hS = m.settle > 0 && isMultiple(v, stepS) ? 1 : 0;
-    const { alpha, labelAlpha } = tickAlphas(v, u0, u1, density(v, L), m, density(v, LS), hS);
+    let d = 0;
+    for (const l of levels) if (isMultiple(v, l.step)) d = Math.max(d, l.w);
+    const hS = stepS && isMultiple(v, stepS) ? 1 : 0;
+    const { alpha, labelAlpha } = tickAlphas(v, u0, u1, d, m, hS);
     if (!(alpha > 0.004 || labelAlpha > 0.004)) continue;
     const moving = fmtMoving(v);
     const still = hS ? fmtStatic(v, stepS) : moving;

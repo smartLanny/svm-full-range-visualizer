@@ -8,10 +8,10 @@ import { deviceOrder } from '../data/colors';
 import { deviceLabel, modeLabel, recordLabel } from '../data/records';
 import { ANOMALY_KINDS, exclusionSummary, type ExclusionSummary } from '../data/anomalies';
 import { translate } from '../i18n';
-import { buildAxes, fmtTickNits, xDomain, yDomain, type AxisMotion, type Axes } from './scales';
+import { buildAxes, fmtTickNits, tickLevel, xDomain, yDomain, X_COUNT, Y_COUNT, type AxisMotion, type Axes } from './scales';
 import { buildCurve, evalCurve, type Curve } from './spline';
 import { fmtLevel, settleSlice, sliceFor, slicesExtent, staticSliceFor, sweepParam, SWEEP_DURATION, type CurvePoint, type Extent } from './slices';
-import { glideTrack, sweepTrack, trackAt, TRACK_DT, type RangeTrack, type URange } from './axisTrack';
+import { glideTrack, levelTrack, seriesAt, sweepTrack, trackAt, TRACK_DT, type RangeTrack, type URange } from './axisTrack';
 
 export interface ChartInputs {
   /** All records in store order (legend lists hidden ones in the interactive view). */
@@ -162,13 +162,14 @@ interface TrackMemo {
   track: RangeTrack | null;
   probeAxes: Map<AxisMode, Axes[]>;
   reserve: Map<AxisMode, string[]>;
+  levels: Map<AxisMode, { x: Float64Array; y: Float64Array }>;
 }
 let trackMemo: TrackMemo[] = [];
 function memoTrack(recs: SvmRecord[], mode: SliceMode, clip: boolean): TrackMemo {
   const key = `${mode}|${clip}`;
   const hit = trackMemo.find((m) => m.key === key && sameRecs(m.recs, recs));
   if (hit) return hit;
-  const value: TrackMemo = { key, recs, track: sweepTrack(recs, mode, clip), probeAxes: new Map(), reserve: new Map() };
+  const value: TrackMemo = { key, recs, track: sweepTrack(recs, mode, clip), probeAxes: new Map(), reserve: new Map(), levels: new Map() };
   trackMemo = [value, ...trackMemo].slice(0, 3);
   return value;
 }
@@ -179,6 +180,33 @@ function sweepProbeAxes(m: TrackMemo, mode: SliceMode, axisMode: AxisMode): Axes
   if (!v) {
     v = Array.from({ length: PROBE_SAMPLES + 1 }, (_, i) => buildAxes(mode, axisMode, toExtent(mode, m.track ? trackAt(m.track, (i / PROBE_SAMPLES) * SWEEP_DURATION) : null)));
     m.probeAxes.set(axisMode, v);
+  }
+  return v;
+}
+
+/** Tick density levels of both axes of a domain (scales.tickLevel), nudged by `bias`. */
+function domainLevels(mode: SliceMode, axisMode: AxisMode, e: Extent | null, bias = 0): { x: number; y: number } {
+  const [x0, x1] = xDomain(mode, axisMode, e);
+  const [y0, y1] = yDomain(axisMode, e);
+  return { x: tickLevel(mode === 'gray', x1 - x0, X_COUNT, bias), y: tickLevel(false, y1 - y0, Y_COUNT, bias) };
+}
+
+/** Tick density levels over a sweep (axisTrack.levelTrack: hysteresis + smoothing over time). */
+function sweepLevels(m: TrackMemo, mode: SliceMode, axisMode: AxisMode): { x: Float64Array; y: Float64Array } {
+  let v = m.levels.get(axisMode);
+  if (!v) {
+    const tr = m.track;
+    const n = tr ? tr.x0.length : 1;
+    const ext = Array.from({ length: n }, (_, i) => toExtent(mode, tr ? trackAt(tr, i * TRACK_DT) : null));
+    const cache = new Map<string, { x: number; y: number }>();
+    const lv = (i: number, bias: number) => {
+      const k = `${i}|${bias}`;
+      let r = cache.get(k);
+      if (!r) cache.set(k, (r = domainLevels(mode, axisMode, ext[i], bias)));
+      return r;
+    };
+    v = { x: levelTrack(n, TRACK_DT, (i, b) => lv(i, b).x), y: levelTrack(n, TRACK_DT, (i, b) => lv(i, b).y) };
+    m.levels.set(axisMode, v);
   }
   return v;
 }
@@ -352,6 +380,11 @@ export function buildScene(inputs: ChartInputs, opts: SceneOptions): Scene {
   const staticExtent = (prm: number): Extent | null =>
     prm === param && settle === 1 ? slicesExtent(series.map((se) => se.points)) : slicesExtent(visible.map((r) => staticSliceFor(r, mode, prm, clipLowGray)));
   const endRange = (tt: number | null, prm: number): URange | null => (tt === null ? toRange(mode, staticExtent(prm)) : tm?.track ? trackAt(tm.track, tt) : null);
+  const endLevels = (tt: number | null, prm: number) => {
+    if (tt === null || !tm) return domainLevels(mode, axisMode, staticExtent(prm));
+    const lv = sweepLevels(tm, mode, axisMode);
+    return { x: seriesAt(lv.x, TRACK_DT, tt), y: seriesAt(lv.y, TRACK_DT, tt) };
+  };
   let extent: Extent | null = null;
   let motion: AxisMotion | undefined;
   let staticEnd: Extent | null = null;
@@ -359,7 +392,7 @@ export function buildScene(inputs: ChartInputs, opts: SceneOptions): Scene {
     if (!moving) extent = staticExtent(param);
     else if (!blend) {
       extent = toExtent(mode, endRange(opts.t, paramTo));
-      motion = { settle: 0, from: null };
+      motion = { settle: 0, from: null, level: endLevels(opts.t, paramTo) };
     } else {
       const bl = blend;
       const key = `${mode}|${clipLowGray}|${bl.from}|${paramFrom}|${opts.t}|${paramTo}`;
@@ -370,7 +403,9 @@ export function buildScene(inputs: ChartInputs, opts: SceneOptions): Scene {
       });
       extent = toExtent(mode, glide ? glide(bl.p) : null);
       staticEnd = bl.from === null ? staticExtent(paramFrom) : opts.t === null ? staticExtent(paramTo) : null;
-      motion = { settle, from: staticEnd };
+      const la = endLevels(bl.from, paramFrom);
+      const lb = endLevels(opts.t, paramTo);
+      motion = { settle, from: staticEnd, level: { x: la.x + (lb.x - la.x) * bl.p, y: la.y + (lb.y - la.y) * bl.p } };
     }
   }
   const axes = buildAxes(mode, axisMode, extent, motion);

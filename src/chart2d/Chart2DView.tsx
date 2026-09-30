@@ -295,6 +295,10 @@ export default function Chart2DView() {
     tl.pause();
     tl.seek(0);
     const dq = sweepProgressOf(inp.sliceMode, sliceParam(inp, from));
+    // Build the first frame once before the glide's clock starts: moving adaptive / free axes
+    // precompute the sweep's range track (~0.1 s for every bundled record), which must not eat
+    // into the glide (its first frames would jump).
+    buildScene(inp, { t: 0, interactive: !inp.presenting, blend: { from, p: 0 } });
     r.phase = Math.abs(dq) < 1e-3 ? { kind: 'sweep' } : { kind: 'enter', start: performance.now() / 1000, dur: glideDuration(dq), from };
     if (r.phase.kind === 'sweep') tl.play();
     setSweeping(true);
@@ -309,6 +313,7 @@ export default function Chart2DView() {
     if (from === null) r.phase = { kind: 'static' };
     else {
       const dq = sweepProgressOf(inp.sliceMode, sliceParam(inp, null)) - sweepProgressOf(inp.sliceMode, sliceParam(inp, from));
+      buildScene(inp, { t: null, interactive: !inp.presenting, blend: { from, p: 0 } }); // warm the glide's range track
       r.phase = { kind: 'exit', start: performance.now() / 1000, dur: glideDuration(dq), from };
     }
     setSweeping(false);
@@ -454,6 +459,7 @@ export default function Chart2DView() {
       },
       begin: async ({ width, height }) => {
         await ensureFonts();
+        buildScene(inputsRef.current, { t: 0, interactive: false }); // warm the sweep's range track
         canvas = document.createElement('canvas');
         canvas.width = Math.max(1, Math.round(width));
         canvas.height = Math.max(1, Math.round(height));

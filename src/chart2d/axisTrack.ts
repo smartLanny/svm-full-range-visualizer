@@ -129,6 +129,14 @@ function limitAndSmooth(held: Float64Array, upper: boolean, step: Float64Array |
     for (let i = 1; i < n; i++) d[i] = Math.max(d[i], d[i - 1] - step[i]);
     for (let i = n - 2; i >= 0; i--) d[i] = Math.max(d[i], d[i + 1] - step[i + 1]);
   }
+  const out = cosineSmooth(d, kernel);
+  if (sg < 0) for (let i = 0; i < n; i++) out[i] = -out[i];
+  return out;
+}
+
+/** Zero-phase raised-cosine smoothing over ±kernel samples (ends held). */
+export function cosineSmooth(d: ArrayLike<number>, kernel: number): Float64Array {
+  const n = d.length;
   const w: number[] = [];
   let ws = 0;
   for (let k = -kernel; k <= kernel; k++) {
@@ -140,9 +148,35 @@ function limitAndSmooth(held: Float64Array, upper: boolean, step: Float64Array |
   for (let i = 0; i < n; i++) {
     let s = 0;
     for (let k = -kernel; k <= kernel; k++) s += w[k + kernel] * d[Math.min(n - 1, Math.max(0, i + k))];
-    out[i] = (sg * s) / ws;
+    out[i] = s / ws;
   }
   return out;
+}
+
+/**
+ * Tick density level along a sweep (scales.tickLevel): `levelAt(i, bias)` = the level of sample
+ * i's domain, its span nudged by the hysteresis margin (bias ±1). The level switches only where
+ * both nudged spans agree on the new one (a span hovering at a boundary keeps its level), and the
+ * integer sequence is smoothed over ±TRACK_KERNEL, so a switch is a short cross-fade and a steady
+ * span always shows a single tick set.
+ */
+export function levelTrack(n: number, dt: number, levelAt: (i: number, bias: number) => number): Float64Array {
+  const seq = new Float64Array(n);
+  let j = n > 0 ? levelAt(0, 0) : 0;
+  for (let i = 0; i < n; i++) {
+    const jn = levelAt(i, 0);
+    if (jn !== j && levelAt(i, -1) === jn && levelAt(i, 1) === jn) j = jn;
+    seq[i] = j;
+  }
+  return cosineSmooth(seq, Math.round(TRACK_KERNEL / dt));
+}
+
+/** Value of a per-sample series at t (linear, held beyond the ends). */
+export function seriesAt(a: Float64Array, dt: number, t: number): number {
+  const n = a.length;
+  const f = Math.min(n - 1, Math.max(0, t / dt));
+  const i = Math.min(n - 2, Math.floor(f));
+  return i < 0 ? a[0] : a[i] + (a[i + 1] - a[i]) * (f - i);
 }
 
 /** A smoothed range track: bounds sampled every `dt` from 0. */
