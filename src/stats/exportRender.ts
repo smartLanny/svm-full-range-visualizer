@@ -698,7 +698,7 @@ function cardPass(p: Pen, e: Env, row: StatsRow, cw: number, h: number | null): 
 
 type ColKey = 'record' | 'dist' | MetricKey;
 
-interface Col {
+export interface Col {
   key: ColKey;
   label: string;
   sub?: string;
@@ -711,7 +711,7 @@ interface Col {
 
 const pct0 = (v: number) => `${Math.round(v * 100)}%`;
 
-function tableCols(t: TFunction, scenarios: ScenarioConfig): Col[] {
+export function tableCols(t: TFunction, scenarios: ScenarioConfig): Col[] {
   const shares = weightShares(scenarios);
   return [
     { key: 'record', label: t('stats.col.record'), align: 'left', padR: 12 },
@@ -735,7 +735,7 @@ function tableCols(t: TFunction, scenarios: ScenarioConfig): Col[] {
 const groupLabel = (e: Env, g: 'at' | 'scenario') => (g === 'at' ? e.t('stats.col.atGroup', { g: Math.round(e.input.sliceGray) }) : e.t('stats.col.scenarioGroup'));
 
 /** Portrait split: shares / luminance / peak / mean — then the SVM @ nits group, coverage and the scenario reference. */
-function tableSplit(cols: Col[]): [number[], number[]] {
+export function tableSplit(cols: Col[]): [number[], number[]] {
   const a: number[] = [0];
   const b: number[] = [0];
   cols.forEach((c, i) => {
