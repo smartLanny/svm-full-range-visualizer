@@ -2717,11 +2717,6 @@ export class Engine {
     return orbit || Math.abs(v.zoom) > 1e-3 || v.pan.lengthSq() > 1e-8;
   }
 
-  /** The intro is on screen (playing, paused or scrubbed before its end). */
-  introOnScreen(): boolean {
-    return this.introShowing();
-  }
-
   /** Current intro time (s) while the intro is on screen, else null. */
   introTime(): number | null {
     const tl = this.intro?.tl;
@@ -2780,18 +2775,20 @@ export class Engine {
    */
   exportName(scene: ExportScene | null = null): string {
     // Named from the screen's settings with the scene applied (callable before beginExport()).
-    const s = exportSettings(this.screenSettings ?? this.settings ?? ({} as EngineSettings), scene);
-    if (!this.settings || !this.model || !s.a) return 'svm-3d';
+    const screen = this.screenSettings ?? this.settings;
+    if (!screen || !this.model || !screen.a) return 'svm-3d';
+    const s = exportSettings(screen, scene);
+    const a = screen.a;
     const t = (k: string, v?: Record<string, string | number>) => translate(s.lang, k, v);
     const label = (r: SvmRecord) => recordLabel(r, s.lang);
     let base: string;
-    if (s.layout === 'diff' && s.b) base = `diff_${label(s.a)}_vs_${label(s.b)}`;
+    if (s.layout === 'diff' && s.b) base = `diff_${label(a)}_vs_${label(s.b)}`;
     else if (s.layout === 'sideBySide' && s.b) {
       // The panels buildModel lays out: A, B and the extras C–F (at most MAX_COMPARE_PANELS).
       const n = Math.min(MAX_COMPARE_PANELS, 2 + (s.extras?.length ?? 0));
-      base = `${label(s.a)}_vs_${label(s.b)}${n > 2 ? `_+${n - 2}` : ''}`;
+      base = `${label(a)}_vs_${label(s.b)}${n > 2 ? `_+${n - 2}` : ''}`;
       if (n > 2 && base.length > 56) base = t('scene3d.export.sideBySideN', { n });
-    } else base = label(s.a);
+    } else base = label(a);
     return `${base}_${t(`scene3d.representation.${s.representation}`)}_${t(`scene3d.views.${s.view}`)}`;
   }
 
