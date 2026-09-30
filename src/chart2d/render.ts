@@ -4,9 +4,9 @@
  * reference layout), so on-screen, 1080p, 4K, 9:16 and 1:1 exports share one design.
  */
 import { SVM_CRITICAL, SVM_SAFE } from '../types';
-import type { Scene, LegendGroup, LegendProbe } from './scene';
+import type { Scene, LegendGroup, LegendProbe, ProbeAxes, SubtitleSlot } from './scene';
 import { bezierAt, bridgeBezier, evalCurve, segmentBezier, type Bezier, type Curve } from './spline';
-import type { Axis } from './scales';
+import { edgeAlpha, type Axes, type Axis } from './scales';
 
 export const FONT_STACK = 'Inter, "PingFang SC", "Microsoft YaHei", "Noto Sans SC", "Source Han Sans SC", system-ui, sans-serif';
 
@@ -159,6 +159,49 @@ function drawTitle(ctx: CanvasRenderingContext2D, scene: Scene, cx: number, cy: 
   return { x: x0, y: cy - px * 0.7, w: total, h: px * 1.4 };
 }
 
+/**
+ * Subtitle with moving axis ranges (scene.subtitleMix > 0): each range value sits in a slot as
+ * wide as the widest value of the motion, its digits tabular, so the text around the changing
+ * numbers (and the centred subtitle as a whole) stays put. subtitleMix blends slot widths and
+ * digit advances from the static (tight, proportional) layout, so a glide never shifts it in
+ * one frame. Uses the current font; draws left-aligned from x0.
+ */
+function subtitleLayout(ctx: CanvasRenderingContext2D, scene: Scene): { width: number; draw: (x0: number, y: number) => void } {
+  const mix = Math.min(1, Math.max(0, scene.subtitleMix));
+  let digitW = 0;
+  for (let d = 0; d <= 9; d++) digitW = Math.max(digitW, ctx.measureText(String(d)).width);
+  const adv = (ch: string) => {
+    const nat = ctx.measureText(ch).width;
+    return ch >= '0' && ch <= '9' ? nat + (digitW - nat) * mix : nat;
+  };
+  const tab = (str: string) => [...str].reduce((a, ch) => a + (ch >= '0' && ch <= '9' ? digitW : ctx.measureText(ch).width), 0);
+  const items = scene.subtitleParts.map((pt) => {
+    if (typeof pt === 'string') return { pt, w: ctx.measureText(pt).width, valW: 0 };
+    const valW = [...pt.value].reduce((a, ch) => a + adv(ch), 0);
+    const full = Math.max(valW, tab(pt.reserve), tab(pt.value));
+    return { pt, w: valW + (full - valW) * mix, valW };
+  });
+  const width = items.reduce((a, it) => a + it.w, 0);
+  const draw = (x0: number, y: number) => {
+    ctx.textAlign = 'left';
+    let x = x0;
+    for (const it of items) {
+      if (typeof it.pt === 'string') ctx.fillText(it.pt, x, y);
+      else {
+        const slot = it.pt as SubtitleSlot;
+        let cx = slot.align === 'left' ? x : x + it.w - it.valW;
+        for (const ch of slot.value) {
+          const a = adv(ch);
+          ctx.fillText(ch, cx + (a - ctx.measureText(ch).width) / 2, y);
+          cx += a;
+        }
+      }
+      x += it.w;
+    }
+  };
+  return { width, draw };
+}
+
 // ---------------------------------------------------------------------------------------------
 // Legend (inside the plot, top-right).
 
@@ -309,13 +352,30 @@ function cornerPos(corner: Corner, L: { w: number; h: number }, plot: Rect, inse
   };
 }
 
+/** Mapping of axes onto the plot. */
+function mappingOf(axes: Axes, plot: Rect): Mapping {
+  const mx = mapper(axes.x, plot.x, plot.w, false);
+  const my = mapper(axes.y, plot.y, plot.h, true);
+  return { ax: mx.a, bx: mx.b, ay: my.a, by: my.b };
+}
+
+/** Identity of a per-frame axes list (stable while its sweep's memo lives). */
+const axesIds = new WeakMap<object, number>();
+let nextAxesId = 1;
+function probeAxesKey(axes: ProbeAxes): string {
+  if (!Array.isArray(axes)) return `${axes.x.u0},${axes.x.u1},${axes.y.u0},${axes.y.u1}`;
+  let id = axesIds.get(axes);
+  if (!id) axesIds.set(axes, (id = nextAxesId++));
+  return `frames#${id}`;
+}
+
 /**
  * Screen samples (x, y, weight = drawn curve length in px per frame) of the probe's curves,
- * inside the plot. Cached per probe and mapping.
+ * inside the plot, each frame mapped with its own axes (ProbeAxes). Cached per probe and mapping.
  */
 const probeSamples = new WeakMap<LegendProbe, { key: string; pts: Float64Array }>();
-function sampleProbe(probe: LegendProbe, map: Mapping, plot: Rect): Float64Array {
-  const key = `${map.ax},${map.bx},${map.ay},${map.by},${plot.x},${plot.y},${plot.w},${plot.h}`;
+function sampleProbe(probe: LegendProbe, axes: ProbeAxes, plot: Rect): Float64Array {
+  const key = `${probeAxesKey(axes)}|${plot.x},${plot.y},${plot.w},${plot.h}`;
   const hit = probeSamples.get(probe);
   if (hit && hit.key === key) return hit.pts;
   const out: number[] = [];
@@ -323,7 +383,9 @@ function sampleProbe(probe: LegendProbe, map: Mapping, plot: Rect): Float64Array
   const push = (x: number, y: number, w: number) => {
     if (x >= plot.x && x <= plot.x + plot.w && y >= plot.y && y <= plot.y + plot.h && w > 0) out.push(x, y, w / frames);
   };
-  for (const frame of probe.frames) {
+  const single = Array.isArray(axes) ? null : mappingOf(axes, plot);
+  probe.frames.forEach((frame, fi) => {
+    const map = single ?? mappingOf((axes as Axes[])[Math.min(fi, (axes as Axes[]).length - 1)], plot);
     for (const c of frame) {
       const n = c.xs.length;
       for (let i = 0; i < n - 1; i++) {
@@ -348,7 +410,7 @@ function sampleProbe(probe: LegendProbe, map: Mapping, plot: Rect): Float64Array
       }
       for (let i = 0; i < n; i++) if (c.dot[i] > 0) push(map.ax * c.xs[i] + map.bx, map.ay * c.ys[i] + map.by, 4 * c.dot[i]);
     }
-  }
+  });
   const pts = Float64Array.from(out);
   probeSamples.set(probe, { key, pts });
   return pts;
@@ -378,17 +440,18 @@ const placementCache = new WeakMap<LegendProbe, { key: string; value: LegendPlac
  * the preferred top-right corner is kept whenever it covers no curve; otherwise the other
  * corners, then compacter layouts (never below the text floor, legendMinK), then the other
  * column count are tried; if every option covers something, the one covering the least curve
- * length wins. For a sweep the probe holds samples of the whole sweep, so one
- * corner is chosen for the entire animation (the legend never jumps while it plays).
+ * length wins. For a sweep the probe holds samples of the whole sweep (each drawn with the axes
+ * of its own time when adaptive / free axes move), so one corner is chosen for the entire
+ * animation (the legend never jumps while it plays).
  */
-function placeLegend(ctx: CanvasRenderingContext2D, groups: LegendGroup[], s: number, plot: Rect, probe: LegendProbe, map: Mapping, sig: string): LegendPlacement {
-  const key = `${sig}|${s}|${map.ax},${map.bx},${map.ay},${map.by}|${plot.x},${plot.y},${plot.w},${plot.h}`;
+function placeLegend(ctx: CanvasRenderingContext2D, groups: LegendGroup[], s: number, plot: Rect, probe: LegendProbe, axes: ProbeAxes, sig: string): LegendPlacement {
+  const key = `${sig}|${s}|${probeAxesKey(axes)}|${plot.x},${plot.y},${plot.w},${plot.h}`;
   const hit = placementCache.get(probe);
   if (hit && hit.key === key) return hit.value;
   const inset = 12 * s;
   const pad = 4 * s;
   const tol = 2 * s;
-  const pts = sampleProbe(probe, map, plot);
+  const pts = sampleProbe(probe, axes, plot);
   const kMin = legendMinK(s);
   const L0 = fitLegend(ctx, groups, s, plot, 1, kMin);
   const layouts = [L0];
@@ -450,15 +513,15 @@ function anchorOf(pl: LegendPlacement) {
   return { ax: pl.x + fx * pl.L.w, ay: pl.y + fy * pl.L.h, fx, fy };
 }
 
-function drawLegend(ctx: CanvasRenderingContext2D, scene: Scene, s: number, plot: Rect, map: Mapping, view: RenderView, hits: LegendHit[]): Rect | null {
+function drawLegend(ctx: CanvasRenderingContext2D, scene: Scene, s: number, plot: Rect, view: RenderView, hits: LegendHit[]): Rect | null {
   const groups = scene.legend;
   if (groups.length === 0 || !scene.showLegend) return null;
   const sig = `${scene.lang}|${groups.map((g) => `${g.label}:${g.rows.map((r) => r.label + (r.excluded ? '*' : '')).join(',')}`).join(';')}`;
-  const to = placeLegend(ctx, groups, s, plot, scene.legendProbe, map, sig);
+  const to = placeLegend(ctx, groups, s, plot, scene.legendProbe, scene.legendAxes, sig);
   if (!scene.legendProbeFrom || scene.legendMix >= 1) return paintLegend(ctx, scene, s, to.L, to.x, to.y, 1, view, hits);
   // Transition into / out of a sweep: the static placement and the sweep's may differ in corner
   // and in scale. Never switch in one frame (docs/adr/0003):
-  const from = placeLegend(ctx, groups, s, plot, scene.legendProbeFrom, map, sig);
+  const from = placeLegend(ctx, groups, s, plot, scene.legendProbeFrom, scene.legendAxesFrom ?? scene.legendAxes, sig);
   const p = Math.min(1, Math.max(0, scene.legendMix));
   if (from.L.cols.length === to.L.cols.length) {
     // same columns: scale and position glide together (the box hugs the corner(s) it glides between)
@@ -709,20 +772,30 @@ export function renderChart(ctx: CanvasRenderingContext2D, w: number, h: number,
     ctx.fillStyle = C.axisText;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    const sw = ctx.measureText(scene.subtitle).width;
+    const sub = scene.subtitleMix > 0 ? subtitleLayout(ctx, scene) : null;
+    const sw = sub ? sub.width : ctx.measureText(scene.subtitle).width;
     // under the title (which may have moved right of the exit button), inside the free band
     const sx = minX > 0 ? Math.max(minX + sw / 2, Math.min(tr.x + tr.w / 2, maxX - sw / 2)) : w / 2;
-    ctx.fillText(scene.subtitle, sx, 60 * s);
+    if (sub) sub.draw(sx - sw / 2, 60 * s);
+    else ctx.fillText(scene.subtitle, sx, 60 * s);
     const x0 = Math.min(tr.x, sx - sw / 2);
     const x1 = Math.max(tr.x + tr.w, sx + sw / 2);
     titleRect = { x: x0, y: tr.y, w: x1 - x0, h: 60 * s + 9 * s - tr.y };
   }
 
-  // ----- grid
+  // ----- grid (a moving axis, docs/adr/0006 fix round 3: every tick has its own opacity, and
+  // lines sit at their exact positions instead of snapping to whole pixels)
   ctx.lineWidth = hair;
+  const linePos = (axis: Axis, v: number) => {
+    const snapped = Math.round(v) + 0.5;
+    return axis.motion ? snapped + (v - snapped) * (1 - axis.motion.settle) : snapped;
+  };
   for (const t of xAxis.ticks) {
     if (t.u < xAxis.u0 - 1e-9 || t.u > xAxis.u1 + 1e-9) continue;
-    const px = Math.round(X(t.u)) + 0.5;
+    const a = t.alpha ?? 1;
+    if (a < 0.004) continue;
+    const px = linePos(xAxis, X(t.u));
+    ctx.globalAlpha = a;
     ctx.strokeStyle = t.major ? C.grid : C.gridMinor;
     ctx.beginPath();
     ctx.moveTo(px, plot.y);
@@ -731,13 +804,17 @@ export function renderChart(ctx: CanvasRenderingContext2D, w: number, h: number,
   }
   for (const t of yAxis.ticks) {
     if (t.u < yAxis.u0 - 1e-9 || t.u > yAxis.u1 + 1e-9) continue;
-    const py = Math.round(Y(t.u)) + 0.5;
+    const a = t.alpha ?? 1;
+    if (a < 0.004) continue;
+    const py = linePos(yAxis, Y(t.u));
+    ctx.globalAlpha = a;
     ctx.strokeStyle = C.grid;
     ctx.beginPath();
     ctx.moveTo(plot.x, py);
     ctx.lineTo(plot.x + plot.w, py);
     ctx.stroke();
   }
+  ctx.globalAlpha = 1;
   // axis lines (left + bottom)
   ctx.strokeStyle = C.axisLine;
   ctx.beginPath();
@@ -746,23 +823,31 @@ export function renderChart(ctx: CanvasRenderingContext2D, w: number, h: number,
   ctx.lineTo(plot.x + plot.w, plot.y + plot.h);
   ctx.stroke();
 
-  // ----- tick labels
+  // ----- tick labels (a still axis: inside the domain; a moving one: by labelAlpha, which also
+  // fades a label out just beyond the domain's edge as it slides off)
+  const labelAlpha = (axis: Axis, t: Axis['ticks'][number]) =>
+    t.labelAlpha === undefined ? (t.u < axis.u0 - 1e-9 || t.u > axis.u1 + 1e-9 ? 0 : 1) : t.labelAlpha;
   ctx.font = font(500, 11.5 * s);
   ctx.fillStyle = C.axisText;
   ctx.textBaseline = 'top';
   ctx.textAlign = 'center';
   for (const t of xAxis.ticks) {
-    if (!t.label || t.u < xAxis.u0 - 1e-9 || t.u > xAxis.u1 + 1e-9) continue;
+    const a = labelAlpha(xAxis, t);
+    if (!t.label || a < 0.004) continue;
     const tw = ctx.measureText(t.label).width;
     const px = Math.min(w - tw / 2 - 4 * s, Math.max(tw / 2 + 4 * s, X(t.u)));
+    ctx.globalAlpha = a;
     ctx.fillText(t.label, px, plot.y + plot.h + 9 * s);
   }
   ctx.textAlign = 'right';
   ctx.textBaseline = 'middle';
   for (const t of yAxis.ticks) {
-    if (!t.label || t.u < yAxis.u0 - 1e-9 || t.u > yAxis.u1 + 1e-9) continue;
+    const a = labelAlpha(yAxis, t);
+    if (!t.label || a < 0.004) continue;
+    ctx.globalAlpha = a;
     ctx.fillText(t.label, plot.x - 9 * s, Y(t.u));
   }
+  ctx.globalAlpha = 1;
   // axis titles
   ctx.font = font(500, 12.5 * s);
   ctx.fillStyle = C.axisText;
@@ -776,11 +861,14 @@ export function renderChart(ctx: CanvasRenderingContext2D, w: number, h: number,
   ctx.fillText(scene.yTitle, 0, 0);
   ctx.restore();
 
-  // ----- reference lines (0.4 safe, 1.0 critical) with labels in the right margin
+  // ----- reference lines (0.4 safe, 1.0 critical) with labels in the right margin; on a moving
+  // SVM axis a line fades out at the plot's edge and its label just beyond it
   const refs = [
     { v: SVM_SAFE, color: C.safe, label: scene.refLabels.safe },
     { v: SVM_CRITICAL, color: C.critical, label: scene.refLabels.critical },
-  ].filter((r) => r.v > yAxis.u0 && r.v < yAxis.u1);
+  ]
+    .map((r) => ({ ...r, line: edgeAlpha(yAxis, r.v, 'line', true), text: edgeAlpha(yAxis, r.v, 'label', true) }))
+    .filter((r) => r.line > 0.004 || r.text > 0.004);
   const refY = refs.map((r) => Y(r.v));
   // keep the two labels apart when the lines are close
   const minGap = 15 * s;
@@ -791,21 +879,28 @@ export function renderChart(ctx: CanvasRenderingContext2D, w: number, h: number,
     labelY[1] = c - minGap / 2;
   }
   refs.forEach((r, i) => {
-    ctx.save();
-    ctx.strokeStyle = r.color;
-    ctx.globalAlpha = 0.85;
-    ctx.lineWidth = 1.5 * s;
-    ctx.setLineDash([6 * s, 5 * s]);
-    ctx.beginPath();
-    ctx.moveTo(plot.x, Math.round(refY[i]) + 0.5);
-    ctx.lineTo(plot.x + plot.w, Math.round(refY[i]) + 0.5);
-    ctx.stroke();
-    ctx.restore();
-    ctx.font = font(600, 11.5 * s);
-    ctx.fillStyle = r.color;
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(r.label, plot.x + plot.w + 8 * s, labelY[i]);
+    if (r.line > 0.004 && r.v > yAxis.u0 && r.v < yAxis.u1) {
+      ctx.save();
+      ctx.strokeStyle = r.color;
+      ctx.globalAlpha = 0.85 * r.line;
+      ctx.lineWidth = 1.5 * s;
+      ctx.setLineDash([6 * s, 5 * s]);
+      ctx.beginPath();
+      const py = linePos(yAxis, refY[i]);
+      ctx.moveTo(plot.x, py);
+      ctx.lineTo(plot.x + plot.w, py);
+      ctx.stroke();
+      ctx.restore();
+    }
+    if (r.text > 0.004) {
+      ctx.font = font(600, 11.5 * s);
+      ctx.fillStyle = r.color;
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.globalAlpha = r.text;
+      ctx.fillText(r.label, plot.x + plot.w + 8 * s, labelY[i]);
+      ctx.globalAlpha = 1;
+    }
   });
 
   // ----- curves (clipped to the plot)
@@ -849,7 +944,7 @@ export function renderChart(ctx: CanvasRenderingContext2D, w: number, h: number,
 
   // ----- legend
   const hits: LegendHit[] = [];
-  const legendRect = drawLegend(ctx, scene, s, plot, map, view, hits);
+  const legendRect = drawLegend(ctx, scene, s, plot, view, hits);
 
   // ----- crosshair + dots
   let hover: RenderResult['hover'] = null;

@@ -132,14 +132,16 @@ export default function Chart2DView() {
       const r = rt.current;
       const ph = r.phase;
       const now = performance.now() / 1000;
+      // dp/dt of the eased glide progress (moving axes widen their edge fades with it)
+      const rate = (q: number, dur: number) => ((Math.PI / 2) * Math.sin(Math.PI * Math.min(1, Math.max(0, q)))) / dur;
       if (ph.kind === 'enter') {
         const p = (now - ph.start) / ph.dur;
-        if (p < 1) return { t: tl.time, interactive, blend: { from: ph.from, p: easeInOutSine(p) } };
+        if (p < 1) return { t: tl.time, interactive, blend: { from: ph.from, p: easeInOutSine(p), rate: rate(p, ph.dur) } };
         r.phase = { kind: 'sweep' };
         if (!tl.playing && tl.time === 0) tl.play();
       } else if (ph.kind === 'exit') {
         const p = (now - ph.start) / ph.dur;
-        if (p < 1) return { t: null, interactive, blend: { from: ph.from, p: easeInOutSine(p) } };
+        if (p < 1) return { t: null, interactive, blend: { from: ph.from, p: easeInOutSine(p), rate: rate(p, ph.dur) } };
         r.phase = { kind: 'static' };
         tl.seek(0);
       }
@@ -287,6 +289,21 @@ export default function Chart2DView() {
   );
 
   // ---------------------------------------------------------------- sweep
+  /**
+   * Build (and lay out, off screen) the first frame of a glide before its clock starts: moving
+   * adaptive / free axes precompute the sweep's range track (~0.1–0.3 s for every bundled record)
+   * and the legend placement samples the whole sweep; neither may eat into the glide (its first
+   * frames would jump).
+   */
+  const warmUp = useCallback((opts: SceneOptions) => {
+    const r = rt.current;
+    const inp = inputsRef.current;
+    const scene = buildScene(inp, opts);
+    if (r.w <= 0 || r.h <= 0) return;
+    const ctx = document.createElement('canvas').getContext('2d');
+    if (ctx) renderChart(ctx, r.w, r.h, screenScale(r.w, r.h), scene, { insetBottom: inp.presenting ? BAND_H : 0, safeLeft: inp.presenting ? r.safeLeft : 0 });
+  }, []);
+
   const startSweep = useCallback(() => {
     const r = rt.current;
     const inp = inputsRef.current;
@@ -295,11 +312,15 @@ export default function Chart2DView() {
     tl.pause();
     tl.seek(0);
     const dq = sweepProgressOf(inp.sliceMode, sliceParam(inp, from));
-    r.phase = Math.abs(dq) < 1e-3 ? { kind: 'sweep' } : { kind: 'enter', start: performance.now() / 1000, dur: glideDuration(dq), from };
+    warmUp({ t: 0, interactive: !inp.presenting, blend: { from, p: 0 } });
+    // Already at the sweep start: no glide, except that moving adaptive / free axes still glide
+    // from the static slice's range to the sweep's (never switch in one frame).
+    const still = Math.abs(dq) < 1e-3 && (inp.axisMode === 'standard' || from !== null);
+    r.phase = still ? { kind: 'sweep' } : { kind: 'enter', start: performance.now() / 1000, dur: glideDuration(dq), from };
     if (r.phase.kind === 'sweep') tl.play();
     setSweeping(true);
     requestDraw();
-  }, [tl, requestDraw]);
+  }, [tl, requestDraw, warmUp]);
 
   const closeSweep = useCallback(() => {
     const r = rt.current;
@@ -309,11 +330,12 @@ export default function Chart2DView() {
     if (from === null) r.phase = { kind: 'static' };
     else {
       const dq = sweepProgressOf(inp.sliceMode, sliceParam(inp, null)) - sweepProgressOf(inp.sliceMode, sliceParam(inp, from));
+      warmUp({ t: null, interactive: !inp.presenting, blend: { from, p: 0 } });
       r.phase = { kind: 'exit', start: performance.now() / 1000, dur: glideDuration(dq), from };
     }
     setSweeping(false);
     requestDraw();
-  }, [tl, requestDraw]);
+  }, [tl, requestDraw, warmUp]);
 
   const lastPlay = useRef(playNonce);
   useEffect(() => {
@@ -454,6 +476,7 @@ export default function Chart2DView() {
       },
       begin: async ({ width, height }) => {
         await ensureFonts();
+        buildScene(inputsRef.current, { t: 0, interactive: false }); // warm the sweep's range track
         canvas = document.createElement('canvas');
         canvas.width = Math.max(1, Math.round(width));
         canvas.height = Math.max(1, Math.round(height));

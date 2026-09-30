@@ -154,11 +154,12 @@ describe('scene + table', () => {
     expect(off.legend.flatMap((g) => g.rows.map((r) => r.id))).toEqual(['a', 'b']);
     expect(on.title.join('')).toBe('SVM 测试（灰阶 G127）');
   });
-  it('adaptive axes are fixed over a sweep', () => {
+  it('free axes follow the sweep (fix round 3: no longer fixed for the whole sweep)', () => {
     const i2 = { ...inputs, axisMode: 'free' as const };
     const a = buildScene(i2, { t: 1, interactive: false }).axes;
     const b = buildScene(i2, { t: 7.3, interactive: false }).axes;
-    expect([a.x.u0, a.x.u1, a.y.u0, a.y.u1]).toEqual([b.x.u0, b.x.u1, b.y.u0, b.y.u1]);
+    expect(a.x.u0).toBeGreaterThan(b.x.u0 + 0.5);
+    expect(a.x.motion?.settle).toBe(0);
   });
   it('builds a table and TSV', () => {
     const tb = buildTable(buildScene(inputs, { t: null, interactive: false }));
