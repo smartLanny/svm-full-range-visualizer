@@ -2,12 +2,15 @@
  * Scene model: turns records + settings into world-space cells (docs/adr/0002).
  *
  * World axes: x = log10(level nits + 1) · SX (luminance to the right), z = −gray · SZ · depthScale
- * (gray increases away from the viewer / upward in top view), y = value · SY · heightScale.
+ * (gray increases away from the viewer / upward in top view), y = value · SY · heightScale. The
+ * depth scale gives every plate the same aspect (plate.ts PLATE_ASPECT), whatever the records'
+ * luminance / gray range and whatever the frame.
  * Pure data — no three.js objects — so it can be unit tested.
  */
 import type { PanelLetter, SceneLayout, SvmRecord } from '../../types';
 import { CONTOUR_LEVELS, MAX_COMPARE_PANELS, PANEL_LETTERS } from '../../types';
 import { cellEdges, diffRecords, gridView, sampleView, terrainNitsTicks, type GridView } from '../../data/grid';
+import { PLATE_ASPECT, plateDepthScale } from './plate';
 
 /** World units per log10(nits + 1). */
 export const SX = 6;
@@ -87,7 +90,7 @@ export interface SceneModel {
   /** Max/min plotted (capped) value over all panels, for bounds. */
   plotMax: number;
   plotMin: number;
-  /** World units per gray level (SZ · depthScale). */
+  /** World units per gray level (SZ · depthScale, see plateDepthScale). */
   sz: number;
 }
 
@@ -102,10 +105,10 @@ export interface ModelInput {
   colorMax: number;
   heightCap: number;
   /**
-   * Depth (gray axis) stretch, default 1. Portrait frames use a deeper plate so the plot (and the
-   * heatmap) fills a tall frame instead of a thin band; cells stay the same cells in every view.
+   * Width : depth of the plate (the domain of all panels), default PLATE_ASPECT. It never depends
+   * on the frame: portrait frames and narrow grid cells center the plate instead of stretching it.
    */
-  depthScale?: number;
+  plateAspect?: number;
 }
 
 export type ModelResult = { ok: true; model: SceneModel } | { ok: false; reason: 'noRecord' | 'needB' | 'empty' | 'noOverlap' };
@@ -188,7 +191,7 @@ export function buildModel(input: ModelInput): ModelResult {
   if (!a) return { ok: false, reason: 'noRecord' };
   if (layout !== 'single' && !b) return { ok: false, reason: 'needB' };
   const opts = { clipLowGray: input.clipLowGray, maxNits: input.maxNits };
-  const sz = SZ * Math.max(0.25, input.depthScale ?? 1);
+  const aspect = input.plateAspect ?? PLATE_ASPECT;
 
   if (layout === 'diff') {
     const raw = diffRecords(a, b!, opts);
@@ -200,6 +203,7 @@ export function buildModel(input: ModelInput): ModelResult {
     const bView = gridView(b!);
     const ex = extents(diff.view);
     const domain: Domain = { lx0: ex.lx0, lx1: ex.lx1, g0: ex.g0, g1: ex.g1 };
+    const sz = SZ * plateDepthScale(domain, SX, SZ, aspect);
     const { mapX, mapZ } = mappers(domain, 0, sz);
     const panel = makePanel('Δ', a, diff.view, 'diff', diff.values, mapX, mapZ, 0);
     panel.other = b!;
@@ -210,7 +214,7 @@ export function buildModel(input: ModelInput): ModelResult {
       }),
     );
     const range = diffRange(diff.values.flat().filter((v): v is number => v !== null));
-    return { ok: true, model: finish(input, 'diff', [panel], domain, range) };
+    return { ok: true, model: finish(input, 'diff', [panel], domain, range, sz) };
   }
 
   const recs = layout === 'sideBySide' ? [a, b!, ...(input.extras ?? [])].slice(0, MAX_COMPARE_PANELS) : [a];
@@ -224,6 +228,8 @@ export function buildModel(input: ModelInput): ModelResult {
     g1: Math.max(...exs.map((e) => e.g1)),
   };
   const width = (domain.lx1 - domain.lx0) * SX;
+  // One depth scale for all panels (they share the domain): every panel has the plate aspect.
+  const sz = SZ * plateDepthScale(domain, SX, SZ, aspect);
   // Side by side: the panels lie in a row in world space (each view's camera is moved to its
   // panel, docs/adr/0002), centered on the single-panel mapping; their letters follow the order.
   const panels = recs.map((rec, i) => {
@@ -232,7 +238,7 @@ export function buildModel(input: ModelInput): ModelResult {
     const values = views[i].points.map((row) => row.map((p) => (p && Number.isFinite(p.svm) ? p.svm : null)));
     return makePanel(PANEL_LETTERS[i], rec, views[i], 'svm', values, mapX, mapZ, offset);
   });
-  return { ok: true, model: finish(input, 'svm', panels, domain, input.colorMax) };
+  return { ok: true, model: finish(input, 'svm', panels, domain, input.colorMax, sz) };
 }
 
 /** Keep only the rows / columns of a diff grid that have at least one non-null difference. */
@@ -264,7 +270,7 @@ function mappers(domain: Domain, offsetX: number, sz: number) {
   };
 }
 
-function finish(input: ModelInput, kind: ValueKind, panels: PanelModel[], domain: Domain, colorMax: number): SceneModel {
+function finish(input: ModelInput, kind: ValueKind, panels: PanelModel[], domain: Domain, colorMax: number, sz: number): SceneModel {
   const bounds = {
     x0: Math.min(...panels.map((p) => p.rect.x0)),
     x1: Math.max(...panels.map((p) => p.rect.x1)),
@@ -289,7 +295,7 @@ function finish(input: ModelInput, kind: ValueKind, panels: PanelModel[], domain
     valueTicks: [],
     plotMax: 0,
     plotMin: 0,
-    sz: SZ * Math.max(0.25, input.depthScale ?? 1),
+    sz,
   };
   setModelHeightCap(model, input.heightCap);
   return model;
