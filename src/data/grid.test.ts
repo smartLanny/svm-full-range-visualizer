@@ -5,7 +5,9 @@ import { cellEdges, diffRecords, fmtNits, fmtSvm, gridView, levelRange, logTicks
 import type { Dataset } from '../types';
 import { restoreExcluded } from './anomalies';
 
-const load = (f: string) => JSON.parse(fs.readFileSync(path.resolve(__dirname, '../../public/datasets', f), 'utf8')) as Dataset;
+// The first Xiaomi 18 Pro Max session (superseded by a re-test) lives on in test-fixtures/ as
+// real-world defects: xiaomi18promax_v1_off/on.json (with the exclusions stored at the time).
+const load = (f: string) => JSON.parse(fs.readFileSync(path.resolve(__dirname, f.includes('_v1_') ? '../../test-fixtures' : '../../public/datasets', f), 'utf8')) as Dataset;
 const iphone = load('iPhone17ProMax.json');
 const mate = load('huawei_mate70air.json');
 
@@ -185,11 +187,11 @@ describe('fmt helpers', () => {
   });
 });
 
-describe('duplicate level columns (raw xiaomi18promax_adaptive_pro_on: 60% and 50% share 162.51 nits)', () => {
-  // The bundled file is cleaned (docs/adr/0012); restore the raw grid to exercise the tie.
-  const x18 = restoreExcluded(load('xiaomi18promax_adaptive_pro_on.json'));
+describe('duplicate level columns (raw xiaomi18promax_v1_on fixture: 60% and 50% share 162.51 nits)', () => {
+  // The fixture is stored cleaned (docs/adr/0012); restore the raw grid to exercise the tie.
+  const x18 = restoreExcluded(load('xiaomi18promax_v1_on.json'));
   it('the cleaned record drops the all-empty duplicate column from the grid view', () => {
-    const clean = gridView(load('xiaomi18promax_adaptive_pro_on.json'));
+    const clean = gridView(load('xiaomi18promax_v1_on.json'));
     expect(clean.levelNits.filter((n) => n === 162.51).length).toBe(1);
     expect(clean.percents).not.toContain(50);
   });

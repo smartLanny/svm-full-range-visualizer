@@ -172,7 +172,17 @@ describe('static slices draw readings only (N08)', () => {
       const sweep = buildScene(inp, { t: 0, interactive: false });
       const enter1 = buildScene(inp, { t: 0, interactive: false, blend: { from: null, p: 1 - 1e-9 } });
       const exit1 = buildScene(inp, { t: null, interactive: false, blend: { from: 3, p: 1 - 1e-9 } });
-      const sig = (sc: typeof st, tol: number) => sc.series.map((s) => s.points.map((p) => `${p.key}:${Math.round(p.a / tol)}`).join(' ')).join('|');
+      // By key: points tied in x (two levels sharing a quantised reading, e.g. the Xiaomi 18 Pro Max
+      // 开 4 % / 10 % at G255) are ordered by column only exactly at the tie, not just beside it.
+      const sig = (sc: typeof st, tol: number) =>
+        sc.series
+          .map((s) =>
+            [...s.points]
+              .sort((p, q) => p.key - q.key)
+              .map((p) => `${p.key}:${Math.round(p.a / tol)}`)
+              .join(' '),
+          )
+          .join('|');
       expect(sig(enter0, 1e-6)).toBe(sig(st, 1e-6));
       expect(sig(enter1, 1e-3)).toBe(sig(sweep, 1e-3));
       expect(sig(exit1, 1e-3)).toBe(sig(st, 1e-3));

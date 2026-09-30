@@ -8,7 +8,9 @@ import { gapNotes, interpolatedShare, pointCells, pointNotes } from './denoiseMa
 import { buildCurve, curveSpanAt } from './spline';
 
 const dir = path.resolve(__dirname, '../../public/datasets');
-const rec = (f: string): SvmRecord => rawDataset({ ...(JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8')) as Dataset), id: f, device: f, mode: '', source: 'bundled' as const });
+// The first Xiaomi 18 Pro Max session (superseded by a re-test) lives on in test-fixtures/ as
+// real-world defects: xiaomi18promax_v1_off/on.json (with the exclusions stored at the time).
+const rec = (f: string): SvmRecord => rawDataset({ ...(JSON.parse(fs.readFileSync(f.includes('_v1_') ? path.resolve(__dirname, '../../test-fixtures', f) : path.join(dir, f), 'utf8')) as Dataset), id: f, device: f, mode: '', source: 'bundled' as const });
 
 describe('slice points back to their cells (docs/adr/0012 addendum)', () => {
   const m80 = processRecord(rec('huawei_mate80rs.json'), { denoise: true }).record;
@@ -41,8 +43,8 @@ describe('slice points back to their cells (docs/adr/0012 addendum)', () => {
     // a raw record has no notes
     expect(pointNotes(rec('huawei_mate80rs.json'), 'gray', 96, false, key27)).toEqual([]);
   });
-  it('gap notes: the no-data cells inside a gap (Xiaomi 18 Pro Max 关 G109, 4 % / 6 %)', () => {
-    const x18 = processRecord(rec('xiaomi18promax_adaptive_pro_off.json'), { denoise: true }).record;
+  it('gap notes: the no-data cells inside a gap (Xiaomi 18 Pro Max 关 first session G109, 4 % / 6 %)', () => {
+    const x18 = processRecord(rec('xiaomi18promax_v1_off.json'), { denoise: true }).record;
     const xv = gridView(x18);
     const k4 = xv.percents.indexOf(4);
     const k6 = xv.percents.indexOf(6);

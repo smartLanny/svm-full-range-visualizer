@@ -11,7 +11,9 @@ import { buildScene, type ChartInputs } from '../chart2d/scene';
 import { buildTable } from '../chart2d/table';
 import { settleSlice, smoothSliceAtGray } from '../chart2d/slices';
 
-const load = (f: string) => JSON.parse(fs.readFileSync(path.resolve(__dirname, '../../public/datasets', f), 'utf8')) as Dataset;
+// The first Xiaomi 18 Pro Max session (superseded by a re-test) lives on in test-fixtures/ as
+// real-world defects: xiaomi18promax_v1_off/on.json (with the exclusions stored at the time).
+const load = (f: string) => JSON.parse(fs.readFileSync(path.resolve(__dirname, f.includes('_v1_') ? '../../test-fixtures' : '../../public/datasets', f), 'utf8')) as Dataset;
 const BUNDLED = fs.readdirSync(path.resolve(__dirname, '../../public/datasets')).filter((f) => f.endsWith('.json') && f !== 'manifest.json');
 
 const ALL: StatsOptions = { clipLowGray: false, maxNits: null, sliceGray: 127 };
@@ -210,8 +212,8 @@ describe('coverage (valid area / nominal area of the scope)', () => {
     expect(s.coverageShare).toBeCloseTo(1, 9);
   });
 
-  it('RecordStats.denoise: the displayed record\'s own counts inside the scope (bundled 18 Pro Max records)', () => {
-    for (const f of ['xiaomi18promax_adaptive_pro_off.json', 'xiaomi18promax_adaptive_pro_on.json']) {
+  it('RecordStats.denoise: the displayed record\'s own counts inside the scope (first 18 Pro Max session, fixtures)', () => {
+    for (const f of ['xiaomi18promax_v1_off.json', 'xiaomi18promax_v1_on.json']) {
       const raw = rawDataset(load(f));
       expect(computeRecordStats(raw, ALL).denoise).toEqual({ interpolated: 0, noData: 0, lumEstimated: 0 });
       const on = processRecord(raw, { denoise: true });

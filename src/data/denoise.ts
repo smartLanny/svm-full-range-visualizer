@@ -26,17 +26,25 @@
  *     - 读数疑似未更新 (readingNotUpdated): such a cell whose SVM also repeats the adjacent reading
  *       (SVM within 1 %, luminance within 15 %) while its column puts the SVM > 10 % elsewhere —
  *       the whole reading was not updated, so the SVM is a copy too (runs of them included).
+ *     - 整段读数亮度档位不符 (levelShifted): ≥ 2 consecutive credible cells of a column, all
+ *       > 35 % off the pattern in the same direction by one common factor (within 20 % of each
+ *       other), whose edge breaks the column's order against the next credible, in-pattern reading
+ *       (e.g. a G192 darker than the G174 below it). Luminance always rises with gray at a fixed
+ *       level, so these cells were measured while the screen was at another brightness: their
+ *       luminance AND SVM belong to another level and cannot be used here (the luminance becomes
+ *       an estimate, the SVM is filled like a spike).
  *     A column's level luminance comes from its G255 cell; when that luminance is unreliable the
  *     level is re-estimated from the pattern (the column's credible rows).
  *  4. SVM spike: more than 3× off the median of ≥ 2 credible neighbours (8-neighbourhood) and
  *     either more than 1.0 away from it or more than 10× off.
  *
  * Processing with denoise on (`processRecord`):
- *  - black-level, repeated-reading and spike cells are FILLED by interpolation (log SVM; luminance
+ *  - black-level, repeated-reading, level-shifted and spike cells are FILLED by interpolation (log SVM; luminance
  *    geometric) only between two highly credible measured cells (usable SVM, luminance clearly
  *    above the black noise) on both sides of a short gap (≤ 2 cells) — first along gray in the
  *    same column, else along level luminance in the same row; never extrapolated. Otherwise they
- *    are shown as no data. A spike keeps its own (measured or estimated) luminance.
+ *    are shown as no data. A spike keeps its own (measured or estimated) luminance, a
+ *    level-shifted cell its estimated one.
  *  - duplicated rows / columns → no data.
  *  - unreliable luminance only → the measured SVM is kept; the luminance becomes an estimate
  *    (interpolated in the same column, else the table's pattern); a bad level is re-estimated.
@@ -49,9 +57,9 @@ import { fmtNits, fmtSvm } from './grid';
 // ---------------------------------------------------------------------------------------------
 // Types
 
-/** Problem detected in a cell. The first five make the SVM unusable; the last two only the luminance. */
-export type DenoiseKind = 'blackLevel' | 'duplicateColumn' | 'duplicateRow' | 'readingNotUpdated' | 'svmSpike' | 'lumNotUpdated' | 'lumOffPattern';
-export const DENOISE_KINDS: DenoiseKind[] = ['blackLevel', 'duplicateColumn', 'duplicateRow', 'readingNotUpdated', 'svmSpike', 'lumNotUpdated', 'lumOffPattern'];
+/** Problem detected in a cell. The first six make the SVM unusable; the last two only the luminance. */
+export type DenoiseKind = 'blackLevel' | 'duplicateColumn' | 'duplicateRow' | 'readingNotUpdated' | 'levelShifted' | 'svmSpike' | 'lumNotUpdated' | 'lumOffPattern';
+export const DENOISE_KINDS: DenoiseKind[] = ['blackLevel', 'duplicateColumn', 'duplicateRow', 'readingNotUpdated', 'levelShifted', 'svmSpike', 'lumNotUpdated', 'lumOffPattern'];
 
 /** What the denoise did with a flagged cell. */
 export type DenoiseAction = 'interpolated' | 'noData' | 'lumEstimated';
@@ -66,10 +74,11 @@ export const DENOISE_ACTIONS: DenoiseAction[] = ['interpolated', 'noData', 'lumE
  *  duplicateColumn — {pct}% 列与 {twinPct}% 列完全相同（源表复制错误）
  *  duplicateRow — G{gray} 行与 G{twinGray} 行完全相同（源表复制错误）
  *  readingNotUpdated — 亮度和 SVM 都与相邻格（G{twinGray} · {twinPct}%）几乎相同，读数疑似未更新
+ *  levelShifted — 亮度 {nits} nits 比整表规律推算的约 {expected} nits 偏 {dev}，本列连续 {run} 格整体偏移且与相邻灰阶顺序矛盾
  *  lumNotUpdated — 亮度 {nits} nits 与相邻格（G{twinGray} · {twinPct}%）几乎相同，比整表规律推算的约 {expected} nits 偏 {dev}
  *  lumOffPattern — 亮度 {nits} nits 比整表规律推算的约 {expected} nits 偏 {dev}
  */
-export type DenoiseReason = 'nonPositive' | 'blackLevel' | 'svmSpike' | 'svmInvalid' | 'duplicateColumn' | 'duplicateRow' | 'readingNotUpdated' | 'lumNotUpdated' | 'lumOffPattern';
+export type DenoiseReason = 'nonPositive' | 'blackLevel' | 'svmSpike' | 'svmInvalid' | 'duplicateColumn' | 'duplicateRow' | 'readingNotUpdated' | 'levelShifted' | 'lumNotUpdated' | 'lumOffPattern';
 
 export interface BlackLevel {
   /** Dark readings used (G ≤ 2 rows in the dim columns). */
@@ -86,9 +95,11 @@ export interface BlackLevel {
 
 /** SVM problem of a cell (the SVM reading cannot be used). */
 export interface SvmFlag {
-  kind: 'blackLevel' | 'duplicateColumn' | 'duplicateRow' | 'readingNotUpdated' | 'svmSpike';
+  kind: 'blackLevel' | 'duplicateColumn' | 'duplicateRow' | 'readingNotUpdated' | 'levelShifted' | 'svmSpike';
   /** duplicateRow / duplicateColumn / readingNotUpdated: matrix [row, col] of the cell it repeats. */
   twin?: [number, number];
+  /** levelShifted: number of consecutive cells shifted together. */
+  run?: number;
   /** svmSpike: median SVM of the credible neighbours. */
   typical?: number;
 }
@@ -162,6 +173,8 @@ export interface CellNote extends CellRef {
   expected?: number;
   deviation?: number;
   twin?: CellRef;
+  /** levelShifted: number of consecutive cells of the column shifted together. */
+  run?: number;
 }
 
 export interface LevelNote {
@@ -425,6 +438,8 @@ function analyse(m: Dataset['matrix']): DenoiseAnalysis {
     return !!p && p.nits > 0 && !f?.lum && f?.svm?.kind !== 'blackLevel' && f?.svm?.kind !== 'duplicateColumn' && f?.svm?.kind !== 'duplicateRow';
   };
   let fit: Fit = { overall: 0, row: new Array(R).fill(null), col: new Array(C).fill(null) };
+  /** levelShifted cells (r * C + c) → length of their run. */
+  const shifted = new Map<number, number>();
   for (let pass = 0; pass < 6; pass++) {
     fit = medianPolishFit(
       Array.from({ length: R }, (_, r) =>
@@ -455,9 +470,59 @@ function analyse(m: Dataset['matrix']): DenoiseAnalysis {
         else if (dev > LUM_HARD && ((localDev !== null && localDev > LUM_HARD) || columnOrderBroken(m, r, c, rowOrd, rpos, lumOk, bl.step))) kind = 'lumOffPattern';
         if (kind) found.push([r, c, { kind, expected: Math.exp(f), deviation: Math.exp(e) - 1, ...(kind === 'lumNotUpdated' && twin ? { twin } : {}) }]);
       }
+    // 3a. Runs of readings shifted together (header, levelShifted), judged on every credible
+    //     cell whether or not it was flagged alone.
+    for (let c = 0; c < C; c++) {
+      const e = rowOrd.map((r) => {
+        const p = cellOf(m, r, c);
+        const k = flags[r][c]?.svm?.kind;
+        if (!p || !(p.nits > chkMin) || k === 'blackLevel' || k === 'duplicateColumn' || k === 'duplicateRow') return null;
+        const f = fitted(fit, r, c);
+        return f === null ? null : Math.log(p.nits) - f;
+      });
+      const off = (i: number) => e[i] !== null && Math.abs(e[i]!) > LUM_HARD;
+      for (let i = 0; i < R; ) {
+        if (!off(i)) {
+          i++;
+          continue;
+        }
+        const s = Math.sign(e[i]!);
+        let j = i;
+        let lo = e[i]!;
+        let hi = e[i]!;
+        while (j + 1 < R && off(j + 1) && Math.sign(e[j + 1]!) === s && Math.max(hi, e[j + 1]!) - Math.min(lo, e[j + 1]!) <= LUM_TOL) {
+          j++;
+          lo = Math.min(lo, e[j]!);
+          hi = Math.max(hi, e[j]!);
+        }
+        // Too dark: its darkest gray is darker than the in-pattern reading of the next darker gray;
+        // too bright: its brightest gray is brighter than that of the next brighter gray.
+        const edge = s < 0 ? i : j;
+        const nb = s < 0 ? i - 1 : j + 1;
+        const re = rowOrd[edge];
+        const rn = rowOrd[nb];
+        const broken =
+          rn !== undefined &&
+          e[nb] !== null &&
+          Math.abs(e[nb]!) <= LUM_TOL &&
+          lumOk(rn, c) &&
+          (s < 0 ? cellOf(m, re, c)!.nits < cellOf(m, rn, c)!.nits - bl.step : cellOf(m, re, c)!.nits > cellOf(m, rn, c)!.nits + bl.step);
+        if (j > i && broken)
+          for (let k = i; k <= j; k++) {
+            const r = rowOrd[k];
+            shifted.set(r * C + c, j - i + 1);
+            if (!flags[r][c]?.lum && !found.some(([fr, fc]) => fr === r && fc === c)) {
+              const f = fitted(fit, r, c)!;
+              found.push([r, c, { kind: 'lumOffPattern', expected: Math.exp(f), deviation: Math.exp(e[k]!) - 1 }]);
+            }
+          }
+        i = j + 1;
+      }
+    }
     for (const [r, c, lum] of found) flags[r][c] = { ...(flags[r][c] ?? {}), lum };
     if (!found.length) break;
   }
+  for (const [rc, run] of shifted) setSvm(Math.floor(rc / C), rc % C, { kind: 'levelShifted', run });
 
   // 3b. Whole reading not updated: a cell with an unreliable luminance whose SVM also repeats an
   //     adjacent reading (SVM within 1 %, luminance within 15 %) while its own column says the SVM
@@ -728,17 +793,25 @@ function build(m: Dataset['matrix'], a: DenoiseAnalysis): Built {
       if (f.svm) {
         const k = f.svm.kind;
         note = { ...base, kind: k, reason: k === 'blackLevel' && p.nits <= 0 ? 'nonPositive' : k === 'svmSpike' && !(p.svm > 0) ? 'svmInvalid' : k };
-        if (f.lum) note.also = f.lum.kind;
+        // A level-shifted cell's luminance problem is part of its reason, not an extra one.
+        if (f.lum && k !== 'levelShifted') note.also = f.lum.kind;
+        if (k === 'levelShifted' && f.lum) {
+          note.expected = f.lum.expected;
+          note.deviation = f.lum.deviation;
+          note.run = f.svm.run;
+        }
         if (k === 'blackLevel') note.floor = a.blackLevel.ceiling;
         if (k === 'svmSpike' && f.svm.typical !== undefined) note.typical = f.svm.typical;
         if (f.svm.twin) note.twin = refOf(m, f.svm.twin[0], f.svm.twin[1]);
-        if (k === 'blackLevel' || k === 'svmSpike' || k === 'readingNotUpdated') {
+        if (k === 'blackLevel' || k === 'svmSpike' || k === 'readingNotUpdated' || k === 'levelShifted') {
           const v = interpolate(m, r, c, rowOrd, colOrd, rpos, cpos, source, nitsOf, levelX_);
           if (v) {
-            // A spike keeps its measured (or estimated) luminance; a black / frozen cell takes the interpolated one.
-            const nits = k === 'svmSpike' ? nitsOf(r, c) : v.nits;
+            // A spike keeps its measured (or estimated) luminance, a level-shifted cell its estimated
+            // one (the column's level is known); a black / frozen cell takes the interpolated one.
+            const keepLum = k === 'svmSpike' || k === 'levelShifted';
+            const nits = keepLum ? nitsOf(r, c) : v.nits;
             note = { ...note, action: 'interpolated', value: { gray: p.gray, brightnessPercent: p.brightnessPercent, nits, svm: v.svm }, from: v.from, via: v.via };
-            if (k === 'svmSpike' && a.lumEstimate[r][c] !== null) note.lumVia = lumVia(m, a, r, c, rowOrd, rpos);
+            if (keepLum && a.lumEstimate[r][c] !== null) note.lumVia = lumVia(m, a, r, c, rowOrd, rpos);
           }
         }
       } else if (f.lum && a.lumEstimate[r][c] !== null) {
@@ -997,6 +1070,7 @@ export function noteParams(n: CellNote): Record<string, string> {
   }
   if (n.expected !== undefined) p.expected = fmtNits(n.expected);
   if (n.deviation !== undefined) p.dev = `${n.deviation > 0 ? '+' : ''}${Math.round(n.deviation * 100)}%`;
+  if (n.run !== undefined) p.run = String(n.run);
   if (n.twin) {
     p.twinGray = String(n.twin.gray);
     p.twinPct = String(n.twin.brightnessPercent);

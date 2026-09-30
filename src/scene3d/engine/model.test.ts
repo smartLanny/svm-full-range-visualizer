@@ -7,11 +7,13 @@ import { buildModel, cellAt, diffColorbarTicks, diffContourLevels, diffRange, DI
 import { boundaryEdges, buildSurfaceGrid, sampleSurface, type SurfaceGrid } from './surfaceGrid';
 import { cutUnderLabels, placeLabels, traceContours } from './contours';
 
-const load = (f: string) => JSON.parse(fs.readFileSync(path.resolve(__dirname, '../../../public/datasets', f), 'utf8')) as SvmRecord;
+// The first Xiaomi 18 Pro Max session (superseded by a re-test) lives on in test-fixtures/ as
+// real-world defects: xiaomi18promax_v1_off/on.json (with the exclusions stored at the time).
+const load = (f: string) => JSON.parse(fs.readFileSync(path.resolve(__dirname, f.includes('_v1_') ? '../../../test-fixtures' : '../../../public/datasets', f), 'utf8')) as SvmRecord;
 const iphone = load('iPhone17ProMax.json');
 const mate = load('huawei_mate70air.json');
 const mateLow = load('huawei_mate70air_low_frequency.json');
-const x18off = load('xiaomi18promax_adaptive_pro_off.json');
+const x18off = load('xiaomi18promax_v1_off.json');
 const x17dc = load('xiaomi17ultra_leica_dc_120hz.json');
 const x17ltpo = load('xiaomi17ultra_leica_ltpo_120hz.json');
 

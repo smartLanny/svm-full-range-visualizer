@@ -9,7 +9,10 @@ import { analyseMatrix, blackLevel, displayRecord, MAX_GAP, noteParams, processR
 const dir = path.resolve(__dirname, '../../public/datasets');
 const manifest = JSON.parse(fs.readFileSync(path.join(dir, 'manifest.json'), 'utf8')) as { file: string }[];
 const FILES = manifest.map((m) => m.file);
-const load = (f: string) => validateDataset(JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8')));
+// The first Xiaomi 18 Pro Max session (superseded by a re-test) lives on in test-fixtures/ as
+// real-world defects: xiaomi18promax_v1_off/on.json (with the exclusions stored at the time).
+const fixtures = path.resolve(__dirname, '../../test-fixtures');
+const load = (f: string) => validateDataset(JSON.parse(fs.readFileSync(path.join(f.includes('_v1_') ? fixtures : dir, f), 'utf8')));
 
 /**
  * Synthetic separable panel: nits = level · (gray/255)^2.2 read to 0.01 nits (0 below half a
@@ -166,6 +169,44 @@ describe('processRecord (synthetic)', () => {
     expect(pr.record.matrix.grid[0][c]!.nits).toBe(pr.record.matrix.headerNits[c]);
     expect(pr.record.matrix.grid[0][c]!.svm).toBe(ds.matrix.grid[0][c]!.svm);
   });
+  it('a run of readings measured at another brightness (shifted together, breaking the gray order) is filled along the level', () => {
+    // 60 % (120 nits): G255–G192 read as if the screen were at 55 % of the level — luminance and SVM.
+    const shift = (g: number, lv: number, p: DataPoint) => {
+      if (lv !== 120 || g < 192) return p;
+      const raw = 0.55 * lv * Math.pow(g / 255, 2.2);
+      return { ...p, nits: Math.round(raw * 100) / 100, svm: 4 / (1 + 4 * Math.sqrt(raw)) };
+    };
+    const ds = panel(shift);
+    const { c } = at(ds, 255, 60);
+    const pr = processRecord(ds, { denoise: true });
+    const run = [255, 224, 192].map((g) => pr.noteAt(g, 60)!);
+    for (const n of run) {
+      expect(n).toMatchObject({ kind: 'levelShifted', reason: 'levelShifted', action: 'interpolated', via: 'level', run: 3 });
+      expect(n.also).toBeUndefined();
+      expect(n.deviation!).toBeLessThan(-0.35);
+      expect(n.from!.map((f) => f.brightnessPercent)).toEqual([50, 70]);
+      // The SVM lies between the two neighbouring levels, not at the shifted reading.
+      const [a, b] = n.from!.map((f) => ds.matrix.grid[at(ds, f.gray, f.brightnessPercent).r][at(ds, f.gray, f.brightnessPercent).c]!.svm);
+      expect(n.value!.svm).toBeGreaterThan(Math.min(a, b));
+      expect(n.value!.svm).toBeLessThan(Math.max(a, b));
+    }
+    expect(noteParams(run[0]).run).toBe('3');
+    // The level comes back to ~120 nits, and the cells below the run are untouched.
+    expect(pr.levelNotes.map((l) => l.brightnessPercent)).toEqual([60]);
+    expect(Math.abs(Math.log(pr.record.matrix.headerNits[c] / 120))).toBeLessThan(0.05);
+    expect(pr.noteAt(160, 60)).toBeNull();
+    expect(pr.analysis.byKind.levelShifted).toBe(3);
+  });
+  it('a whole column off by one factor, or a shifted run that keeps the gray order, is left alone', () => {
+    // A mislabelled level: every reading of the column scaled — the pattern's level effect absorbs it.
+    const whole = panel((_g, lv, p) => (lv === 120 ? { ...p, nits: Math.round(p.nits * 55) / 100 } : p));
+    expect(processRecord(whole, { denoise: true }).notes.filter((n) => n.gray > 8)).toEqual([]);
+    // Coarse grays: the shifted G255 / G224 stay brighter than G128, so nothing proves another brightness.
+    const coarse = panel((g, lv, p) => (lv === 120 && g >= 224 ? { ...p, nits: Math.round(p.nits * 60) / 100 } : p), [255, 224, 128, 64, 32, 16, 8, 2, 1]);
+    const pr = processRecord(coarse, { denoise: true });
+    expect(pr.notes.some((n) => n.kind === 'levelShifted')).toBe(false);
+    expect(pr.notes.filter((n) => n.gray >= 224).every((n) => n.value?.svm === n.raw.svm)).toBe(true);
+  });
   it('the dimmer of two identical adjacent columns is no data', () => {
     const ds = panel();
     for (const row of ds.matrix.grid) row[5] = row[4] ? { ...row[4], brightnessPercent: 50 } : null;
@@ -195,7 +236,7 @@ describe('processRecord (synthetic)', () => {
 
 describe('rawDataset (stored exclusions go back into the grid)', () => {
   it('restores excluded points and drops the field; records without it are returned as is', () => {
-    const f = 'xiaomi18promax_adaptive_pro_off.json';
+    const f = 'xiaomi18promax_v1_off.json';
     const stored = load(f);
     expect(stored.excluded!.length).toBeGreaterThan(0);
     const raw = rawDataset(stored);
@@ -318,6 +359,31 @@ describe('known cases in the bundled records', () => {
     expect(lum.every((x) => x.value!.svm === x.raw.svm)).toBe(true);
   });
 
+  it('Xiaomi 18 Pro Max 开 (re-test): 13 % G255–G192 were read at another brightness; the level is re-estimated between 16 % and 10 %', () => {
+    const p = pr('xiaomi18promax_adaptive_pro_on.json');
+    const c = p.raw.matrix.cols.indexOf(13);
+    // Raw: 1.41 / 1.16 / 0.96 / 0.78 nits — about 0.6 × the 关 record's 13 % column, and G192 darker than G174 (1.01).
+    expect(p.raw.matrix.headerNits[c]).toBeCloseTo(1.41, 2);
+    const run = [255, 233, 212, 192].map((g) => p.noteAt(g, 13)!);
+    expect(run.map((n) => [n.kind, n.action, n.via, n.run])).toEqual(Array(4).fill(['levelShifted', 'interpolated', 'level', 4]));
+    expect(p.noteAt(174, 13)).toBeNull();
+    const lv = (pct: number) => p.record.matrix.headerNits[p.raw.matrix.cols.indexOf(pct)];
+    expect(lv(13)).toBeGreaterThan(lv(10));
+    expect(lv(13)).toBeLessThan(lv(16));
+    // 关 measured 2.33 nits at 13 %.
+    expect(Math.abs(Math.log(lv(13) / 2.33))).toBeLessThan(0.15);
+    // 10 % G255 (1.11 nits, darker than its own G233 1.46): luminance re-estimated, SVM kept.
+    expect(p.noteAt(255, 10)).toMatchObject({ kind: 'lumOffPattern', action: 'lumEstimated' });
+    expect(p.noteAt(255, 10)!.value!.svm).toBe(0.743);
+    // Nothing else above G15 is touched.
+    expect(p.notes.filter((n) => n.gray > 15).length).toBe(5);
+  });
+  it('Xiaomi 18 Pro Max 关 (re-test): clean — only a 0-nits G15 reading above the default clip', () => {
+    const p = pr('xiaomi18promax_adaptive_pro_off.json');
+    expect(p.notes.filter((n) => n.gray >= 15).map((n) => `G${n.gray}/${n.brightnessPercent}% ${n.kind}`)).toEqual(['G15/6% blackLevel']);
+    expect(p.levelNotes).toEqual([]);
+  });
+
   it('Huawei Mate 70 Air 低频闪 60Hz: the 27 % level (28.3 nits from a bad G255 reading) is re-estimated to ~36 nits', () => {
     const p = pr('huawei_mate70air_low_frequency_60hz.json');
     const c = p.raw.matrix.cols.indexOf(27);
@@ -330,16 +396,16 @@ describe('known cases in the bundled records', () => {
     expect(top.value!.svm).toBeGreaterThan(0.1);
   });
 
-  it('Xiaomi 18 Pro Max: SVM 62.80 at −0.05 nits (G51 / 16 %) is black-level junk and not shown', () => {
-    const p = pr('xiaomi18promax_adaptive_pro_off.json');
+  it('Xiaomi 18 Pro Max, first session: SVM 62.80 at −0.05 nits (G51 / 16 %) is black-level junk and not shown', () => {
+    const p = pr('xiaomi18promax_v1_off.json');
     const n = p.noteAt(51, 16)!;
     expect(n).toMatchObject({ kind: 'blackLevel', reason: 'nonPositive', action: 'noData' });
     expect(n.raw.svm).toBeCloseTo(62.802, 3);
     expect(p.record.data.every((d) => d.nits > p.analysis.blackLevel.ceiling)).toBe(true);
   });
 
-  it('Xiaomi 18 Pro Max 开: the 50 % column copied from 60 % is no data', () => {
-    const p = pr('xiaomi18promax_adaptive_pro_on.json');
+  it('Xiaomi 18 Pro Max 开, first session: the 50 % column copied from 60 % is no data', () => {
+    const p = pr('xiaomi18promax_v1_on.json');
     expect(p.notes.filter((n) => n.kind === 'duplicateColumn').every((n) => n.brightnessPercent === 50 && n.action === 'noData')).toBe(true);
     expect(p.analysis.byKind.duplicateColumn).toBe(24);
   });

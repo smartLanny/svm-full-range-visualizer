@@ -5,8 +5,10 @@ import type { Dataset, DataPoint } from '../types';
 import { detectAnomalies, excludeAnomalies, medianPolish, noiseFloor, restoreExcluded } from './anomalies';
 import { gridView } from './grid';
 
-const dir = path.resolve(__dirname, '../../public/datasets');
-const load = (f: string) => JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8')) as Dataset;
+// The first Xiaomi 18 Pro Max session (superseded by a re-test) lives on in test-fixtures/ as
+// real-world defects: xiaomi18promax_v1_off/on.json (with the exclusions stored at the time).
+const fixtures = path.resolve(__dirname, '../../test-fixtures');
+const load = (f: string) => JSON.parse(fs.readFileSync(path.join(fixtures, f), 'utf8')) as Dataset;
 
 /** Synthetic separable panel: nits = level * (gray/255)^2.2, svm = 1 / sqrt(nits). */
 function panel(grays: number[], levels: number[], tweak?: (g: number, lv: number, p: DataPoint) => DataPoint | null): Dataset {
@@ -78,8 +80,8 @@ describe('exclude / restore', () => {
   });
 });
 
-describe('bundled Xiaomi 18 Pro Max records (cleaned)', () => {
-  for (const f of ['xiaomi18promax_adaptive_pro_off.json', 'xiaomi18promax_adaptive_pro_on.json']) {
+describe('first Xiaomi 18 Pro Max session (test fixtures, cleaned at the time)', () => {
+  for (const f of ['xiaomi18promax_v1_off.json', 'xiaomi18promax_v1_on.json']) {
     const clean = load(f);
     const raw = restoreExcluded(clean);
     it(`${f}: excluded set is exactly what the rules detect on the raw data`, () => {
@@ -96,7 +98,7 @@ describe('bundled Xiaomi 18 Pro Max records (cleaned)', () => {
     });
   }
   it('the eight stale readings of the "off" record are the known copy errors', () => {
-    const off = load('xiaomi18promax_adaptive_pro_off.json');
+    const off = load('xiaomi18promax_v1_off.json');
     const stale = off.excluded!.filter((x) => x.reason === 'nitsShift').map((x) => `G${x.gray}@${x.brightnessPercent}`);
     expect(stale.sort()).toEqual(['G139@90', 'G192@100', 'G27@100', 'G27@90', 'G51@100', 'G51@90', 'G83@100', 'G96@90'].sort());
   });

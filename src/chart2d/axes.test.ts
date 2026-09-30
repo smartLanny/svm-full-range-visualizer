@@ -185,10 +185,11 @@ describe('moving axes: range', () => {
     }
     expect(bad.slice(0, 12)).toEqual([]);
     expect(checked).toBe(16);
-    // Only where the data's range really stays put: some record (Mate 80 RS among them) covers
-    // G15–G255 at every level, so the adaptive gray axis of a level sweep over it holds still.
-    expect(still).toEqual(['all brightness/adaptive', 'Xiaomi 18 off + iPhone 18 + Mate 80 RS brightness/adaptive']);
-    expect(moved).toBe(14);
+    // Only where the data's range really stays put: some record (Mate 80 RS, the re-tested Xiaomi
+    // 18 Pro Max) covers G15–G255 at every level, so the adaptive gray axis of a level sweep over
+    // it holds still.
+    expect(still).toEqual(['all brightness/adaptive', 'Xiaomi 18 Pro Max brightness/adaptive', 'Xiaomi 18 off + iPhone 18 + Mate 80 RS brightness/adaptive']);
+    expect(moved).toBe(13);
     expect(maxStep).toBeGreaterThan(0.002);
     // a faint point outside the plot for at most a few frames (the renderer clips it)
     expect(fadingOutRun, worstRun).toBeLessThanOrEqual(6);
