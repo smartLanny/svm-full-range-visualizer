@@ -238,32 +238,25 @@ export default function ExportDialog({ open, onClose, target }: ExportDialogProp
   const t = useT();
   const lang = useLang();
   const [prefs, setPrefs] = useState<Prefs>(loadPrefs);
-  const [windowSize, setWindowSize] = useState<ExportSize>(() => currentViewSize(target));
   const [encoder, setEncoder] = useState<EncoderStatus>({ state: 'checking' });
-  const [contents, setContents] = useState<ExportContent[]>([]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  /** The user's pick in this opening of the dialog (null = the default, see defaultContent). */
+  const [pickedId, setPickedId] = useState<string | null>(null);
 
-  const labels = () => ({ current: t('export.content.current'), currentDetail: t('export.content.currentDetail') });
-
-  // Each time the dialog opens: the "current view" size and the view's contents (they follow the
-  // view's state), selecting the content remembered for this view, else the one on screen.
+  // Read when the dialog opens (and on a language switch), during render so the first frame of the
+  // dialog already shows them: the "current view" size and the view's contents — they follow the
+  // view's state (layout, records, slice mode, an open animation).
+  const windowSize = useMemo<ExportSize>(() => currentViewSize(target), [open, target]); // eslint-disable-line react-hooks/exhaustive-deps
+  const contents = useMemo<ExportContent[]>(
+    () => (open ? listContents(target, { current: t('export.content.current'), currentDetail: t('export.content.currentDetail') }) : []),
+    [open, target, lang], // eslint-disable-line react-hooks/exhaustive-deps
+  );
+  // A new opening starts from the default again: the content remembered for this view, else the
+  // one on screen.
   useEffect(() => {
-    if (!open) return;
-    setWindowSize(currentViewSize(target));
-    const list = listContents(target, labels());
-    setContents(list);
-    setSelectedId(defaultContent(list, prefs.content[target.id])?.id ?? null);
-  }, [open, target]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (!open) setPickedId(null);
+  }, [open]);
 
-  // Language switched while open: relabel, keep the selection.
-  useEffect(() => {
-    if (!open) return;
-    const list = listContents(target, labels());
-    setContents(list);
-    setSelectedId((id) => (id && list.some((c) => c.id === id) ? id : (defaultContent(list)?.id ?? null)));
-  }, [lang]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const content = contents.find((c) => c.id === selectedId) ?? null;
+  const content = contents.find((c) => c.id === pickedId) ?? defaultContent(contents, prefs.content[target.id]);
   const isVideo = content?.kind === 'video';
   const anim = open && content && isVideo ? animationOf(target, content.id) : null;
 
@@ -344,7 +337,7 @@ export default function ExportDialog({ open, onClose, target }: ExportDialogProp
       onClose={onClose}
       title={t('export.title')}
       icon={<Download size={15} className="text-accent-hover" />}
-      widthClass="max-w-[820px]"
+      widthClass="max-w-[880px]"
       closeLabel={t('common.close')}
       footer={
         <>
@@ -363,7 +356,7 @@ export default function ExportDialog({ open, onClose, target }: ExportDialogProp
         </>
       }
     >
-      <div className="grid gap-5 md:grid-cols-[minmax(0,1.08fr)_minmax(0,1fr)]">
+      <div className="grid gap-5 md:grid-cols-2">
         {/* 1. What to export */}
         <Row
           label={
@@ -374,7 +367,7 @@ export default function ExportDialog({ open, onClose, target }: ExportDialogProp
           }
           hint={t('export.content.hint', { view: t(`export.view.${target.id}`), n: contents.length })}
         >
-          <ContentList contents={contents} selected={selectedId} onSelect={setSelectedId} />
+          <ContentList contents={contents} selected={content?.id ?? null} onSelect={setPickedId} />
         </Row>
 
         {/* 2. Size / aspect / frame rate */}

@@ -414,14 +414,39 @@ const settle = (page, ms = 1600) => page.waitForTimeout(ms);
   await page.evaluate(() => window.__svm.store.getState().requestStop('scene3d'));
   await settle(page);
 
+  // --- values overlay on: the top-view export prints the value table like the top view on screen --
+  await setStore(page, () => window.__svm.store.getState().patch({ layout: 'single', view: 'perspective' }));
+  await settle(page);
+  const plain = await exportContent(page, 'top', { quality: '1440', tag: '3d-top-values-off' });
+  await setStore(page, () => {
+    const s = window.__svm.store.getState();
+    s.set('overlays', { ...s.overlays, values: true });
+  });
+  await settle(page, 800);
+  const vals = await exportContent(page, 'top', { quality: '1440', tag: '3d-top-values-on' });
+  d = await similar(page, vals.file, plain.file, 1280);
+  ok(d.mean > 0.3, `3d-top-values: value table drawn in the top-view export (mean diff to values off ${d.mean.toFixed(2)})`);
+  await setStore(page, () => window.__svm.store.getState().set('view', 'top'));
+  await settle(page);
+  const valsCur = await exportContent(page, 'current', { quality: '1440', tag: '3d-top-values-current' });
+  d = await similar(page, vals.file, valsCur.file, 1280);
+  ok(d.mean < 0.5, `3d-top-values: equals the current-view export with the screen in top view (mean diff ${d.mean.toFixed(3)})`);
+  await setStore(page, () => {
+    const s = window.__svm.store.getState();
+    s.patch({ overlays: { ...s.overlays, values: false }, view: 'perspective' });
+  });
+  await settle(page);
+
   // --- intro video from the side-by-side layout (record A alone) ---------------------------------
   if (!QUICK) {
     await setStore(page, () => window.__svm.store.getState().patch({ layout: 'sideBySide', view: 'perspective' }));
     await settle(page, 2200);
     const vid = await exportContent(page, 'intro', { fps: 30, tag: '3d-intro-video' });
     ok(/_开场动画_1920x1080_30fps\.(mp4|webm)$/.test(vid.name) && !/_vs_/.test(vid.name), `3d-intro-video: named after record A (${vid.name})`);
-    const v = await decodeVideo(page, vid.file, vid.name.endsWith('.webm') ? 'video/webm' : 'video/mp4', [1, 6, 12.9], '3d-intro');
-    ok(v.width === 1920 && v.height === 1080 && Math.abs(v.duration - 391 / 30) < 0.1, `3d-intro-video: ${v.width}x${v.height}, ${v.duration.toFixed(3)} s (expect 13.033)`);
+    const v = await decodeVideo(page, vid.file, vid.name.endsWith('.webm') ? 'video/webm' : 'video/mp4', [1, 4, 7, 10, 13.1], '3d-intro');
+    const introDur = await page.evaluate(() => window.__svm3dExport().animation('intro').duration);
+    const want = (Math.round(introDur * 30) + 1) / 30;
+    ok(v.width === 1920 && v.height === 1080 && Math.abs(v.duration - want) < 0.1, `3d-intro-video: ${v.width}x${v.height}, ${v.duration.toFixed(3)} s (expect ${want.toFixed(3)})`);
     ok(v.frames.every((f) => f.mean > 8), `3d-intro-video: frames not black (${v.frames.map((f) => `${f.t}s ${f.mean.toFixed(1)}`).join(', ')})`);
     ok((await page.evaluate(() => window.__svm.store.getState().layout)) === 'sideBySide', '3d-intro-video: the screen keeps its side-by-side layout');
   }

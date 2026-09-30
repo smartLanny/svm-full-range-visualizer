@@ -491,7 +491,7 @@ export default function Chart2DView() {
         const i = inputsRef.current;
         if (isSweepContent(content)) return sweepAnimation(i.lang, contentSliceMode(content)!);
         // Legacy (no content): the sweep of the slice mode on screen.
-        return content === undefined ? { ...sweepAnimation(i.lang, i.sliceMode), fileName: undefined } : null;
+        return content === undefined ? sweepAnimation(i.lang, i.sliceMode) : null;
       },
       // "Current view" preset (C5): the on-screen drawing buffer in device px (the view's aspect).
       viewSize: () => {
