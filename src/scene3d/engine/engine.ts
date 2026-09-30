@@ -40,6 +40,8 @@ import { easeInOutCubic, smoothstep, Tween } from './easing';
 import { makeFrameParams, type FrameParams } from './frame';
 import { DEFAULT_PHI, DEFAULT_THETA, ViewControls, defaultUserView, type UserView } from './controls';
 import { IntroPlan, INTRO_DURATION } from './intro';
+import { ScenarioOverlay } from './scenarioOverlay';
+import { DEFAULT_SCENARIOS, scenarioKey, type ScenarioConfig } from '../../data/scenarios';
 
 export interface EngineSettings {
   lang: Lang;
@@ -58,6 +60,8 @@ export interface EngineSettings {
   heightCap: number;
   colorMax: number;
   overlays: Overlays;
+  /** Scenario-reference rectangles outlined in the top view when overlays.scenarios is on. */
+  scenarios?: ScenarioConfig;
   background: string;
   /**
    * Presentation: CSS px from the left edge the in-canvas title must keep clear (the exit button
@@ -217,6 +221,9 @@ export class Engine {
   private fits = new Map<string, CamPose>();
   private contourKey = '';
   private valuesKey = '';
+  /** Scenario outlines per panel (top view, overlays.scenarios) and the key they were built for. */
+  private scenarioOverlays: ScenarioOverlay[] = [];
+  private scenarioOverlayKey = '';
   private titleTex: { key: string; tt: TextTexture & { inset: number } } | null = null;
   private colorbarTex: { key: string; tt: TextTexture & { inset: number } } | null = null;
 
@@ -234,6 +241,7 @@ export class Engine {
     captions: new Tween(0),
     title: new Tween(1),
     colorbar: new Tween(1),
+    scenarios: new Tween(0),
   };
   private readonly frame: FrameParams = makeFrameParams();
   private lastPose: CamPose = makeFrameParams().pose;
@@ -423,6 +431,7 @@ export class Engine {
     this.colorbarTex = null;
     this.contourKey = '';
     this.valuesKey = '';
+    this.scenarioOverlayKey = '';
     // Caption widths (and so the side-by-side grid) were measured with the fallback font.
     this.refreshModelForViewport();
     this.invalidate();
@@ -621,6 +630,7 @@ export class Engine {
     fade(this.tw.axes, ov.axes ? 1 : 0);
     fade(this.tw.title, ov.title ? 1 : 0);
     fade(this.tw.colorbar, ov.colorbar ? 1 : 0);
+    fade(this.tw.scenarios, ov.scenarios ? 1 : 0);
     fade(this.tw.captions, s.layout === 'sideBySide' && ov.axes ? 1 : 0);
     if (prev && (prev.heightScale !== s.heightScale || prev.overlays.title !== ov.title || prev.overlays.colorbar !== ov.colorbar)) this.clearFits();
     // The title moved clear of the presentation exit button: its width budget (and so its line
@@ -664,9 +674,37 @@ export class Engine {
       p.dispose();
     }
     this.panels = [];
+    this.disposeScenarioOverlays();
     this.disposeAxes();
     this.views = [];
     this.hover.removeFromParent();
+  }
+
+  private disposeScenarioOverlays() {
+    for (const o of this.scenarioOverlays) o.dispose();
+    this.scenarioOverlays = [];
+    this.scenarioOverlayKey = '';
+  }
+
+  /**
+   * Scenario outlines (docs/adr/0009 addendum): built lazily, only while the overlay is (fading) on,
+   * for the current model, configuration, language and top-view scale.
+   */
+  private ensureScenarioOverlays() {
+    const s = this.settings!;
+    const cfg = s.scenarios ?? DEFAULT_SCENARIOS;
+    const wpc = this.topWorldPerCss();
+    const key = `${this.modelKey}|${scenarioKey(cfg)}|${s.lang}|${wpc.toFixed(5)}|${this.pxScale}`;
+    if (key === this.scenarioOverlayKey) return;
+    this.disposeScenarioOverlays();
+    this.scenarioOverlayKey = key;
+    const m = this.model!;
+    const label = (id: string) => translate(s.lang, `stats.scenario.name.${id}`);
+    for (const p of m.panels) {
+      const o = new ScenarioOverlay(p, m, cfg, label, wpc, this.pxScale);
+      this.scenarioOverlays.push(o);
+      this.world.add(o.group);
+    }
   }
 
   private disposeAxes() {
@@ -1507,6 +1545,15 @@ export class Engine {
       }
     });
     this.separateContourLabels(labelRects);
+
+    // Scenario outlines: flat top view only (fading in with the flattening, like the interpolation
+    // marks), never during the intro storyboard.
+    const scenOp = this.introFrame ? 0 : this.tw.scenarios.value(now()) * smoothstep(0.3, 0.02, fp.heightK) * smoothstep(0.6, 0.2, fp.pose.phi);
+    if (scenOp > 0.003) this.ensureScenarioOverlays();
+    for (const o of this.scenarioOverlays) {
+      o.group.position.y = 0.03;
+      o.setStyle(scenOp, this.pxScale);
+    }
 
     // floor + plate (no floor glow on a pure black presentation background: keyable / black-level exact)
     this.floorMat.uniforms.uOpacity.value = fp.ground;
