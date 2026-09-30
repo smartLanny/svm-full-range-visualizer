@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { SvmRecord } from '../types';
 import { ColormapType } from '../types';
-import { cleanExtras, DEFAULT_SETTINGS, fillPanelIds, nextPanelCandidate, selectComparePanelIds, selectComparePanels, useAppStore } from './appStore';
+import { cleanExtras, DEFAULT_SETTINGS, displayOf, fillPanelIds, nextPanelCandidate, processedOf, selectComparePanelIds, selectComparePanels, useAppStore } from './appStore';
 import { sanitizePrefs, sanitizeSettings, sanitizeUserRecords } from './bootstrap';
 import { applyBundledEdit, bundledEditsOf } from './persistence';
 
@@ -235,5 +235,51 @@ describe('side-by-side panels (A, B + extras C–F)', () => {
     expect(cleanExtras(same, known, 'r0', 'r1')).toBe(same);
     expect(sanitizePrefs({ activeId: 'r0', compareId: 'r1', compareExtraIds: ['r1', 'r2', 7, 'gone', 'r2', 'r3'] }, known).compareExtraIds).toEqual(['r2', 'r3']);
     expect(sanitizePrefs({ compareExtraIds: 'r2' }, known).compareExtraIds).toEqual([]);
+  });
+});
+
+describe('denoise setting (docs/adr/0012 addendum)', () => {
+  /** 3 × 3 panel whose centre SVM is a spike; the rest is smooth. */
+  const spiky = (id: string): SvmRecord => {
+    const rows = [255, 128, 64];
+    const cols = [100, 50, 20];
+    const lv = [500, 100, 20];
+    const grid = rows.map((g) => cols.map((pct, c) => ({ gray: g, brightnessPercent: pct, nits: lv[c] * Math.pow(g / 255, 2.2), svm: 0.2 + c * 0.1 + (255 - g) / 500 })));
+    grid[1][1] = { ...grid[1][1], svm: 9 };
+    return rec(id, { data: grid.flat(), matrix: { rows, cols, headerNits: lv, grid } });
+  };
+
+  it('defaults to on; saves keep a boolean, anything else (or a missing key) falls back to the default', () => {
+    expect(DEFAULT_SETTINGS.denoise).toBe(true);
+    expect(sanitizeSettings({ denoise: false }).denoise).toBe(false);
+    expect(sanitizeSettings({ rev: 2, denoise: true }).denoise).toBe(true);
+    expect('denoise' in sanitizeSettings({ denoise: 'off' })).toBe(false);
+    expect('denoise' in sanitizeSettings({ rev: 2, clipLowGray: false })).toBe(false);
+  });
+
+  it('processedOf / displayOf follow the setting; records themselves stay raw', () => {
+    const r = spiky('d1');
+    useAppStore.setState({ denoise: true });
+    expect(processedOf(r).notes.map((n) => [n.gray, n.brightnessPercent, n.kind])).toEqual([[128, 50, 'svmSpike']]);
+    expect(displayOf(r).matrix.grid[1][1]!.svm).toBeLessThan(1);
+    expect(r.matrix.grid[1][1]!.svm).toBe(9);
+    useAppStore.setState({ denoise: false });
+    expect(displayOf(r)).toBe(r);
+    expect(processedOf(r).notes).toEqual([]);
+    expect(displayOf(r, { denoise: true })).toBe(processedOf(r, { denoise: true }).record);
+    useAppStore.setState({ denoise: DEFAULT_SETTINGS.denoise });
+  });
+
+  it('stored records that carry `excluded` (former destructive exclusion) are loaded raw', () => {
+    const p = { gray: 128, brightnessPercent: 50, nits: 20, svm: 0.3 };
+    const cleaned = rec('u9', {
+      data: [{ gray: 255, brightnessPercent: 100, nits: 500, svm: 0.1 }],
+      matrix: { rows: [255, 128], cols: [100, 50], headerNits: [500, 100], grid: [[{ gray: 255, brightnessPercent: 100, nits: 500, svm: 0.1 }, null], [null, null]] },
+      excluded: [{ ...p, reason: 'svmSpike', detail: 'x' }],
+    });
+    const { records } = sanitizeUserRecords([cleaned]);
+    expect(records[0].excluded).toBeUndefined();
+    expect(records[0].matrix.grid[1][1]).toEqual(p);
+    expect(records[0].data).toHaveLength(2);
   });
 });
