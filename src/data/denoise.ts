@@ -782,7 +782,9 @@ function build(m: Dataset['matrix'], a: DenoiseAnalysis): Built {
     nominal: R * C,
     valid: data.length,
   };
-  const out: Built = { matrix: { ...m, headerNits, grid }, data, notes, noteGrid, levelNotes, summary };
+  // Nothing to change: keep the raw matrix itself (toggling the denoise then redraws nothing).
+  const untouched = !notes.length && !levelNotes.length;
+  const out: Built = { matrix: untouched ? m : { ...m, headerNits, grid }, data, notes, noteGrid, levelNotes, summary };
   builtCache.set(m, out);
   return out;
 }
@@ -905,7 +907,7 @@ export function processRecord<T extends Dataset>(record: T, opts: DenoiseOptions
     const b = build(raw.matrix, analysis);
     const byRef = new Map(b.notes.map((n) => [`${n.gray}|${n.brightnessPercent}`, n]));
     out = {
-      record: { ...raw, matrix: b.matrix, data: b.data },
+      record: b.matrix === raw.matrix ? raw : { ...raw, matrix: b.matrix, data: b.data },
       raw,
       denoise: true,
       analysis,

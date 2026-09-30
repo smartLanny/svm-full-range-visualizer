@@ -155,6 +155,12 @@ describe('processRecord (synthetic)', () => {
     expect(col.length).toBe(ds.matrix.rows.length);
     expect(col.every((n) => n.kind === 'duplicateColumn' && n.action === 'noData' && n.twin?.brightnessPercent === 60)).toBe(true);
   });
+  it('a record the denoise does not touch is displayed as the raw record itself', () => {
+    const ds = panel(undefined, [255, 128, 64, 32]);
+    const pr = processRecord(ds, { denoise: true });
+    expect(pr.notes).toEqual([]);
+    expect(pr.record).toBe(ds);
+  });
   it('is memoised per record + options; a renamed record shares the processed matrix', () => {
     const ds = panel();
     const a = processRecord(ds, { denoise: true });
