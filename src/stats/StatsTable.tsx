@@ -5,10 +5,26 @@ import type { RecordStyle } from '../data/colors';
 import { deviceLabel, modeLabel } from '../data/records';
 import { fmtNits } from '../data/grid';
 import { SVM_AT_NITS } from '../data/stats';
+import { SCENARIO_IDS, usedMean, weightShares, type ScenarioConfig } from '../data/scenarios';
 import { useT } from '../i18n';
 import { IconButton, cn } from '../ui';
-import { fmtNitsOrDash, fmtPct, markOf, metricByKey, type MetricKey, type Ranking, type SortDir, type SortKey, type StatsRow } from './model';
-import { CaveatMark, caveatText, CoverageValue, DenoiseBadge, denoisedInScope, RecordKey, ShareBar, SvmValue } from './parts';
+import { fmtNitsOrDash, fmtPct, markOf, metricByKey, scenarioRenormalised, SCENARIO_METRIC, type MetricKey, type Ranking, type ScenarioMetricKey, type SortDir, type SortKey, type StatsRow } from './model';
+import {
+  CaveatMark,
+  caveatText,
+  CoverageValue,
+  DenoiseBadge,
+  denoisedInScope,
+  droppedNames,
+  GradeDot,
+  GradeWord,
+  RecordKey,
+  scenarioAssumptions,
+  scenarioLine,
+  scenarioTooltip,
+  ShareBar,
+  SvmValue,
+} from './parts';
 
 interface Props {
   rows: StatsRow[];
@@ -21,9 +37,13 @@ interface Props {
   sortDir: SortDir;
   /** Gray level of the slice behind the SVM@nits columns. */
   sliceGray: number;
+  /** Scenario ranges / weights (headers and tooltips of the scenario reference columns). */
+  scenarios: ScenarioConfig;
   onSort: (key: SortKey) => void;
   onOpen3d: (id: string) => void;
 }
+
+const pct0 = (v: number) => `${Math.round(v * 100)}%`;
 
 /** Height of the first header row; the second row sticks right below it. */
 const ROW1 = 26;
@@ -84,6 +104,42 @@ function SortHeader({ k, label, sub, sortKey, sortDir, onSort, align = 'right', 
 
 type Mark = 'best' | 'caveat' | null;
 
+/**
+ * Scenario reference cell (docs/adr/0009 addendum): grade dot + value over the grade word; a
+ * scenario left out of the composite reads "— / 缺数据"; a renormalised composite carries the amber
+ * marker. Best values get the accent highlight like every ranked column.
+ */
+function ScenarioCell({ row, k, mark, config, className }: { row: StatsRow; k: ScenarioMetricKey; mark: Mark; config: ScenarioConfig; className?: string }) {
+  const t = useT();
+  const ref = row.stats.scenario;
+  const id = SCENARIO_IDS.find((x) => SCENARIO_METRIC[x] === k);
+  const v = id ? usedMean(ref, id) : ref.composite;
+  const renorm = k === 'scenario' && scenarioRenormalised(row.stats);
+  const title = id ? scenarioLine(ref.scenarios.find((x) => x.id === id)!, t) : scenarioTooltip(row.stats, config, t);
+  const warn = renorm ? t('stats.scenario.caveat', { names: droppedNames(ref, t) }) : null;
+  return (
+    <td className={cn('whitespace-nowrap px-2 py-2 text-right tabular-nums', className)} title={title}>
+      <span className={cn('inline-flex flex-col items-end rounded px-1.5 py-0.5', mark === 'best' && 'bg-accent/15 ring-1 ring-inset ring-accent/30')}>
+        <span className="inline-flex items-center gap-1">
+          {warn && <CaveatMark title={warn} />}
+          {v === null ? <span className="text-ink-4">—</span> : <ValueOnly v={v} best={mark === 'best'} />}
+        </span>
+        {v === null ? <span className="text-2xs text-amber-300">{t('stats.scenario.noData')}</span> : <GradeWord v={v} />}
+      </span>
+    </td>
+  );
+}
+
+/** Grade-coloured dot + value (the table puts the grade word on its own line). */
+function ValueOnly({ v, best }: { v: number; best: boolean }) {
+  return (
+    <span className={cn('inline-flex items-center gap-1.5', best ? 'font-semibold text-accent-hover' : 'text-ink-1')}>
+      <GradeDot v={v} />
+      {v.toFixed(2)}
+    </span>
+  );
+}
+
 function Cell({ children, mark, caveat, className }: { children: React.ReactNode; mark?: Mark; caveat?: string; className?: string }) {
   return (
     <td className={cn('whitespace-nowrap px-2 py-2 text-right tabular-nums', className)}>
@@ -100,8 +156,10 @@ function Cell({ children, mark, caveat, className }: { children: React.ReactNode
   );
 }
 
-export function StatsTable({ rows, styles, lang, rank, scrolledX, sortKey, sortDir, sliceGray, onSort, onOpen3d }: Props) {
+export function StatsTable({ rows, styles, lang, rank, scrolledX, sortKey, sortDir, sliceGray, scenarios, onSort, onOpen3d }: Props) {
   const t = useT();
+  const assumptions = scenarioAssumptions(scenarios, t).join('\n');
+  const shares = weightShares(scenarios);
   const hp = { sortKey, sortDir, onSort };
   const markFor = (k: MetricKey, row: StatsRow) => markOf(rank, k, row, metricByKey(k).value(row.stats));
   const valueCaveat = t('stats.caveat.value');
@@ -146,11 +204,23 @@ export function StatsTable({ rows, styles, lang, rank, scrolledX, sortKey, sortD
               title={t('stats.metric.coverageHint')}
               {...hp}
             />
+            <th
+              colSpan={SCENARIO_IDS.length + 1}
+              scope="colgroup"
+              className="sticky top-0 z-20 border-b border-line bg-surface-2 px-3 pt-1.5 text-center text-xs font-medium text-ink-2"
+              title={assumptions}
+            >
+              {t('stats.col.scenarioGroup')}
+            </th>
             <th rowSpan={2} className={cn(TH, 'top-0 w-9 rounded-tr-xl')} />
           </tr>
           <tr>
             {SVM_AT_NITS.map((n, i) => (
               <SortHeader key={n} k={`at${i}` as MetricKey} label={String(n)} sub="nits" top={ROW1} {...hp} />
+            ))}
+            <SortHeader k="scenario" label={t('stats.col.scComposite')} sub={t('stats.scenario.tag')} top={ROW1} title={assumptions} {...hp} />
+            {SCENARIO_IDS.map((id) => (
+              <SortHeader key={id} k={SCENARIO_METRIC[id]} label={t(`stats.scenario.name.${id}`)} sub={pct0(shares[id])} top={ROW1} title={assumptions} {...hp} />
             ))}
           </tr>
         </thead>
@@ -226,6 +296,9 @@ export function StatsTable({ rows, styles, lang, rank, scrolledX, sortKey, sortD
                 <td className="whitespace-nowrap px-2 py-2 pr-3 text-right group-hover:bg-surface-3">
                   <CoverageValue stats={s} caveat={caveat} className="px-1.5 py-0.5" />
                 </td>
+                {(['scenario', ...SCENARIO_IDS.map((id) => SCENARIO_METRIC[id])] as ScenarioMetricKey[]).map((k) => (
+                  <ScenarioCell key={k} row={row} k={k} mark={markFor(k, row)} config={scenarios} className={cn('group-hover:bg-surface-3', k === 'scOutdoor' && 'pr-3')} />
+                ))}
                 <td className={cn('px-1 py-2 text-right group-hover:bg-surface-3', last && 'rounded-br-xl')}>
                   <IconButton
                     size="xs"

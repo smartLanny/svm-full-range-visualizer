@@ -16,9 +16,27 @@ import type { RecordStyle } from '../data/colors';
 import { deviceLabel, modeLabel } from '../data/records';
 import { fmtNits, gridView, type GridView } from '../data/grid';
 import { SVM_AT_NITS } from '../data/stats';
+import { DEFAULT_SCENARIOS, SCENARIO_IDS, scenarioGrade, usedMean, weightShares, type ScenarioConfig } from '../data/scenarios';
 import { translate, type TFunction } from '../i18n';
 import { FONT_STACK } from '../chart2d/render';
-import { band, BAND_COLORS, fmtNitsOrDash, fmtPct, fmtSvmOrDash, markOf, metricByKey, type MetricKey, type Ranking, type SortDir, type SortKey, type StatsRow } from './model';
+import {
+  band,
+  BAND_COLORS,
+  fmtNitsOrDash,
+  fmtPct,
+  fmtSvmOrDash,
+  GRADE_COLORS,
+  isScenarioMetric,
+  markOf,
+  metricByKey,
+  scenarioRenormalised,
+  SCENARIO_METRIC,
+  type MetricKey,
+  type Ranking,
+  type SortDir,
+  type SortKey,
+  type StatsRow,
+} from './model';
 import { drawHeatmap, HATCH_BASE, HATCH_LINE, hasNoDataCells, thumbGrayLabels, thumbHeight, thumbTicks, type ThumbExtent } from './heatmap';
 import {
   cachedMeasure,
@@ -52,6 +70,8 @@ export interface StatsExportInput {
   sliceGray: number;
   colormap: ColormapType;
   colorMax: number;
+  /** Scenario ranges / weights (the table's weight sub-headers); default DEFAULT_SCENARIOS. */
+  scenarios?: ScenarioConfig;
   sortKey: SortKey;
   sortDir: SortDir;
   /** "统计范围" text as on the page ("G ≥ 15 · 档位亮度 ≤ 500 nits · 当前灰阶截面 G127"). */
@@ -355,6 +375,86 @@ function svmValue(p: Pen, v: number | null, x: number, top: number, lh: number, 
 const svmValueWidth = (p: Pen, v: number | null, size: number, weight: number, digits = 2) =>
   v === null || !Number.isFinite(v) ? p.m('—', size, weight) : 12 + p.m(v.toFixed(digits), size, weight);
 
+// ---- scenario reference (parts.tsx ScenarioBlock / GradeValue) ---------------------------------
+
+/** Height of the card's scenario block (py-1.5 + two 16 px rows) and its margins (mt-2, mb-4). */
+const SCEN_H = 44;
+const SCEN_TOTAL = 8 + SCEN_H + 16;
+
+const gradeLabel = (t: TFunction, v: number) => t(`stats.scenario.grade.${scenarioGrade(v)}`);
+
+/**
+ * GradeValue left-aligned at x, centred on cy: dot (6) + 4 + value + 4 + grade word (10 px, cut
+ * with an ellipsis to fit `maxW`). Returns the width.
+ */
+function gradeValue(p: Pen, t: TFunction, v: number | null, x: number, cy: number, size: number, weight: number, color: string, maxW = Infinity): number {
+  if (v === null || !Number.isFinite(v)) return p.text('—', x, cy - 8, 16, size, weight, C.ink4);
+  const g = scenarioGrade(v);
+  p.dot(x + 3, cy, 3, GRADE_COLORS[g]);
+  const vw = p.text(v.toFixed(2), x + 10, cy - 8, 16, size, weight, color);
+  const gx = x + 10 + vw + 4;
+  const word = ellipsize(gradeLabel(t, v), Math.max(0, x + maxW - gx), 10, 500, p.m);
+  const ww = p.text(word, gx, cy - 7, 14, 10, 500, GRADE_COLORS[g]);
+  return gx + ww - x;
+}
+
+/** Width of gradeValue (untruncated). */
+const gradeValueWidth = (p: Pen, t: TFunction, v: number | null, size: number, weight: number) =>
+  v === null || !Number.isFinite(v) ? p.m('—', size, weight) : 10 + p.m(v.toFixed(2), size, weight) + 4 + p.m(gradeLabel(t, v), 10, 500);
+
+/** Tag "参考": 9 px text in a 12 px tall ring, px-1. Returns its width. */
+function refTag(p: Pen, label: string, x: number, cy: number): number {
+  const w = 4 + p.m(label, 9, 500) + 4;
+  p.ring(x, cy - 6, w, 12, 3, C.lineStrong);
+  p.text(label, x + 4, cy - 6, 12, 9, 500, C.ink3);
+  return w;
+}
+
+/**
+ * The card's scenario block (ScenarioBlock) at card y `y`, inner width `iw`: title + tag and the
+ * composite on the first row, one chip per scenario on the second.
+ */
+function scenarioBlock(p: Pen, e: Env, row: StatsRow, y: number, iw: number) {
+  const { t, input } = e;
+  const s = row.stats;
+  const ref = s.scenario;
+  const L = 28;
+  const R = 16 + iw - 12;
+  p.fill(16, y, iw, SCEN_H, C.s1, 8);
+  p.ring(16, y, iw, SCEN_H, 8, C.line);
+  // row 1: composite on the right (drawn first: the title gets what is left)
+  const c1 = y + 6 + 8;
+  const renorm = scenarioRenormalised(s);
+  const cBest = markOf(input.rank, 'scenario', row, ref.composite) === 'best';
+  const label = t('stats.scenario.composite');
+  const vw = gradeValueWidth(p, t, ref.composite, 12, 600);
+  const lw = p.m(label, 10, 400);
+  const cx = R - vw;
+  gradeValue(p, t, ref.composite, cx, c1, 12, 600, cBest ? C.accentHover : C.ink1);
+  p.text(label, cx - 4 - lw, c1 - 7, 14, 10, 400, C.ink3);
+  if (renorm) p.icon('warn', cx - 4 - lw - 4 - 11, c1 - 5.5, 11, C.amber);
+  const leftEnd = cx - 4 - lw - (renorm ? 15 : 0) - 8;
+  const tag = t('stats.scenario.tag');
+  const tagW = 4 + p.m(tag, 9, 500) + 4;
+  const title = ellipsize(t('stats.scenario.title'), Math.max(0, leftEnd - L - 6 - tagW), 10, 400, p.m);
+  const tw = p.text(title, L, c1 - 7, 14, 10, 400, C.ink3);
+  refTag(p, tag, L + tw + 6, c1);
+  // row 2: chips (grid-cols-3 gap-2)
+  const c2 = y + 6 + 16 + 8;
+  const colW = (iw - 24 - 16) / 3;
+  ref.scenarios.forEach((sc, i) => {
+    const x = L + i * (colW + 8);
+    const nw = p.text(t(`stats.scenario.name.${sc.id}`), x, c2 - 7, 14, 10, 400, C.ink4);
+    const v = sc.used ? sc.mean : null;
+    const rest = colW - nw - 4;
+    if (v === null) p.text(ellipsize(t('stats.scenario.noData'), Math.max(0, rest), 10, 400, p.m), x + nw + 4, c2 - 7, 14, 10, 400, C.amber);
+    else {
+      const best = markOf(input.rank, SCENARIO_METRIC[sc.id], row, v) === 'best';
+      gradeValue(p, t, v, x + nw + 4, c2, 11, 500, best ? C.accentHover : C.ink1, rest);
+    }
+  });
+}
+
 // ---- card (StatsCard) ------------------------------------------------------------------------
 
 /**
@@ -399,14 +499,16 @@ function cardPass(p: Pen, e: Env, row: StatsRow, cw: number, h: number | null): 
   y += 12;
 
   if (s.cellCount === 0) {
-    // No valid cell in scope: a dashed box filling the card.
+    // No valid cell in scope: a dashed box filling the card, the scenario block under it (the
+    // reference does not depend on the scope).
     const natural = 40 + 16 + 4 + 14 + 40;
-    const boxH = h !== null ? Math.max(natural, h - y - 16) : natural;
+    const boxH = h !== null ? Math.max(natural, h - y - SCEN_TOTAL) : natural;
     p.ring(16, y, iw, boxH, 8, C.lineStrong, 1, [4, 3]);
     const top = y + (boxH - 34) / 2;
     p.text(t('stats.noCells'), cw / 2, top, 16, 12, 400, C.ink2, 'center');
     p.text(t('stats.noCellsHint'), cw / 2, top + 20, 14, 10, 400, C.ink3, 'center');
-    return y + natural + 16;
+    scenarioBlock(p, e, row, y + boxH + 8, iw);
+    return y + natural + SCEN_TOTAL;
   }
 
   // hero: safe share (big), critical share (right), share bar + legend + coverage
@@ -586,7 +688,10 @@ function cardPass(p: Pen, e: Env, row: StatsRow, cw: number, h: number | null): 
     const w = svmValue(p, a.svm, x, y3 + 49, 20, 14, 500, m === 'best' ? C.accentHover : C.ink1);
     if (m === 'caveat') p.icon('warn', x + w + 4, y3 + 49 + 4.5, 11, C.amber);
   });
-  return y3 + 79 + 16;
+
+  // scenario reference (independent of the scope)
+  scenarioBlock(p, e, row, y3 + 79 + 8, iw);
+  return y3 + 79 + SCEN_TOTAL;
 }
 
 // ---- table (StatsTable) ------------------------------------------------------------------------
@@ -600,11 +705,14 @@ interface Col {
   align: 'left' | 'right';
   /** Right padding of the cells (the coverage column has pr-3). */
   padR: number;
-  /** Member of the "SVM @ 实测亮度" group (second header row). */
-  group?: boolean;
+  /** Member of a column group (second header row): "SVM @ 实测亮度" or "场景参考". */
+  group?: 'at' | 'scenario';
 }
 
-function tableCols(t: TFunction): Col[] {
+const pct0 = (v: number) => `${Math.round(v * 100)}%`;
+
+function tableCols(t: TFunction, scenarios: ScenarioConfig): Col[] {
+  const shares = weightShares(scenarios);
   return [
     { key: 'record', label: t('stats.col.record'), align: 'left', padR: 12 },
     { key: 'dist', label: t('stats.col.dist'), align: 'left', padR: 8 },
@@ -614,12 +722,19 @@ function tableCols(t: TFunction): Col[] {
     { key: 'fullWhite', label: t('stats.col.fullWhite'), sub: 'nits', align: 'right', padR: 8 },
     { key: 'peak', label: t('stats.col.peak'), sub: t('stats.col.peakWhere'), align: 'right', padR: 8 },
     { key: 'mean', label: t('stats.col.mean'), sub: t('stats.metric.meanHint'), align: 'right', padR: 8 },
-    ...SVM_AT_NITS.map((n, i): Col => ({ key: `at${i}` as MetricKey, label: String(n), sub: 'nits', align: 'right', padR: 8, group: true })),
+    ...SVM_AT_NITS.map((n, i): Col => ({ key: `at${i}` as MetricKey, label: String(n), sub: 'nits', align: 'right', padR: 8, group: 'at' })),
     { key: 'coverage', label: t('stats.col.coverage'), sub: t('stats.col.coverageSub'), align: 'right', padR: 12 },
+    { key: 'scenario', label: t('stats.col.scComposite'), sub: t('stats.scenario.tag'), align: 'right', padR: 8, group: 'scenario' },
+    ...SCENARIO_IDS.map(
+      (id): Col => ({ key: SCENARIO_METRIC[id], label: t(`stats.scenario.name.${id}`), sub: pct0(shares[id]), align: 'right', padR: id === 'outdoor' ? 12 : 8, group: 'scenario' }),
+    ),
   ];
 }
 
-/** Portrait split: shares / luminance / peak / mean — then the SVM @ nits group and coverage. */
+/** Header text of a column group. */
+const groupLabel = (e: Env, g: 'at' | 'scenario') => (g === 'at' ? e.t('stats.col.atGroup', { g: Math.round(e.input.sliceGray) }) : e.t('stats.col.scenarioGroup'));
+
+/** Portrait split: shares / luminance / peak / mean — then the SVM @ nits group, coverage and the scenario reference. */
 function tableSplit(cols: Col[]): [number[], number[]] {
   const a: number[] = [0];
   const b: number[] = [0];
@@ -705,6 +820,34 @@ function cellOf(p: Pen, e: Env, row: StatsRow, col: Col): { w: number; h: number
       },
     };
   }
+  if (isScenarioMetric(key)) {
+    // ScenarioCell: [⚠] grade dot + value over the grade word ("— / 缺数据" when left out).
+    const id = SCENARIO_IDS.find((x) => SCENARIO_METRIC[x] === key);
+    const v = id ? usedMean(s.scenario, id) : s.scenario.composite;
+    const renorm = key === 'scenario' && scenarioRenormalised(s);
+    const w0 = renorm ? 15 : 0;
+    const vw = w0 + (v === null ? p.m('—', 12, 400) : 12 + p.m(v.toFixed(2), 12, weight));
+    const sub = v === null ? t('stats.scenario.noData') : gradeLabel(t, v);
+    const w = Math.max(vw, p.m(sub, 10, v === null ? 400 : 500));
+    return {
+      w,
+      h: 30,
+      draw: (right, midY) => {
+        span(right, midY, w, 30);
+        const top = midY - 15;
+        let x = right - 6;
+        if (v === null) x -= p.text('—', x, top, 16, 12, 400, C.ink4, 'right');
+        else {
+          x -= p.text(v.toFixed(2), x, top, 16, 12, weight, color, 'right');
+          p.dot(x - 6 - 3, top + 8, 3, GRADE_COLORS[scenarioGrade(v)]);
+          x -= 12;
+        }
+        if (renorm) p.icon('warn', x - 4 - 11, top + 8 - 5.5, 11, C.amber);
+        if (v === null) p.text(sub, right - 6, top + 16, 14, 10, 400, C.amber, 'right');
+        else p.text(sub, right - 6, top + 16, 14, 10, 500, GRADE_COLORS[scenarioGrade(v)], 'right');
+      },
+    };
+  }
   // mean, SVM @ nits
   const v = key === 'mean' ? s.meanSvm : (s.svmAt[Number(key.slice(2))]?.svm ?? null);
   const vw = svmValueWidth(p, v, 12, weight);
@@ -764,10 +907,11 @@ function naturalWidths(p: Pen, e: Env, cols: Col[], rows: StatsRow[]): number[] 
     }
     return ci === 0 ? Math.min(RECORD_MAX, Math.max(RECORD_MIN, w)) : Math.ceil(w);
   });
-  // The group header must fit over its columns.
-  const g = cols.map((c, i) => (c.group ? i : -1)).filter((i) => i >= 0);
-  if (g.length) {
-    const need = 24 + p.m(e.t('stats.col.atGroup', { g: Math.round(e.input.sliceGray) }), 12, 500);
+  // Each group header must fit over its columns.
+  for (const grp of ['at', 'scenario'] as const) {
+    const g = cols.map((c, i) => (c.group === grp ? i : -1)).filter((i) => i >= 0);
+    if (!g.length) continue;
+    const need = 24 + p.m(groupLabel(e, grp), 12, 500);
     const have = g.reduce((a, i) => a + widths[i], 0);
     if (need > have) g.forEach((i) => (widths[i] += (need - have) / g.length));
   }
@@ -801,7 +945,7 @@ function tablePass(p: Pen, e: Env, cols: Col[], idx: number[], ws: number[], row
     xs.push(x);
     x += w;
   }
-  const groupAt = idx.map((i, k) => (cols[i].group ? k : -1)).filter((k) => k >= 0);
+
   idx.forEach((ci, k) => {
     const c = cols[ci];
     const x0 = xs[k];
@@ -824,10 +968,12 @@ function tablePass(p: Pen, e: Env, cols: Col[], idx: number[], ws: number[], row
       if (active) p.icon(input.sortDir === 'asc' ? 'up' : 'down', x0 + w - 6 - 11, top + (hh - 11) / 2, 11, C.accentHover);
     }
   });
-  if (groupAt.length) {
-    const gx = xs[groupAt[0]];
-    const gw = groupAt.reduce((a, k) => a + ws[k], 0);
-    p.text(t('stats.col.atGroup', { g: Math.round(input.sliceGray) }), gx + gw / 2, 6, 16, 12, 500, C.ink2, 'center');
+  for (const grp of ['at', 'scenario'] as const) {
+    const at = idx.map((i, k) => (cols[i].group === grp ? k : -1)).filter((k) => k >= 0);
+    if (!at.length) continue;
+    const gx = xs[at[0]];
+    const gw = at.reduce((a, k) => a + ws[k], 0);
+    p.text(groupLabel(e, grp), gx + gw / 2, 6, 16, 12, 500, C.ink2, 'center');
     p.fill(gx, ROW1 - 1, gw, 1, C.line);
   }
   // body
@@ -978,7 +1124,12 @@ export function renderStatsExport(canvas: HTMLCanvasElement, input: StatsExportI
   // legend strip: the table's legend line (as under the table on screen); the cards only carry
   // the low-coverage footnote when some record is left out of the ranking
   const footnote: StripItem[] = input.rank.low.size > 0 ? [{ kind: 'warn', text: t('stats.caveat.footnote') }] : [];
-  const items: StripItem[] = content === 'table' && rows.length ? [{ kind: 'best', text: t('stats.bestHint') }, ...footnote, { kind: 'text', text: t('stats.metric.svmAtHint') }] : rows.length ? footnote : [];
+  const items: StripItem[] =
+    content === 'table' && rows.length
+      ? [{ kind: 'best', text: t('stats.bestHint') }, ...footnote, { kind: 'text', text: t('stats.metric.svmAtHint') }, { kind: 'text', text: t('stats.scenario.legend') }]
+      : rows.length
+        ? footnote
+        : [];
 
   // Cards: uniform card height per width (grid rows stretch to their tallest card).
   const memo = new Map<number, number>();
@@ -991,7 +1142,7 @@ export function renderStatsExport(canvas: HTMLCanvasElement, input: StatsExportI
     return h;
   };
   // Table: natural column widths and band heights.
-  const cols = tableCols(t);
+  const cols = tableCols(t, input.scenarios ?? DEFAULT_SCENARIOS);
   const natural = content === 'table' && rows.length ? naturalWidths(measure, e, cols, rows) : [];
   const bandHeight = (idx: number[]) => HEAD_H + rowHeights(measure, e, idx.map((i) => cols[i]), rows).reduce((a, h) => a + h, 0);
 
