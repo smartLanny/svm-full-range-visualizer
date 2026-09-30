@@ -35,9 +35,9 @@ export interface URange {
 /** Sampling step of a sweep's range track (s). */
 export const TRACK_DT = 1 / 60;
 /** Hold window (s, each side): a bound anticipates / keeps an extreme this long. */
-export const TRACK_HOLD = 0.35;
+export const TRACK_HOLD = 0.5;
 /** Raised-cosine smoothing half-width (s); never wider than TRACK_HOLD (containment). */
-export const TRACK_KERNEL = 0.35;
+export const TRACK_KERNEL = 0.5;
 /** Speed limit of a bound: share of the current span per second (a zoom / pan rate). */
 export const TRACK_SPEED = 1;
 
