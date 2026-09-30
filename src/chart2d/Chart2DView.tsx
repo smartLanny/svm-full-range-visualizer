@@ -289,6 +289,21 @@ export default function Chart2DView() {
   );
 
   // ---------------------------------------------------------------- sweep
+  /**
+   * Build (and lay out, off screen) the first frame of a glide before its clock starts: moving
+   * adaptive / free axes precompute the sweep's range track (~0.1–0.3 s for every bundled record)
+   * and the legend placement samples the whole sweep; neither may eat into the glide (its first
+   * frames would jump).
+   */
+  const warmUp = useCallback((opts: SceneOptions) => {
+    const r = rt.current;
+    const inp = inputsRef.current;
+    const scene = buildScene(inp, opts);
+    if (r.w <= 0 || r.h <= 0) return;
+    const ctx = document.createElement('canvas').getContext('2d');
+    if (ctx) renderChart(ctx, r.w, r.h, screenScale(r.w, r.h), scene, { insetBottom: inp.presenting ? BAND_H : 0, safeLeft: inp.presenting ? r.safeLeft : 0 });
+  }, []);
+
   const startSweep = useCallback(() => {
     const r = rt.current;
     const inp = inputsRef.current;
@@ -297,15 +312,12 @@ export default function Chart2DView() {
     tl.pause();
     tl.seek(0);
     const dq = sweepProgressOf(inp.sliceMode, sliceParam(inp, from));
-    // Build the first frame once before the glide's clock starts: moving adaptive / free axes
-    // precompute the sweep's range track (~0.1 s for every bundled record), which must not eat
-    // into the glide (its first frames would jump).
-    buildScene(inp, { t: 0, interactive: !inp.presenting, blend: { from, p: 0 } });
+    warmUp({ t: 0, interactive: !inp.presenting, blend: { from, p: 0 } });
     r.phase = Math.abs(dq) < 1e-3 ? { kind: 'sweep' } : { kind: 'enter', start: performance.now() / 1000, dur: glideDuration(dq), from };
     if (r.phase.kind === 'sweep') tl.play();
     setSweeping(true);
     requestDraw();
-  }, [tl, requestDraw]);
+  }, [tl, requestDraw, warmUp]);
 
   const closeSweep = useCallback(() => {
     const r = rt.current;
@@ -315,12 +327,12 @@ export default function Chart2DView() {
     if (from === null) r.phase = { kind: 'static' };
     else {
       const dq = sweepProgressOf(inp.sliceMode, sliceParam(inp, null)) - sweepProgressOf(inp.sliceMode, sliceParam(inp, from));
-      buildScene(inp, { t: null, interactive: !inp.presenting, blend: { from, p: 0 } }); // warm the glide's range track
+      warmUp({ t: null, interactive: !inp.presenting, blend: { from, p: 0 } });
       r.phase = { kind: 'exit', start: performance.now() / 1000, dur: glideDuration(dq), from };
     }
     setSweeping(false);
     requestDraw();
-  }, [tl, requestDraw]);
+  }, [tl, requestDraw, warmUp]);
 
   const lastPlay = useRef(playNonce);
   useEffect(() => {
