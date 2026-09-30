@@ -547,7 +547,7 @@ const strings: StringsModule = {
         removePanel: 'Remove from comparison ({p})',
         addPanel: 'Add record',
         panelsFull: 'Side by side shows six records at most',
-        fillVisible: 'Use visible records',
+        fillVisible: 'Use visible',
         fillVisibleHint: 'Fill the panels with the visible (not hidden) records of the list, six at most; visible records already compared keep their panel',
         panelsHint: '{n} of {max} records side by side · the top view compares their heatmaps at a glance; picking a record already shown swaps the two panels',
         representation: 'Representation',

@@ -121,14 +121,21 @@ export function defaultGrid(n: number, landscape: boolean): GridShape {
 }
 
 
+/** Frame insets and cell bands (px) a candidate grid would have (its captions may need two lines). */
+export interface GridMetrics {
+  ins: Insets;
+  opt: SplitOptions;
+}
+
 /**
- * Grid for n side-by-side panels in a frame (W × H px with the single-panel insets `ins`): two
- * panels as before (side by side when aspect ≥ 1, else stacked); more panels take the candidate
- * grid whose congruent cells show the biggest plates (each deepened to fill its cell, see
- * fillDepthScale). The 16:9 / 9:16 defaults (defaultGrid) get a small bonus so near-ties keep
- * the familiar arrangement and resizing does not flip grids back and forth.
+ * Grid for n side-by-side panels in a frame (W × H px; `metrics` gives the single-panel insets and
+ * the cell bands of each candidate grid): two panels as before (side by side when aspect ≥ 1,
+ * else stacked); more panels take the candidate grid whose congruent cells show the biggest plates
+ * (each deepened to fill its cell, see fillDepthScale). The 16:9 / 9:16 defaults (defaultGrid) get
+ * a small bonus so near-ties keep the familiar arrangement and resizing does not flip grids back
+ * and forth.
  */
-export function gridFor(n: number, vp: Viewport, ins: Insets, opt: SplitOptions, plateAspect = NOMINAL_PLATE_ASPECT): GridShape {
+export function gridFor(n: number, vp: Viewport, metrics: (g: GridShape) => GridMetrics, plateAspect = NOMINAL_PLATE_ASPECT): GridShape {
   if (n <= 1) return SINGLE_GRID;
   const aspect = vp.width / Math.max(1, vp.height);
   if (n === 2) return aspect < 1 ? { cols: 1, rows: 2 } : { cols: 2, rows: 1 };
@@ -136,6 +143,7 @@ export function gridFor(n: number, vp: Viewport, ins: Insets, opt: SplitOptions,
   let best = def;
   let bestScore = -1;
   for (const g of gridCandidates(n)) {
+    const { ins, opt } = metrics(g);
     const plot = gridPlotSize(vp, ins, g, opt);
     const pa = plateAspect / fillDepthScale(plot, plateAspect);
     const w = Math.min(plot.w, plot.h * pa);

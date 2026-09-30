@@ -5,7 +5,7 @@
  */
 import * as THREE from 'three';
 import type { Lang, LightingMode, Representation, SceneLayout, SvmRecord, ViewPreset } from '../../types';
-import { ColormapType, MAX_COMPARE_PANELS } from '../../types';
+import { ColormapType, MAX_COMPARE_PANELS, PANEL_LETTERS } from '../../types';
 import type { Overlays } from '../../store/appStore';
 import { deviceLabel, modeLabel, recordLabel } from '../../data/records';
 import { translate } from '../../i18n';
@@ -20,7 +20,22 @@ import { Axes, CAPTION_STYLE, type AxisLabelSpec } from './axes';
 import { captionLineHeight, drawCaptionTexture, drawColorbarTexture, drawTitleTexture, HUD_SUBTITLE_STYLE, HUD_TITLE_STYLE, Hud, SUBTITLE_LINE, TITLE_LINE, type ColorbarSpec, type Rect } from './hud';
 import { measureText, TextCache, type TextTexture } from './text';
 import { chooseValueFont, drawValuesTexture, measureValueCells } from './values';
-import { approxCellAspect, depthScaleFor, fillDepthScale, gridFor, gridPlotSize, presetFit, regionAt, SINGLE_GRID, splitCells, viewOffsetFor, type Cell, type CellLayout, type GridShape } from './cells';
+import {
+  approxCellAspect,
+  depthScaleFor,
+  fillDepthScale,
+  gridFor,
+  gridPlotSize,
+  presetFit,
+  regionAt,
+  SINGLE_GRID,
+  splitCells,
+  viewOffsetFor,
+  type Cell,
+  type CellLayout,
+  type GridMetrics,
+  type GridShape,
+} from './cells';
 import { captionLines, commonPrefixLength, titleLines, wrapParts } from './fitText';
 import { easeInOutCubic, smoothstep, Tween } from './easing';
 import { makeFrameParams, type FrameParams } from './frame';
@@ -355,6 +370,7 @@ export class Engine {
   /** Fonts finished loading: redraw all text textures. */
   refreshText() {
     this.text.clear();
+    this.gridCache.clear();
     for (const t of this.captionTex.values()) t.texture.dispose();
     this.captionTex.clear();
     this.captionCache = null;
@@ -366,6 +382,8 @@ export class Engine {
     this.colorbarTex = null;
     this.contourKey = '';
     this.valuesKey = '';
+    // Caption widths (and so the side-by-side grid) were measured with the fallback font.
+    this.refreshModelForViewport();
     this.invalidate();
   }
 
@@ -404,7 +422,10 @@ export class Engine {
     const n = this.panelsFor(s, layout);
     const g = this.gridOf(n, s);
     // Grids of 3–6 panels: deepen the plate to fill the (nominal) plot area of a cell.
-    if (n >= 3) return fillDepthScale(gridPlotSize(this.vp, this.nominalInsets(s), g, this.nominalSplit()));
+    if (n >= 3) {
+      const m = this.gridMetrics(n, g, s);
+      return fillDepthScale(gridPlotSize(this.vp, m.ins, g, m.opt));
+    }
     return depthScaleFor(approxCellAspect(g, this.vp.width / Math.max(1, this.vp.height)));
   }
 
@@ -427,26 +448,53 @@ export class Engine {
    */
   private gridOf(n: number, s: EngineSettings | null = this.settings): GridShape {
     if (n <= 1) return SINGLE_GRID;
-    return gridFor(n, this.vp, this.nominalInsets(s), this.nominalSplit());
+    const key = this.gridMetricsKey(n, s);
+    const hit = this.gridCache.get(key);
+    if (hit) return hit;
+    const g = gridFor(n, this.vp, (c) => this.gridMetrics(n, c, s));
+    if (this.gridCache.size > 32) this.gridCache.clear();
+    this.gridCache.set(key, g);
+    return g;
+  }
+  private readonly gridCache = new Map<string, GridShape>();
+
+  private gridMetricsKey(n: number, s: EngineSettings | null): string {
+    const ov = s?.overlays;
+    const ids = [s?.a?.id, s?.b?.id, ...(s?.extras ?? []).map((r) => r.id)].slice(0, n).join(',');
+    return `${n}|${this.vp.width}x${this.vp.height}|${this.pxScale}|${ov?.title}|${ov?.colorbar}|${this.exporting ? 0 : this.uiInset}|${s?.lang}|${ids}`;
   }
 
-  /** Typical single-panel frame insets with a caption band (px), for choosing grids / plate depth. */
-  private nominalInsets(s: EngineSettings | null): Insets {
+  /**
+   * Nominal frame insets and cell bands (px) of a candidate grid, for choosing the grid and the
+   * plate depth before the model exists: a typical title / colorbar / axis band, the floating
+   * controls, and the caption band the panels' captions would need in cells of that width (one
+   * line, or two when a caption does not fit).
+   */
+  private gridMetrics(n: number, g: GridShape, s: EngineSettings | null): GridMetrics {
     const S = this.pxScale;
     const ov = s?.overlays;
     const cb = ov?.colorbar ?? true;
     const portrait = this.portrait;
+    const right = (cb && !portrait ? 110 : 30) * S;
+    const pad = CELL_PAD * S;
+    const recs = s ? [s.a, s.b, ...(s.extras ?? [])].slice(0, n) : [];
+    const capW = (g.cols > 1 ? (this.vp.width - right + pad) / g.cols : this.vp.width) - 8 * S;
+    const twoLines = recs.some((r, i) => {
+      if (!r || !s) return false;
+      const mode = modeLabel(r, s.lang);
+      const one = `${PANEL_LETTERS[i]} · ${deviceLabel(r, s.lang)}${mode ? ` · ${mode}` : ''}`;
+      return measureText(one, CAPTION_STYLE, S) > capW;
+    });
+    const cap = 26 + (twoLines ? captionLineHeight(CAPTION_STYLE.size) : 0) + (g.rows > 1 ? STACK_PAD : 0);
     return {
-      top: (((ov?.title ?? true) ? 84 : 30) + 26) * S,
-      right: (cb && !portrait ? 110 : 30) * S,
-      bottom: (62 + (cb && portrait ? 64 : 0)) * S,
-      left: 70 * S,
+      ins: {
+        top: (((ov?.title ?? true) ? 84 : 30) + cap) * S,
+        right,
+        bottom: (62 + (cb && portrait ? 64 : 0) + (this.exporting ? 0 : this.uiInset)) * S,
+        left: 70 * S,
+      },
+      opt: { pad, capBand: cap * S, lumBand: (n >= 3 ? LUM_BAND_GRID : LUM_BAND) * S },
     };
-  }
-
-  private nominalSplit() {
-    const S = this.pxScale;
-    return { pad: CELL_PAD * S, capBand: (26 + STACK_PAD) * S, lumBand: LUM_BAND_GRID * S };
   }
 
   /** Grid of the current model's views. */
@@ -805,6 +853,8 @@ export class Engine {
     this.uiInset = bottomCss;
     this.clearFits();
     if (this.intro) this.intro.planKey = '';
+    // The room left for the plots can change the side-by-side grid (and so the plate depth).
+    this.refreshModelForViewport();
     if (this.hasRendered && !this.introDriving && !this.exporting && this.model) {
       this.camTransition = { from: clonePose(this.lastPose), t0: now(), dur: CAM_DUR * 0.7, clip: !!this.clip };
     }

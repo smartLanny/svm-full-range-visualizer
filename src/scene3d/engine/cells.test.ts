@@ -22,9 +22,9 @@ const STACK: GridShape = { cols: 1, rows: 2 };
 
 describe('side-by-side cells: two panels (as before)', () => {
   it('two panels: side by side in landscape frames, stacked in portrait ones (aspect < 1)', () => {
-    const g = (w: number, h: number) => gridFor(2, { width: w, height: h }, ins, opt);
+    const g = (w: number, h: number) => gridFor(2, { width: w, height: h }, () => ({ ins, opt }));
     expect([g(1920, 1080), g(1000, 1000), g(990, 1000), g(1080, 1920)]).toEqual([SIDE, SIDE, STACK, STACK]);
-    expect(gridFor(1, { width: 1920, height: 1080 }, ins, opt)).toEqual({ cols: 1, rows: 1 });
+    expect(gridFor(1, { width: 1920, height: 1080 }, () => ({ ins, opt }))).toEqual({ cols: 1, rows: 1 });
     expect([approxCellAspect({ cols: 1, rows: 1 }, 1.6), approxCellAspect(SIDE, 1.6), approxCellAspect(STACK, 0.5625)]).toEqual([1.6, 0.8, 1.125]);
   });
 
@@ -144,7 +144,7 @@ describe('side-by-side cells: 2–6 panels on a grid', () => {
     const port = { width: 1080, height: 1920 };
     // Portrait frames carry the colorbar below the plot instead of right of it.
     const portIns = { ...ins, right: 30, bottom: ins.bottom + 64 };
-    const got = (vp: typeof land, i = ins) => [2, 3, 4, 5, 6].map((n) => gridFor(n, vp, i, opt)).map((g) => `${g.cols}x${g.rows}`);
+    const got = (vp: typeof land, i = ins) => [2, 3, 4, 5, 6].map((n) => gridFor(n, vp, () => ({ ins: i, opt }))).map((g) => `${g.cols}x${g.rows}`);
     expect(got(land)).toEqual(['2x1', '3x1', '2x2', '3x2', '3x2']);
     expect(got({ width: 1600, height: 900 })).toEqual(['2x1', '3x1', '2x2', '3x2', '3x2']);
     expect(got(port, portIns)).toEqual(['1x2', '1x3', '2x2', '2x3', '2x3']);
@@ -161,7 +161,7 @@ describe('side-by-side cells: 2–6 panels on a grid', () => {
 
   it('square frames use the space: 3 panels on 2 × 2 rather than a thin row', () => {
     const sq = { width: 1080, height: 1080 };
-    expect(gridFor(3, sq, ins, opt)).toEqual({ cols: 2, rows: 2 });
+    expect(gridFor(3, sq, () => ({ ins, opt }))).toEqual({ cols: 2, rows: 2 });
     // The chosen grid shows plates at least as big as any candidate's (bonus aside).
     const plate = (g: GridShape) => {
       const p = gridPlotSize(sq, ins, g, opt);
@@ -171,7 +171,7 @@ describe('side-by-side cells: 2–6 panels on a grid', () => {
     };
     for (const n of [3, 4, 5, 6]) {
       const best = Math.max(...gridCandidates(n).map(plate));
-      expect(plate(gridFor(n, sq, ins, opt)) * 1.12).toBeGreaterThanOrEqual(best);
+      expect(plate(gridFor(n, sq, () => ({ ins, opt }))) * 1.12).toBeGreaterThanOrEqual(best);
     }
   });
 
