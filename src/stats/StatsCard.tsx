@@ -7,7 +7,7 @@ import { fmtNits } from '../data/grid';
 import { useT } from '../i18n';
 import { Badge, Button, cn } from '../ui';
 import { fmtSvmOrDash, markOf, type MetricKey, type Ranking, type StatsRow } from './model';
-import { CaveatMark, caveatText, CoverageValue, ExclusionBadge, RecordKey, ShareBar, SvmValue } from './parts';
+import { CaveatMark, caveatText, CoverageValue, DenoiseBadge, RecordKey, ShareBar, SvmValue } from './parts';
 import { Thumbnail, type ThumbExtent } from './Thumbnail';
 
 interface Props {
@@ -91,7 +91,7 @@ export function StatsCard({ row, style, lang, rank, clipLowGray, maxNits, colorm
           <span className="line-clamp-2 max-w-full break-words text-xs text-ink-3" title={mode}>
             {mode || ' '}
           </span>
-          <ExclusionBadge rec={rec} stats={s} />
+          <DenoiseBadge rec={rec} stats={s} />
         </div>
       </header>
 

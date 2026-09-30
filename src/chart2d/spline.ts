@@ -146,7 +146,7 @@ export interface CurveNode {
   key: number;
 }
 
-/** Dotted connection across a gap (missing / excluded samples) between two opaque nodes. */
+/** Dotted connection across a gap (missing / no-data samples) between two opaque nodes. */
 export interface Bridge {
   i0: number;
   i1: number;
@@ -233,7 +233,7 @@ function blendedSlopes(ss: Float64Array, vs: Float64Array, seg: Float64Array): F
  * - segment opacity = min of its two nodes, or 0 across a gap (a key missing in between);
  * - tangents blend with the neighbouring segments' opacity (blendedSlopes);
  * - between two opaque nodes with a gap (or fading nodes) in between, a dotted bridge fades in
- *   as the nodes in between fade out. It is never solid: an excluded sample is not bridged
+ *   as the nodes in between fade out. It is never solid: a sample without data is not bridged
  *   silently.
  * With every node opaque and no gap this is the ordinary monotone spline.
  */

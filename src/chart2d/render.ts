@@ -673,7 +673,7 @@ function bezierLength(b: Bezier): number {
  * Stroke a curve: consecutive segments of equal opacity form one path (the dash pattern runs
  * on across paths via lineDashOffset, see offs), each path is stroked with a background-coloured casing
  * that separates crossing lines, then in colour. Isolated points are dots; gaps get a faint
- * dotted bridge (never a solid line: an excluded sample is not bridged silently).
+ * dotted bridge (never a solid line: a sample without data is not bridged silently).
  */
 function drawCurve(ctx: CanvasRenderingContext2D, c: Curve, map: Mapping, st: CurveStyle) {
   const n = c.xs.length;

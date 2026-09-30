@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
-  AlertTriangle,
+  Sparkles,
   ArrowUpDown,
   ChevronRight,
   Eye,
@@ -21,12 +21,12 @@ import {
 } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import { selectComparePanelIds, useAppStore } from '../store/appStore';
-import { useRecordStyles } from '../store/hooks';
+import { useProcessed, useRecordStyles } from '../store/hooks';
 import { useLang, useT, type TFunction } from '../i18n';
 import { deviceLabel, modeLabel, recordLabel } from '../data/records';
 import { deviceOrder } from '../data/colors';
-import { exclusionSummary, type ExclusionSummary } from '../data/anomalies';
-import { reasonsText } from './screening';
+import type { DenoiseSummary } from '../data/denoise';
+import { summaryText } from '../data/denoiseText';
 import type { RecordStyle } from '../data/colors';
 import { MAX_COMPARE_PANELS, PANEL_LETTERS, type Lang, type SvmRecord } from '../types';
 import { Button, ColorSwatch, MenuItem, cn, toast } from '../ui';
@@ -399,11 +399,13 @@ function RecordRow({
   const label = modeLabel(rec, lang) || rec.name || t('shell.sidebar.untitledMode');
   const nominal = rec.matrix.rows.length * rec.matrix.cols.length;
   const valid = rec.data.length;
-  const summary = useMemo(() => exclusionSummary(rec), [rec]);
+  // What the denoise changed in this record (docs/adr/0012 addendum); nothing with it off.
+  const processed = useProcessed(rec);
+  const summary = processed && (processed.summary.touched || processed.summary.levelsEstimated) ? processed.summary : null;
   const full = [
     recordLabel(rec, lang),
     rec.name && rec.name !== recordLabel(rec, lang) && rec.name !== `${rec.device} ${rec.mode}`.trim() ? rec.name : '',
-    t('common.exclusion.coverage', { valid, nominal }),
+    t('common.denoise.coverage', { valid, nominal }),
   ]
     .filter(Boolean)
     .join('\n');
@@ -451,7 +453,7 @@ function RecordRow({
           <span className="shrink-0 font-mono tabular-nums" data-testid="record-points">
             {valid < nominal ? t('shell.sidebar.pointsPartial', { valid, nominal }) : t('shell.sidebar.points', { n: valid })}
           </span>
-          {summary && <ExclusionBadge summary={summary} />}
+          {summary && <DenoiseBadge summary={summary} />}
         </div>
       </div>
 
@@ -533,24 +535,22 @@ function RecordRow({
   );
 }
 
-/** "已剔除 N" with a tooltip breaking the exclusions down by reason (docs/adr/0012, contract C4). */
-function ExclusionBadge({ summary }: { summary: ExclusionSummary }) {
+/**
+ * "降噪 N 格": cells the denoise changed (docs/adr/0012 addendum, contract C4), with a tooltip
+ * breaking them down (what was done, what was found, coverage) in plain words. Calm, not a warning.
+ */
+function DenoiseBadge({ summary }: { summary: DenoiseSummary }) {
   const t = useT();
-  const tip = [
-    t('common.exclusion.title', { n: summary.total }),
-    reasonsText(t, summary.byReason, '\n'),
-    t('common.exclusion.coverage', { valid: summary.valid, nominal: summary.nominal }),
-    t('common.exclusion.detail'),
-  ].join('\n');
+  const tip = [summaryText(summary, t), t('common.denoise.detail')].join('\n');
   return (
     <span
       title={tip}
       aria-label={tip}
-      data-testid="record-excluded"
-      className="inline-flex shrink-0 items-center gap-0.5 whitespace-nowrap rounded-[3px] bg-amber-400/10 px-1 py-px text-amber-300/90"
+      data-testid="record-denoise"
+      className="inline-flex shrink-0 items-center gap-0.5 whitespace-nowrap rounded-[3px] bg-surface-4 px-1 py-px text-ink-2"
     >
-      <AlertTriangle size={9} className="shrink-0" />
-      {t('common.exclusion.badge', { n: summary.total })}
+      <Sparkles size={9} className="shrink-0 text-sky-300/90" />
+      {t('common.denoise.badge', { n: summary.touched })}
     </span>
   );
 }

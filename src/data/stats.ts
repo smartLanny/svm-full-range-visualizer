@@ -20,7 +20,7 @@ import { LOW_GRAY_CLIP, SVM_CRITICAL, SVM_SAFE } from '../types';
 import { cellEdges, gridView, logNits, type GridView } from './grid';
 import { settleSlice, smoothSliceAtGray } from '../chart2d/slices';
 import { buildCurve, evalCurve } from '../chart2d/spline';
-import type { ProcessedRecord } from './denoise';
+import { displayNotes, type ProcessedRecord } from './denoise';
 
 /** Luminances (measured nits) at which the gray-slice SVM is reported. */
 export const SVM_AT_NITS = [2, 10, 50, 100] as const;
@@ -45,12 +45,15 @@ export interface StatsPeak {
 export interface RecordStats {
   /** Number of valid (non-missing) cells in scope. */
   cellCount: number;
-  /** Number of cells of the nominal grid in scope (valid + missing / excluded). */
+  /** Number of cells of the nominal grid in scope (valid + missing / no data). */
   nominalCount: number;
-  /** Valid area ÷ nominal area of the scope, on the nominal cell layout (0..1); null if the scope is empty. */
+  /**
+   * Valid area ÷ nominal area of the scope, on the nominal cell layout (0..1); null if the scope is
+   * empty. Valid = measured + interpolated by the denoise (docs/adr/0012 addendum).
+   */
   coverageShare: number | null;
-  /** Excluded raw points (dataset.excluded, docs/adr/0012) that fall inside the scope. */
-  excludedInScope: number;
+  /** What the denoise did inside the scope (all zero for a raw record / denoise off). */
+  denoise: DenoiseInScope;
   /** Area share with SVM < 0.4 (0..1); null when no cells in scope. */
   safeShare: number | null;
   /** Area share with 0.4 <= SVM < 1.0. */
@@ -178,7 +181,7 @@ export function sliceSvmAt(ds: Pick<Dataset, 'matrix'>, gray: number, nits: read
   };
 }
 
-function compute(ds: Pick<Dataset, 'matrix' | 'excluded'>, opts: StatsOptions): RecordStats {
+function compute(ds: Pick<Dataset, 'matrix'>, opts: StatsOptions): RecordStats {
   const view = gridView(ds, { clipLowGray: opts.clipLowGray, maxNits: opts.maxNits });
   const areas = cellAreas(view);
 
@@ -234,7 +237,7 @@ function compute(ds: Pick<Dataset, 'matrix' | 'excluded'>, opts: StatsOptions): 
   const svmAt = SVM_AT_NITS.map((nits, i) => ({ nits, svm: at.svm[i] }));
   const sliceGray = at.gray;
 
-  // Coverage on the nominal layout, and excluded points inside the scope.
+  // Coverage on the nominal layout, and what the denoise did inside the scope.
   const nom = nominalScope(ds, opts);
   let nominalArea = 0;
   let validArea = 0;
@@ -246,18 +249,14 @@ function compute(ds: Pick<Dataset, 'matrix' | 'excluded'>, opts: StatsOptions): 
       if (nom.valid[r][c]) validArea += a;
     }),
   );
-  let excludedInScope = 0;
-  if (ds.excluded?.length) {
-    const rowSet = new Set(nom.rows.map((i) => ds.matrix.rows[i]));
-    const colSet = new Set(nom.cols.map((i) => ds.matrix.cols[i]));
-    for (const x of ds.excluded) if (rowSet.has(x.gray) && colSet.has(x.brightnessPercent)) excludedInScope++;
-  }
+  const dn = displayNotes(ds);
+  const denoise = dn ? denoiseInScope({ notes: dn.notes, record: ds }, opts) : { interpolated: 0, noData: 0, lumEstimated: 0 };
 
   return {
     cellCount,
     nominalCount,
     coverageShare: nominalArea > 0 ? validArea / nominalArea : null,
-    excludedInScope,
+    denoise,
     safeShare,
     midShare,
     criticalShare,
@@ -274,8 +273,11 @@ function compute(ds: Pick<Dataset, 'matrix' | 'excluded'>, opts: StatsOptions): 
 
 const cache = new WeakMap<Dataset['matrix'], Map<string, RecordStats>>();
 
-/** Summary stats of one record under the given scope. Memoized per matrix + options. */
-export function computeRecordStats(ds: Pick<Dataset, 'matrix' | 'excluded'>, opts: StatsOptions): RecordStats {
+/**
+ * Summary stats of one record under the given scope. Memoized per matrix + options. Pass the
+ * record as displayed (processed by the denoise): its notes are found by its matrix.
+ */
+export function computeRecordStats(ds: Pick<Dataset, 'matrix'>, opts: StatsOptions): RecordStats {
   const key = `${opts.clipLowGray ? 1 : 0}|${opts.maxNits ?? 'all'}|${opts.sliceGray}`;
   let perMatrix = cache.get(ds.matrix);
   if (!perMatrix) {
@@ -303,7 +305,7 @@ export interface DenoiseInScope {
  * Counts of processed cells inside the scope (low-gray clip / level cap, the same nominal rows and
  * columns as the coverage) — for "降噪：插值 N 格，无有效数据 M 格". All zero with denoise off.
  */
-export function denoiseInScope(pr: Pick<ProcessedRecord, 'notes' | 'record'>, opts: Pick<StatsOptions, 'clipLowGray' | 'maxNits'>): DenoiseInScope {
+export function denoiseInScope(pr: { notes: ProcessedRecord['notes']; record: Pick<Dataset, 'matrix'> }, opts: Pick<StatsOptions, 'clipLowGray' | 'maxNits'>): DenoiseInScope {
   const out: DenoiseInScope = { interpolated: 0, noData: 0, lumEstimated: 0 };
   if (!pr.notes.length) return out;
   const nom = nominalScope(pr.record, opts);

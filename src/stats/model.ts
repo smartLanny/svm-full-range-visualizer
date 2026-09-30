@@ -190,7 +190,9 @@ export function toTsv(rows: StatsRow[], t: TFunction, lang: Lang): string {
     t('stats.col.cells'),
     t('stats.col.nominalCells'),
     `${t('stats.col.coverage')} (%)`,
-    t('stats.col.excluded'),
+    t('stats.col.interpolated'),
+    t('stats.col.noData'),
+    t('stats.col.lumEstimated'),
   ];
   const clean = (s: string) => s.replace(/[\t\r\n]+/g, ' ');
   const lines = rows.map(({ rec, stats: s }) =>
@@ -209,7 +211,9 @@ export function toTsv(rows: StatsRow[], t: TFunction, lang: Lang): string {
       String(s.cellCount),
       String(s.nominalCount),
       num(s.coverageShare === null ? null : s.coverageShare * 100, 1),
-      String(s.excludedInScope),
+      String(s.denoise.interpolated),
+      String(s.denoise.noData),
+      String(s.denoise.lumEstimated),
     ].join('\t'),
   );
   return [header.join('\t'), ...lines].join('\n');

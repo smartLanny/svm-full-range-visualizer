@@ -3,7 +3,9 @@ import { EXAMPLE_TSV } from '../data/exampleTsv';
 import { toDatasetJson } from '../data/records';
 import { isTypingTarget } from './useGlobalShortcuts';
 import { jsonToRecord, tableTextToResults } from './fileImport';
-import { applyScreening, mergeByReason, reasonsText, screenDataset } from './screening';
+import { mergeSummaries } from './screening';
+import { processRecord } from '../data/denoise';
+import { countParts, kindParts } from '../data/denoiseText';
 import { translate } from '../i18n';
 
 const el = (tagName: string, extra: Record<string, unknown> = {}) => ({ tagName, isContentEditable: false, ...extra }) as unknown as EventTarget;
@@ -48,27 +50,36 @@ describe('table files: every table, named from its title, screened', () => {
     const [r] = tableTextToResults(body, 'my device.tsv', 'my device');
     expect(r.record!.name).toBe('my device');
   });
-  it('screening finds the 0-nit black rows; applying moves them to excluded', () => {
+  it('the importer previews what the denoise will do; the record itself stays raw', () => {
     const r = results[0];
     const s = r.screening!;
-    expect(s.anomalies.length).toBeGreaterThan(0);
-    expect(s.byReason.belowNoise).toBeGreaterThan(0);
-    const clean = applyScreening(r.record!, s, true);
-    expect(clean.excluded!.length).toBe(s.anomalies.length);
-    expect(clean.data.length).toBe(r.record!.data.length - s.anomalies.length);
-    expect(applyScreening(r.record!, s, false)).toBe(r.record);
-    // A record that already carries `excluded` is not screened again.
-    expect(screenDataset(clean)).toBeNull();
+    expect(s.summary.touched).toBeGreaterThan(0);
+    expect(s.summary.byKind.blackLevel).toBeGreaterThan(0);
+    expect(s.summary).toEqual(processRecord(r.record!, { denoise: true }).summary);
+    // nothing removed: every parsed cell is still in the record
+    expect(r.record!.excluded).toBeUndefined();
+    expect(r.record!.data.length).toBe(r.record!.matrix.grid.flat().filter((p) => p).length);
   });
-  it('reason summary text', () => {
+  it('summary text of several previews (plain words)', () => {
     const t = (k: string, v?: Record<string, string | number>) => translate('zh', k, v);
-    const m = mergeByReason([{ belowNoise: 3 }, { belowNoise: 2, svmSpike: 1 }, null]);
-    expect(m.total).toBe(6);
-    expect(reasonsText(t, m.byReason)).toBe('低于噪声底 5 · SVM 尖峰 1');
+    const m = mergeSummaries([results[0].screening, results[1].screening, null]);
+    expect(m.touched).toBe(results[0].screening!.summary.touched + results[1].screening!.summary.touched);
+    expect(countParts(m, t).join(' · ')).toMatch(/^(插值补全 \d+ 格 · )?无有效数据 \d+ 格/);
+    expect(kindParts({ blackLevel: 3, svmSpike: 1 }, t).join(' · ')).toBe('接近全黑、测不准 3 · SVM 尖峰 1');
   });
 });
 
 describe('JSON round trip keeps the English aliases', () => {
+  it('a JSON exported by the former destructive exclusion is imported raw', () => {
+    const [r] = tableTextToResults(EXAMPLE_TSV, 'a.tsv', 'a');
+    const rec = r.record!;
+    const p = rec.matrix.grid[0][0]!;
+    const grid = rec.matrix.grid.map((row, i) => row.map((q, j) => (i === 0 && j === 0 ? null : q)));
+    const json = JSON.parse(JSON.stringify({ ...toDatasetJson(rec), matrix: { ...rec.matrix, grid }, excluded: [{ ...p, reason: 'svmSpike', detail: 'x' }] }));
+    const back = jsonToRecord(json);
+    expect(back.excluded).toBeUndefined();
+    expect(back.matrix.grid[0][0]).toEqual(p);
+  });
   it('export → import', () => {
     const [r] = tableTextToResults(EXAMPLE_TSV, 'a.tsv', 'a');
     const json = JSON.parse(JSON.stringify(toDatasetJson({ ...r.record!, deviceEn: 'Demo', modeEn: 'Standard 120Hz' })));

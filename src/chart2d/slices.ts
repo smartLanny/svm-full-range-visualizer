@@ -11,7 +11,7 @@
  * never overshooting the neighbouring measurements, but C1-continuous in the parameter, so
  * the motion is fluid.
  *
- * Missing (or excluded, docs/adr/0012) cells are never interpolated across along the swept
+ * Missing cells (never measured, or no data after the denoise, docs/adr/0012) are never interpolated across along the swept
  * axis: a point whose neighbouring row / column is missing stays at its measured value and
  * fades out over that interval (and fades in on the way back), so nothing pops. Along the
  * curve a missing sample is a gap; the renderer marks it (dotted) instead of bridging it.
@@ -66,7 +66,7 @@ const smooth01 = (u: number) => {
 /**
  * A slice point as drawn: `a` is its opacity (0..1] and `key` the measured column (gray slice)
  * or row (brightness slice) it comes from, so gaps can be recognised (a key between two
- * drawn points that is not drawn itself = a missing / excluded measurement).
+ * drawn points that is not drawn itself = a missing measurement / no data).
  */
 export interface CurvePoint extends SlicePoint {
   a: number;
@@ -92,7 +92,7 @@ export const LEVEL_FADE = 0.045;
  *   fades out across the interval next to it (at least `fade` wide, at most half the span), and
  *   fades in the same way before the next valid sample.
  *
- * So a point never appears or disappears in one frame: records with excluded cells and grids
+ * So a point never appears or disappears in one frame: records with no-data cells and grids
  * whose rows / columns do not all cover the same range fade instead of popping (docs/adr/0003:
  * the frame is a continuous function of the sweep parameter).
  */

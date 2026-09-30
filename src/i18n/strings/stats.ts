@@ -41,7 +41,9 @@ const strings: StringsModule = {
       nominalCells: '名义单元格',
       coverage: '覆盖率',
       coverageSub: '有效面积占比',
-      excluded: '已剔除（范围内）',
+      interpolated: '插值补全（范围内）',
+      noData: '无有效数据（范围内）',
+      lumEstimated: '亮度为估算值（范围内）',
     },
     metric: {
       safeShare: '安全占比',
@@ -61,7 +63,7 @@ const strings: StringsModule = {
       svmAtHint: '当前灰阶截面在该实测亮度处的插值 SVM；超出测量范围为“—”',
       outOfRange: '超出测量范围',
       coverage: '覆盖率',
-      coverageHint: '有效单元格面积 ÷ 统计范围内的名义面积（对数亮度 × 灰阶平面）。缺失或已剔除的格不参与统计。',
+      coverageHint: '有效单元格面积 ÷ 统计范围内的名义面积（对数亮度 × 灰阶平面）。有效 = 实测 + 降噪插值补全的格；缺失或无有效数据的格不参与统计。',
     },
     caveat: {
       label: '覆盖率偏低',
@@ -69,9 +71,11 @@ const strings: StringsModule = {
       value: '该值不差于列内最佳，但本记录覆盖率偏低，不参与评比。',
       footnote: '覆盖率低于可见记录中位数 90% 的记录不参与“最佳”评比',
     },
-    exclusion: {
-      inScope: '其中 {n} 个在当前统计范围内',
-      none: '统计范围内无剔除点',
+    denoise: {
+      inScope: '降噪（统计范围内）：{parts}',
+      none: '无改动',
+      record: '整条记录：{parts}',
+      coverage: '覆盖率把实测格和插值补全的格都算作有效；无有效数据的格不计入。',
     },
     band: {
       safe: '安全',
@@ -91,7 +95,7 @@ const strings: StringsModule = {
       missing: '缺失',
       hover: 'G{g} · {n} nits · SVM {v}',
       hoverNoData: 'G{g} · {n} nits · {what}',
-      noDataHint: '斜纹格：该位置没有有效测量值（缺失或已按规则剔除），不计入统计',
+      noDataHint: '斜纹格：该位置没有有效数据（未测量，或降噪判定测不准且无法插值补全），不计入统计',
     },
     noCells: '统计范围内没有有效测量点',
     noCellsHint: '可关闭低灰阶裁剪或放宽亮度上限',
@@ -148,7 +152,9 @@ const strings: StringsModule = {
       nominalCells: 'Nominal cells',
       coverage: 'Coverage',
       coverageSub: 'valid area share',
-      excluded: 'Excluded (in scope)',
+      interpolated: 'Interpolated (in scope)',
+      noData: 'No valid data (in scope)',
+      lumEstimated: 'Luminance estimated (in scope)',
     },
     metric: {
       safeShare: 'Safe share',
@@ -168,7 +174,7 @@ const strings: StringsModule = {
       svmAtHint: 'Interpolated SVM of the current gray slice at that measured luminance; “—” outside the measured range',
       outOfRange: 'outside the measured range',
       coverage: 'Coverage',
-      coverageHint: 'Valid cell area ÷ nominal area of the scope (log-luminance × gray plane). Missing or excluded cells are left out of every metric.',
+      coverageHint: 'Valid cell area ÷ nominal area of the scope (log-luminance × gray plane). Valid = measured + interpolated by the denoise; missing cells and cells with no valid data are left out of every metric.',
     },
     caveat: {
       label: 'Low coverage',
@@ -176,9 +182,11 @@ const strings: StringsModule = {
       value: 'This value matches or beats the column best, but the record’s coverage is low, so it is not ranked.',
       footnote: 'Records with coverage below 90% of the visible median are not ranked for “best”',
     },
-    exclusion: {
-      inScope: '{n} of them inside the current scope',
-      none: 'none inside the current scope',
+    denoise: {
+      inScope: 'Denoise (inside the scope): {parts}',
+      none: 'no changes',
+      record: 'Whole record: {parts}',
+      coverage: 'Coverage counts measured and interpolated cells as valid; cells with no valid data do not count.',
     },
     band: {
       safe: 'Safe',
@@ -198,7 +206,7 @@ const strings: StringsModule = {
       missing: 'missing',
       hover: 'G{g} · {n} nits · SVM {v}',
       hoverNoData: 'G{g} · {n} nits · {what}',
-      noDataHint: 'Hatched cells: no valid measurement there (missing or excluded by rule); left out of the stats',
+      noDataHint: 'Hatched cells: no valid data there (not measured, or unreliable and not fillable by the denoise); left out of the stats',
     },
     noCells: 'No valid measurements in scope',
     noCellsHint: 'Turn off the low-gray clip or raise the luminance cap',

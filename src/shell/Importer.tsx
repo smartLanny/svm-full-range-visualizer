@@ -1,5 +1,5 @@
 import React, { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertCircle, AlertTriangle, CheckCircle2, ClipboardPaste, FileJson, FileUp, RotateCcw, ShieldCheck, Sparkles, Trash2, Upload, X } from 'lucide-react';
+import { AlertCircle, CheckCircle2, ClipboardPaste, FileJson, FileUp, RotateCcw, ShieldCheck, Sparkles, Trash2, Upload, X } from 'lucide-react';
 import { useLang, useT, type TFunction } from '../i18n';
 import { parseRawData, splitTables } from '../data/parse';
 import { guessDeviceMode, recordLabel, toRecord } from '../data/records';
@@ -8,10 +8,13 @@ import type { Dataset } from '../types';
 import { useAppStore } from '../store/appStore';
 import * as THREE from 'three';
 import { getJsColor } from '../colormaps';
-import { Button, Checkbox, Dialog, NumberInput, Segmented, cn, toast } from '../ui';
+import { Button, Dialog, NumberInput, Segmented, cn, toast } from '../ui';
 import { FormRow, TextInput, useFieldId } from './controls';
 import { JSON_ACCEPT, addResults, errorText, pickFiles, readRecordFiles, resultFileLabel, type FileResult } from './fileImport';
-import { applyScreening, datasetRanges, mergeByReason, reasonsText, screenDataset, type Screening } from './screening';
+import { datasetRanges, mergeSummaries, screenDataset, type Screening } from './screening';
+import { processRecord } from '../data/denoise';
+import { countParts, kindParts } from '../data/denoiseText';
+import { useDenoise } from '../store/hooks';
 import { shellUi, useShellUi, type ImporterTab } from './uiStore';
 
 interface ParseOk {
@@ -23,7 +26,7 @@ interface ParseOk {
   level: [number, number];
   svm: [number, number];
   missing: number;
-  /** Anomaly screening of the parsed table (C7). */
+  /** What the denoise will do with the parsed table (C7; the table is imported raw). */
   screening: Screening | null;
 }
 type ParseResult = ParseOk | { ok: false; error: string } | null;
@@ -83,12 +86,10 @@ export function Importer() {
   const paste = usePasteState();
 
   const seed = useShellUi((s) => s.importer.seed);
-  const [excludeFiles, setExcludeFiles] = useState(true);
 
   useEffect(() => {
     if (!open) {
       setJsonResults([]);
-      setExcludeFiles(true);
       paste.reset();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -170,7 +171,6 @@ export function Importer() {
             addResults(
               jsonResults.filter((r) => r.ok),
               t,
-              excludeFiles,
             );
             shellUi.closeImporter();
           }}
@@ -218,7 +218,7 @@ export function Importer() {
           {tab === 'paste' ? (
             <PasteTab state={paste} />
           ) : (
-            <JsonTab results={jsonResults} setResults={setJsonResults} addFiles={addJsonFiles} exclude={excludeFiles} setExclude={setExcludeFiles} />
+            <JsonTab results={jsonResults} setResults={setJsonResults} addFiles={addJsonFiles} />
           )}
         </div>
       </div>
@@ -235,7 +235,6 @@ function usePasteState() {
   const [metaTouched, setMetaTouched] = useState(false);
   const [factor, setFactor] = useState(1);
   const [text, setText] = useState('');
-  const [exclude, setExclude] = useState(true);
   const deferred = useDeferredValue(text);
   const deferredFactor = useDeferredValue(factor);
   const tables = useMemo(() => analyseAll(deferred, deferredFactor), [deferred, deferredFactor]);
@@ -260,8 +259,6 @@ function usePasteState() {
     result,
     multi,
     metaTouched,
-    exclude,
-    setExclude,
     setName: onName,
     setDevice: (v: string) => {
       setDevice(v);
@@ -291,16 +288,12 @@ function usePasteState() {
       setMetaTouched(false);
       setFactor(1);
       setText('');
-      setExclude(true);
     },
     submit: (t: TFunction) => {
       const all = analyseAll(text, factor);
       const lang = useAppStore.getState().lang;
-      let excluded = 0;
-      const clean = (res: ParseOk) => {
-        if (exclude && res.screening) excluded += res.screening.anomalies.length;
-        return applyScreening(res.ds, res.screening, exclude);
-      };
+      // Imported raw (docs/adr/0012 addendum): the denoise is applied when shown, never stored.
+      const clean = (res: ParseOk) => res.ds;
       if (all.length > 1) {
         const untitled = all.filter((tb) => !tb.title && tb.res?.ok).length;
         const fallback = name.trim() ? [] : defaultNames(t, untitled);
@@ -316,8 +309,7 @@ function usePasteState() {
         const store = useAppStore.getState();
         store.addRecords(recs);
         store.setActive(recs[0].id);
-        const msg = t('shell.importer.importedN', { n: recs.length });
-        toast(excluded ? `${msg}${t('shell.importer.importedExcluded', { n: excluded })}` : msg, 'success', excluded ? 5000 : 3200);
+        toast(t('shell.importer.importedN', { n: recs.length }), 'success', 3200);
         shellUi.closeImporter();
         return;
       }
@@ -335,8 +327,7 @@ function usePasteState() {
       const store = useAppStore.getState();
       store.addRecords([rec]);
       store.setActive(rec.id);
-      const msg = t('shell.importer.imported', { name: recordLabel(rec, lang) });
-      toast(excluded ? `${msg}${t('shell.importer.importedExcluded', { n: excluded })}` : msg, 'success', excluded ? 5000 : 3200);
+      toast(t('shell.importer.imported', { name: recordLabel(rec, lang) }), 'success', 3200);
       shellUi.closeImporter();
     },
   };
@@ -353,11 +344,12 @@ function PasteTab({ state }: { state: PasteState }) {
     data: useFieldId('imp-data'),
   };
   const r = state.result;
-  // What will be imported: the parsed table with the accepted exclusions applied.
-  const shown = useMemo(() => (r && r.ok ? applyScreening(r.ds, r.screening, state.exclude) : null), [r, state.exclude]);
-  // Ranges of what will be imported (after the exclusion when it is on), not of the raw table.
+  const denoise = useDenoise();
+  // What the views will show: the parsed table (imported raw) under the denoise setting.
+  const shown = useMemo(() => (r && r.ok ? processRecord(r.ds, { denoise }).record : null), [r, denoise]);
+  // Ranges of what will be shown (denoised when the denoise is on), not of the raw table.
   const ranges = useMemo(() => (shown ? datasetRanges(shown) : null), [shown]);
-  // The raw maximum, when the exclusion removed it (shown as "raw max …, excluded").
+  // The raw maximum, when the denoise hides it (shown as "raw max …, hidden by the denoise").
   const excludedMax = r && r.ok && ranges?.svm && shown !== r.ds && r.svm[1] > ranges.svm[1] ? r.svm[1] : null;
   const screenings = state.multi ? state.multi.map((m) => (m.res?.ok ? m.res.screening : null)) : r && r.ok ? [r.screening] : [];
   const anyOk = state.multi ? state.multi.some((m) => m.res?.ok) : !!(r && r.ok);
@@ -526,11 +518,8 @@ function PasteTab({ state }: { state: PasteState }) {
                     {r.missing || t('shell.importer.missingNone')}
                   </dd>
                   <dt className="text-ink-3">{t('shell.importer.screen.label')}</dt>
-                  <dd
-                    className={cn('text-right font-mono tabular-nums', r.screening?.anomalies.length ? 'text-amber-300' : 'text-ink-1')}
-                    data-testid="importer-anomalies"
-                  >
-                    {r.screening?.anomalies.length || t('shell.importer.missingNone')}
+                  <dd className={cn('text-right font-mono tabular-nums', r.screening?.summary.touched ? 'text-sky-300' : 'text-ink-1')} data-testid="importer-denoise">
+                    {r.screening?.summary.touched || t('shell.importer.missingNone')}
                   </dd>
                 </dl>
                 <MiniMatrix ds={shown} />
@@ -539,29 +528,22 @@ function PasteTab({ state }: { state: PasteState }) {
           </div>
         </div>
       </div>
-      {anyOk && <ScreeningBar screenings={screenings} exclude={state.exclude} setExclude={state.setExclude} />}
+      {anyOk && <DenoisePreview screenings={screenings} />}
     </div>
   );
 }
 
 /**
- * Anomaly screening summary (C7): counts by reason and the "exclude obvious anomalies" checkbox
- * (default on). Shown under the paste box and the file list.
+ * Denoise preview (C7, docs/adr/0012 addendum): what the view-time denoise will do with the
+ * tables / files, in plain words. Nothing to decide: records are imported raw, and the denoise is
+ * one switch in the settings. Shown under the paste box and the file list.
  */
-function ScreeningBar({
-  screenings,
-  exclude,
-  setExclude,
-}: {
-  screenings: (Screening | null | undefined)[];
-  exclude: boolean;
-  setExclude: (v: boolean) => void;
-}) {
+function DenoisePreview({ screenings }: { screenings: (Screening | null | undefined)[] }) {
   const t = useT();
-  const { total, byReason } = mergeByReason(screenings.map((s) => s?.byReason));
-  const screened = screenings.some((s) => s);
-  if (!screened) return null;
-  if (!total)
+  const denoise = useDenoise();
+  const sum = mergeSummaries(screenings);
+  if (!screenings.some((s) => s)) return null;
+  if (!sum.touched && !sum.levelsEstimated)
     return (
       <p className="-mt-1 flex items-center gap-1.5 text-2xs text-ink-3" data-testid="importer-screening">
         <ShieldCheck size={13} className="shrink-0 text-green-400/80" />
@@ -569,22 +551,14 @@ function ScreeningBar({
       </p>
     );
   return (
-    <div className="-mt-1 flex flex-wrap items-start gap-x-6 gap-y-2 rounded-md bg-amber-400/[0.06] px-3 py-2.5 ring-1 ring-inset ring-amber-300/20" data-testid="importer-screening">
-      <div className="flex min-w-0 flex-1 items-start gap-2">
-        <AlertTriangle size={14} className="mt-px shrink-0 text-amber-300" />
-        <div className="min-w-0">
-          <div className="text-xs text-ink-1">{t('shell.importer.screen.found', { n: total })}</div>
-          <div className="mt-0.5 text-2xs leading-snug text-ink-3">{reasonsText(t, byReason)}</div>
-        </div>
+    <div className="-mt-1 flex items-start gap-2 rounded-md bg-surface-1 px-3 py-2.5 ring-1 ring-inset ring-line" data-testid="importer-screening">
+      <Sparkles size={14} className="mt-px shrink-0 text-sky-300/90" />
+      <div className="min-w-0 text-2xs leading-snug">
+        <div className="text-xs text-ink-1">{t('shell.importer.screen.found', { n: sum.touched })}</div>
+        <div className="mt-0.5 text-ink-2">{countParts(sum, t).join(' · ')}</div>
+        <div className="mt-0.5 text-ink-3">{kindParts(sum.byKind, t).join(' · ')}</div>
+        <div className="mt-1 text-ink-3">{t(denoise ? 'shell.importer.screen.raw' : 'shell.importer.screen.off')}</div>
       </div>
-      <Checkbox
-        checked={exclude}
-        onChange={setExclude}
-        data-testid="importer-exclude"
-        label={t('shell.importer.screen.exclude')}
-        description={t('shell.importer.screen.excludeHint')}
-        className="max-w-[360px]"
-      />
     </div>
   );
 }
@@ -619,9 +593,9 @@ function MultiPreview({ tables, deviceOverride }: { tables: TableResult[]; devic
               <div className={cn('mt-0.5 font-mono text-2xs tabular-nums', ok ? 'text-ink-2' : 'text-red-300')}>
                 {tb.res?.ok ? t('shell.importer.size', { rows: tb.res.rows, cols: tb.res.cols }) : tb.res ? errorText(t, tb.res.error) : ''}
               </div>
-              {tb.res?.ok && !!tb.res.screening?.anomalies.length && (
-                <div className="mt-0.5 truncate text-2xs text-amber-300" title={reasonsText(t, tb.res.screening.byReason, '\n')}>
-                  {t('shell.importer.screen.perTable', { n: tb.res.screening.anomalies.length })}
+              {tb.res?.ok && !!tb.res.screening?.summary.touched && (
+                <div className="mt-0.5 truncate text-2xs text-sky-300/90" title={[countParts(tb.res.screening.summary, t).join(' · '), kindParts(tb.res.screening.summary.byKind, t).join(' · ')].join('\n')}>
+                  {t('shell.importer.screen.perTable', { n: tb.res.screening.summary.touched })}
                 </div>
               )}
             </li>
@@ -670,14 +644,10 @@ function JsonTab({
   results,
   setResults,
   addFiles,
-  exclude,
-  setExclude,
 }: {
   results: FileResult[];
   setResults: React.Dispatch<React.SetStateAction<FileResult[]>>;
   addFiles: (files: File[]) => Promise<void>;
-  exclude: boolean;
-  setExclude: (v: boolean) => void;
 }) {
   const t = useT();
   const lang = useLang();
@@ -706,8 +676,7 @@ function JsonTab({
         <ul className="max-h-[260px] divide-y divide-line overflow-y-auto rounded-lg ring-1 ring-inset ring-line" data-testid="importer-results">
           {results.map((r, i) => {
             const fileLabel = resultFileLabel(t, r);
-            const n = r.ok ? (r.screening?.anomalies.length ?? 0) : 0;
-            const already = r.ok && r.record?.excluded?.length ? r.record.excluded.length : 0;
+            const n = r.ok ? (r.screening?.summary.touched ?? 0) : 0;
             return (
               <li key={`${fileLabel}-${i}`} className="flex items-center gap-3 px-3 py-2">
                 {r.ok ? <CheckCircle2 size={15} className="shrink-0 text-green-400" /> : <AlertCircle size={15} className="shrink-0 text-red-400" />}
@@ -718,12 +687,11 @@ function JsonTab({
                   <div className={cn('truncate text-2xs', r.ok ? 'text-ink-3' : 'text-red-300')} title={fileLabel}>
                     {r.ok && r.record ? `${fileLabel} · ${t('shell.importer.fileOk', { points: r.record.data.length })}` : `${fileLabel} · ${errorText(t, r.error)}`}
                     {n > 0 && (
-                      <span className="text-amber-300" title={reasonsText(t, r.screening!.byReason, '\n')}>
+                      <span className="text-sky-300/90" title={[countParts(r.screening!.summary, t).join(' · '), kindParts(r.screening!.summary.byKind, t).join(' · ')].join('\n')}>
                         {' · '}
                         {t('shell.importer.screen.perTable', { n })}
                       </span>
                     )}
-                    {already > 0 && <span className="text-ink-3">{` · ${t('common.exclusion.badge', { n: already })}`}</span>}
                   </div>
                 </div>
                 <button
@@ -740,7 +708,7 @@ function JsonTab({
           })}
         </ul>
       )}
-      {results.some((r) => r.ok) && <ScreeningBar screenings={results.filter((r) => r.ok).map((r) => r.screening)} exclude={exclude} setExclude={setExclude} />}
+      {results.some((r) => r.ok) && <DenoisePreview screenings={results.filter((r) => r.ok).map((r) => r.screening)} />}
     </div>
   );
 }

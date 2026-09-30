@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { ColormapType, SvmRecord } from '../types';
 import { cellEdges, fmtNits, gridView } from '../data/grid';
-import { ANOMALY_KINDS, type AnomalyKind } from '../data/anomalies';
+import { displayNotes } from '../data/denoise';
+import { noteLines } from '../data/denoiseText';
 import { useT } from '../i18n';
 import { drawHeatmap, HATCH_CSS, hasNoDataCells, THUMB_HEIGHT as HEIGHT, thumbGrayLabels, thumbTicks, type ThumbExtent } from './heatmap';
 
@@ -19,7 +20,7 @@ interface Props {
 
 /**
  * Mini heatmap (Canvas2D): gray up, level luminance (log) right, cells exactly as in the 3D top
- * view. Cells without a valid value (missing or excluded) get a neutral grey hatch, never a
+ * view. Cells without a valid value (missing, or no data after the denoise) get a neutral grey hatch, never a
  * colour (never drawn as 0); area outside the record's measured range stays flat background.
  * Stepped 0.4 / 1.0 contours follow cell borders. Redraws only when inputs or the size change (no animation loop).
  */
@@ -31,8 +32,8 @@ export function Thumbnail({ rec, clipLowGray, maxNits, colormap, colorMax, slice
   const [hover, setHover] = useState<{ x: number; text: string } | null>(null);
   const view = useMemo(() => gridView(rec, { clipLowGray, maxNits }), [rec, clipLowGray, maxNits]);
   const noData = useMemo(() => hasNoDataCells(view), [view]);
-  /** Excluded raw points by gray + brightness percent -> reason (docs/adr/0012). */
-  const excludedAt = useMemo(() => new Map((rec.excluded ?? []).map((x) => [`${x.gray}|${x.brightnessPercent}`, x.reason])), [rec.excluded]);
+  /** What the denoise did to the displayed record (docs/adr/0012 addendum), or null. */
+  const notes = displayNotes(rec);
 
   useEffect(() => {
     const el = wrapRef.current;
@@ -67,14 +68,14 @@ export function Thumbnail({ rec, clipLowGray, maxNits, colormap, colorMax, slice
     const r = ge.findIndex((e0, i) => i < view.grays.length && g >= e0 && g <= ge[i + 1]);
     if (c < 0 || r < 0) return setHover(null);
     const p = view.points[r][c];
+    const note = notes?.noteAt(view.grays[r], view.percents[c]) ?? null;
     let text: string;
     if (p && Number.isFinite(p.svm)) {
       text = t('stats.thumb.hover', { g: view.grays[r], n: fmtNits(view.levelNits[c]), v: p.svm.toFixed(2) });
+      // interpolated / luminance estimated: say so, with the raw reading
+      if (note) text += ` · ${noteLines(note, t).action} (${noteLines(note, t).raw})`;
     } else {
-      const reason = excludedAt.get(`${view.grays[r]}|${view.percents[c]}`);
-      const what = reason
-        ? t('common.exclusion.excludedCell', { reason: ANOMALY_KINDS.includes(reason as AnomalyKind) ? t(`common.exclusion.reasons.${reason}`) : reason })
-        : t('common.exclusion.missingCell');
+      const what = note ? `${noteLines(note, t).action} · ${noteLines(note, t).reason}` : t('common.noValidData');
       text = t('stats.thumb.hoverNoData', { g: view.grays[r], n: fmtNits(view.levelNits[c]), what });
     }
     setHover({ x: e.clientX - rect.left, text });

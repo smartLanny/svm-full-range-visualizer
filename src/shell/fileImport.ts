@@ -5,7 +5,8 @@ import { safeFileName } from '../export/registry';
 import { useAppStore } from '../store/appStore';
 import type { TFunction } from '../i18n';
 import { toast } from '../ui';
-import { applyScreening, screenDataset, type Screening } from './screening';
+import { screenDataset, type Screening } from './screening';
+import { rawDataset } from '../data/denoise';
 import { shellUi } from './uiStore';
 
 export interface FileResult {
@@ -14,9 +15,9 @@ export interface FileResult {
   table?: number;
   tables?: number;
   ok: boolean;
-  /** Parsed record as read (not yet screened). */
+  /** Parsed record, raw (points an older export stored in `excluded` put back). */
   record?: SvmRecord;
-  /** Anomaly screening (null: the JSON already carries an `excluded` field). */
+  /** What the denoise will do with it (preview, docs/adr/0012 addendum). */
   screening?: Screening | null;
   /** Error code (key under shell.importer.errors) or raw message. */
   error?: string;
@@ -36,10 +37,13 @@ export const isTableFile = (name: string) => /\.(tsv|txt)$/i.test(name);
 
 export const baseName = (name: string) => name.replace(/\.[^.]+$/, '');
 
-/** Turn a parsed JSON value into a user record (fresh id, so re-importing never collides). */
+/**
+ * Turn a parsed JSON value into a user record (fresh id, so re-importing never collides). Always
+ * raw: points a former version removed destructively (`excluded`) go back into the grid.
+ */
 export function jsonToRecord(json: unknown): SvmRecord {
   const ds = validateDataset(json);
-  return toRecord(ds, 'user', { id: generateId(), name: ds.name, ...englishAliases(json) });
+  return rawDataset(toRecord(ds, 'user', { id: generateId(), name: ds.name, ...englishAliases(json) }));
 }
 
 /**
@@ -103,9 +107,8 @@ export function resultFileLabel(t: TFunction, r: FileResult): string {
 
 /**
  * Window drop / "Open JSON": a single table file opens the paste tab with its text (preview,
- * device / mode, correction factor and screening before anything is imported). Other files are
- * read; when any of them has anomalies to decide on, the importer's file tab opens with them,
- * otherwise they are imported right away.
+ * device / mode, correction factor and the denoise preview before anything is imported). Other
+ * files are read and imported right away (raw; there is nothing to decide).
  */
 export async function importFiles(files: File[], t: TFunction): Promise<FileResult[]> {
   if (files.length === 1 && isTableFile(files[0].name)) {
@@ -121,17 +124,13 @@ export async function importFiles(files: File[], t: TFunction): Promise<FileResu
     }
   }
   const results = await readRecordFiles(files);
-  if (results.some((r) => r.ok && r.screening?.anomalies.length)) {
-    shellUi.openImporter('json', { files: results });
-    return results;
-  }
   addResults(results, t);
   return results;
 }
 
-/** Add every valid result to the store (screened when `exclude`), reporting the outcome as toasts. */
-export function addResults(results: FileResult[], t: TFunction, exclude = true) {
-  const ok = results.filter((r) => r.ok && r.record).map((r) => applyScreening(r.record!, r.screening, exclude));
+/** Add every valid result to the store (raw records), reporting the outcome as toasts. */
+export function addResults(results: FileResult[], t: TFunction) {
+  const ok = results.filter((r) => r.ok && r.record).map((r) => r.record!);
   const failed = results.filter((r) => !r.ok);
   if (ok.length) {
     const store = useAppStore.getState();
@@ -139,9 +138,8 @@ export function addResults(results: FileResult[], t: TFunction, exclude = true) 
     // Newly imported records become A so the user immediately sees them in 3D.
     store.setActive(ok[0].id);
     const lang = store.lang;
-    const excluded = exclude ? results.reduce((n, r) => n + (r.ok && r.screening ? r.screening.anomalies.length : 0), 0) : 0;
     const msg = ok.length === 1 ? t('shell.importer.imported', { name: recordLabel(ok[0], lang) }) : t('shell.importer.importedN', { n: ok.length });
-    toast(excluded ? `${msg}${t('shell.importer.importedExcluded', { n: excluded })}` : msg, 'success', excluded ? 5000 : 3200);
+    toast(msg, 'success', 3200);
   }
   if (failed.length) {
     const first = failed[0];
