@@ -103,7 +103,7 @@ const strings: StringsModule = {
       renormalised: '缺{names}数据，权重已重新分配',
       caveat: '权重已重新分配（缺{names}数据），与其他记录的综合值不可直接比较，不参与“最佳”评比',
       about:
-        '场景加权 SVM 是参考值，不替代面积占比。每个场景取（档位亮度 × 灰阶）矩形内单元格 SVM 的面积加权算术平均，面积按 log10(nits) × 灰阶计，跨边界的格只计重叠部分；使用降噪后的显示数据，与统计范围（低灰阶裁剪 / 亮度上限）无关。',
+        '场景加权 SVM 是参考值，不替代面积占比。每个场景取（档位亮度 × 灰阶）矩形内单元格 SVM 的面积加权算术平均，面积按 log10(nits) × 灰阶计，跨边界的格只计重叠部分；使用当前显示的数据（开启降噪时为降噪后的数据），与统计范围（低灰阶裁剪 / 亮度上限）无关。',
       range: '{name}：{n0}–{n1} nits × G{g0}–G{g1}，权重 {w}',
       rules:
         '综合 = 各场景均值按权重加权平均；有效数据覆盖不足场景面积 {c} 的场景不计入，其余权重按比例重新分配。分级：< 0.4 无感，0.4–1.0 轻微，1.0–3.0 可见，≥ 3.0 强烈（0.4 / 1.0 即安全 / 临界阈值，3.0 为显示用分界）。亮度轴统一以 {cap} nits 为上限。',
@@ -232,7 +232,7 @@ const strings: StringsModule = {
       criticalRange: 'SVM ≥ 1.0',
     },
     scenario: {
-      title: 'Scenario reference',
+      title: 'Scenarios',
       tag: 'ref.',
       composite: 'Composite',
       name: { night: 'Night', indoor: 'Indoor', outdoor: 'Outdoor' },
@@ -243,7 +243,7 @@ const strings: StringsModule = {
       renormalised: 'Missing data for {names}: weights redistributed',
       caveat: 'Weights redistributed (missing data for {names}): not directly comparable with other records’ composite, not ranked for “best”',
       about:
-        'The scenario-weighted SVM is a reference value; it does not replace the area shares. Per scenario: the area-weighted arithmetic mean SVM of the cells inside a (level luminance × gray) rectangle, area in log10(nits) × gray, cells across a bound counted by their overlap only; computed on the displayed (denoised) data, independent of the stats scope (low-gray clip / luminance cap).',
+        'The scenario-weighted SVM is a reference value; it does not replace the area shares. Per scenario: the area-weighted arithmetic mean SVM of the cells inside a (level luminance × gray) rectangle, area in log10(nits) × gray, cells across a bound counted by their overlap only; computed on the data as displayed (denoised when the denoise is on), independent of the stats scope (low-gray clip / luminance cap).',
       range: '{name}: {n0}–{n1} nits × G{g0}–G{g1}, weight {w}',
       rules:
         'Composite = weighted average of the scenario means; a scenario whose valid data covers less than {c} of its area is left out and the other weights are scaled up. Grades: < 0.4 imperceptible, 0.4–1.0 slight, 1.0–3.0 visible, ≥ 3.0 strong (0.4 / 1.0 are the safe / critical thresholds, 3.0 is a display choice). The luminance axis is capped at {cap} nits for every scenario.',
