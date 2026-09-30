@@ -268,6 +268,21 @@ describe('moving axes: ticks', () => {
     expect(fades).toBeGreaterThan(100);
   }, 120000);
 
+  it('shows no label beyond an edge that does not move (the gray axis ends at G255)', () => {
+    let n = 0;
+    for (const hiddenIds of Object.values(SUBSETS)) {
+      for (const axisMode of ['adaptive', 'free'] as const) {
+        for (const a of sweepAxes(inputs({ sliceMode: 'brightness', axisMode, hiddenIds }))) {
+          expect(a.x.u1).toBeCloseTo(255, 9);
+          const beyond = a.x.ticks.filter((t) => t.u > 255 && (t.labelAlpha ?? 0) > 0);
+          expect(beyond.map((t) => t.label)).toEqual([]);
+          n++;
+        }
+      }
+    }
+    expect(n).toBe(8 * (N + 1));
+  }, 60000);
+
   it('a steady span shows one tick set (no permanent cross-fade at a step boundary)', () => {
     // brightness slice, adaptive: gray 15–255 for seconds (span 240 / 8 = 30 sits exactly on the
     // 20 ↔ 50 step boundary of niceStep) — the moving axis must show one step, not both.

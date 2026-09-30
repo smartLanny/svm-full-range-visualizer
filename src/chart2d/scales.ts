@@ -259,9 +259,9 @@ export function buildAxes(slice: SliceMode, mode: AxisMode, extent: Extent | nul
 //
 // Nothing on a moving axis pops. Ticks fade near the domain's edges, continuously in the domain:
 // a gridline fades out just inside an edge, a label fades out just beyond it (where it slides off;
-// a label on an edge that does not move, like SVM 0, stays fully visible). The faster an edge
-// moves, the wider its fade reaches inside, so every fade lasts at least FADE_TIME whatever the
-// zoom speed. The tick density is a continuous level λ (tickLevel): between two integer levels
+// a label on an edge that does not move, like SVM 0, stays fully visible, and no label shows
+// beyond such an edge). The faster an edge moves, the wider its fade reaches inside, so every fade lasts
+// at least FADE_TIME whatever the zoom speed. The tick density is a continuous level λ (tickLevel): between two integer levels
 // both tick sets cross-fade (a log axis's 2 / 5 labels and minor gridlines, a linear axis's next
 // 1-2-5 step); λ changes over a few hundred ms around a level switch and is an integer otherwise.
 // Labels are formatted per value (a value's label never changes format while the axis moves).
@@ -272,12 +272,18 @@ export function buildAxes(slice: SliceMode, mode: AxisMode, extent: Extent | nul
 // at the static end it equals the static tick set exactly and it becomes the moving value as
 // settle → 0.
 
-/** Gridlines fade out within this share of the span inside the domain's edges (at least). */
+/** Gridlines of a moving edge fade out within this share of the span inside it (at least). */
 const GRID_EDGE = 0.02;
-/** Labels fade out within this share of the span beyond the domain's edges. */
+/** Labels beyond a moving edge fade out within this share of the span. */
 const LABEL_EDGE = 0.03;
 /** A moving edge's fades reach speed × FADE_TIME inside (s): no fade is shorter than this. */
 const FADE_TIME = 0.15;
+/**
+ * Edge speed (share of the span per second) from which labels fade over the full LABEL_EDGE
+ * beyond it; slower edges over proportionally less, and beyond an edge that does not move at all
+ * no label shows (like a still axis). A label on such an edge stays fully visible.
+ */
+const EDGE_SPEED_FULL = 0.02;
 
 const smooth01 = (u: number) => {
   const v = Math.min(1, Math.max(0, u));
@@ -287,16 +293,20 @@ const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
 
 /** Still-axis visibility: inside the domain (strict: not on its edges). */
 const hardIn = (u: number, a: number, b: number, strict = false) => (strict ? u > a && u < b : u >= a - 1e-9 && u <= b + 1e-9) ? 1 : 0;
+/** Fade of one edge: distance d inside it (< 0 beyond), fading from -out to +inside; a zero-width fade is a cut. */
+const edgeFade = (d: number, out: number, inside: number) => (out + inside > 1e-12 ? smooth01((d + out) / (out + inside)) : d >= -1e-9 ? 1 : 0);
+const reach = (v: number) => Math.min(1, v / EDGE_SPEED_FULL);
 /** Moving gridline visibility: fades out inside the edges (wider at a fast edge). */
 const softLine = (u: number, a: number, b: number, m: AxisMotionState) => {
   const span = b - a || 1e-9;
-  return smooth01((u - a) / (Math.max(GRID_EDGE, m.v0 * FADE_TIME) * span)) * smooth01((b - u) / (Math.max(GRID_EDGE, m.v1 * FADE_TIME) * span));
+  const w0 = Math.max(GRID_EDGE, m.v0 * FADE_TIME) * span;
+  const w1 = Math.max(GRID_EDGE, m.v1 * FADE_TIME) * span;
+  return edgeFade(u - a, 0, w0) * edgeFade(b - u, 0, w1);
 };
 /** Moving label visibility: fades out from speed × FADE_TIME inside to LABEL_EDGE beyond the edges. */
 const softLabel = (u: number, a: number, b: number, m: AxisMotionState) => {
   const span = b - a || 1e-9;
-  const out = LABEL_EDGE * span;
-  return smooth01((u - a + out) / (out + m.v0 * FADE_TIME * span)) * smooth01((b - u + out) / (out + m.v1 * FADE_TIME * span));
+  return edgeFade(u - a, LABEL_EDGE * reach(m.v0) * span, m.v0 * FADE_TIME * span) * edgeFade(b - u, LABEL_EDGE * reach(m.v1) * span, m.v1 * FADE_TIME * span);
 };
 
 /**
