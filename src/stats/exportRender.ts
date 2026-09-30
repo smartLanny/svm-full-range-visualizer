@@ -256,7 +256,7 @@ interface Env {
   input: StatsExportInput;
   /** Grid views of the records (thumbnails), memoized per render. */
   views: Map<string, GridView>;
-  /** Heatmap canvases by record + pixel size (a card drawn twice reuses it). */
+  /** Heatmap canvases drawn during this render (their backing stores are released at the end). */
   scratch: HTMLCanvasElement[];
 }
 

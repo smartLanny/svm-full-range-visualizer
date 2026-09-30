@@ -188,8 +188,8 @@ export default function StatsView() {
       },
     });
     // DEV-only hooks for scripts/verify-export-contents.mjs (layout of an export, one card alone).
+    const w = window as unknown as Record<string, unknown>;
     if (import.meta.env.DEV) {
-      const w = window as unknown as Record<string, unknown>;
       w.__svmStatsExport = {
         render: (width: number, height: number, content: 'cards' | 'table'): { info: StatsRenderInfo; png: string } => {
           const c = document.createElement('canvas');
@@ -205,7 +205,10 @@ export default function StatsView() {
         },
       };
     }
-    return unregister;
+    return () => {
+      unregister();
+      if (import.meta.env.DEV) delete w.__svmStatsExport;
+    };
   }, []);
 
   const onCopy = async () => {
