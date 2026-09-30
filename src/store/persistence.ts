@@ -1,6 +1,6 @@
 import { createStore, del, get, promisifyRequest, set, type UseStore } from 'idb-keyval';
 import type { SvmRecord } from '../types';
-import { DEFAULT_SETTINGS, useAppStore, type RecordPrefs, type Settings } from './appStore';
+import { DEFAULT_SETTINGS, SETTINGS_REV, useAppStore, type RecordPrefs, type Settings } from './appStore';
 
 /**
  * Local persistence (IndexedDB, never uploaded). docs/adr/0007.
@@ -237,7 +237,7 @@ export function startAutoSave(): () => void {
     if (suspended) return;
     const s = useAppStore.getState();
     const writes: [string, unknown][] = [];
-    const settings: Partial<Settings> = {};
+    const settings: Partial<Settings> & { rev: number } = { rev: SETTINGS_REV };
     for (const k of SETTINGS_KEYS) (settings as Record<string, unknown>)[k] = s[k];
     const settingsJson = JSON.stringify(settings);
     if (settingsJson !== lastSettings) {

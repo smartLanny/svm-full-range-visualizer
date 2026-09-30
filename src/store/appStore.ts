@@ -63,6 +63,14 @@ export interface Settings {
   presentBlack: boolean;
 }
 
+/**
+ * Revision of the saved settings format. Bumped when a default changes and older saves must
+ * adopt the new default once; the revision is saved next to the settings (persistence.ts; migrations in bootstrap.ts sanitizeSettings).
+ * 2: the 2D chart defaults to adaptive axes (a save without a revision still has the old
+ *    'standard' default, which is dropped once so the new default applies).
+ */
+export const SETTINGS_REV = 2;
+
 export const DEFAULT_SETTINGS: Settings = {
   lang: 'zh',
   tab: 'scene3d',
@@ -80,7 +88,7 @@ export const DEFAULT_SETTINGS: Settings = {
   sliceMode: 'gray',
   sliceGray: 127,
   sliceNits: 100,
-  axisMode: 'standard',
+  axisMode: 'adaptive',
   stageAspect: 'fit',
   presentBlack: false,
 };

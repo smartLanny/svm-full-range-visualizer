@@ -26,6 +26,12 @@ describe('sanitizeSettings (persisted settings are checked key by key)', () => {
   });
   it('tolerates garbage', () => {
     expect(sanitizeSettings(null)).toEqual({});
+  });
+  it('adopts the adaptive 2D axis default once for saves older than rev 2', () => {
+    expect(DEFAULT_SETTINGS.axisMode).toBe('adaptive');
+    expect(sanitizeSettings({ axisMode: 'standard' }).axisMode).toBeUndefined();
+    expect(sanitizeSettings({ axisMode: 'free' }).axisMode).toBe('free');
+    expect(sanitizeSettings({ rev: 2, axisMode: 'standard' }).axisMode).toBe('standard');
     expect(sanitizeSettings('x')).toEqual({});
   });
 });

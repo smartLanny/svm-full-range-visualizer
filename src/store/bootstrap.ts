@@ -53,10 +53,13 @@ export function sanitizeSettings(saved: unknown): Partial<Settings> {
   const out: Partial<Settings> = {};
   if (!saved || typeof saved !== 'object') return out;
   const src = saved as Record<string, unknown>;
+  const rev = typeof src.rev === 'number' ? src.rev : 1;
   for (const k of Object.keys(DEFAULT_SETTINGS) as (keyof Settings)[]) {
     if (!(k in src) || !SETTING_CHECKS[k](src[k])) continue;
     (out as Record<string, unknown>)[k] = src[k];
   }
+  // rev 2: the old default 'standard' gives way to the new default 'adaptive' once.
+  if (rev < 2 && out.axisMode === 'standard') delete out.axisMode;
   if (out.overlays) {
     const o = out.overlays as unknown as Record<string, unknown>;
     const overlays: Overlays = { ...DEFAULT_SETTINGS.overlays };
