@@ -250,5 +250,5 @@ export function exclusionSummary(ds: Pick<Dataset, 'matrix' | 'excluded' | 'data
   return { total: ex.length, byReason, nominal: ds.matrix.rows.length * ds.matrix.cols.length, valid: ds.data.length };
 }
 
-/** i18n keys (common namespace) for each anomaly kind: common.exclusion.reasons.<kind>. */
+/** The former anomaly kinds (superseded; the views describe the denoise with common.denoise.*). */
 export const ANOMALY_KINDS: AnomalyKind[] = ['belowNoise', 'duplicateColumn', 'duplicateRow', 'nitsShift', 'svmSpike'];

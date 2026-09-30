@@ -200,8 +200,8 @@ const strings: StringsModule = {
       raw: 'Raw reading: {nits} nits · SVM {svm}',
       from: 'Interpolated from {from0} and {from1}',
       lumVia: {
-        column: 'luminance estimated from the grays above and below',
-        pattern: 'luminance estimated from the table’s pattern',
+        column: 'Luminance estimated from the grays above and below',
+        pattern: 'Luminance estimated from the table’s pattern',
       },
       estimated: 'est.',
       level: 'Level luminance {raw} nits came from an unreliable G255 reading; estimated as {value} nits from the column’s other grays',
