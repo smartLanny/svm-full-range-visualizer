@@ -127,18 +127,23 @@ describe('scenario reference — synthetic grids', () => {
     expect(empty.dropped).toEqual(['night', 'indoor', 'outdoor']);
   });
 
-  it(`drops a scenario covered below ${SCENARIO_MIN_COVERAGE * 100} % (outdoor up to 450 vs 440 nits)`, () => {
+  it(`drops a scenario covered below ${SCENARIO_MIN_COVERAGE * 100} % (brightest column just above / below the cut)`, () => {
+    expect(SCENARIO_MIN_COVERAGE).toBe(0.4);
     const upTo = (top: number) => synth(GRAYS, [top, 300, 200, 100, 50, 20, 10, 5, 2, 1], () => 0.5);
-    const o450 = scenarioOf(scenarioReference(upTo(450)), 'outdoor');
-    expect(o450.coverage).toBeCloseTo(Math.log10(450 / 400) / Math.log10(500 / 400), 9);
-    expect(o450.used).toBe(true);
-    const r440 = scenarioReference(upTo(440));
-    const o440 = scenarioOf(r440, 'outdoor');
-    expect(o440.coverage).toBeLessThan(SCENARIO_MIN_COVERAGE);
-    expect(o440.mean).toBeCloseTo(0.5, 12); // computed, but not counted
-    expect(o440.used).toBe(false);
-    expect(usedMean(r440, 'outdoor')).toBeNull();
-    expect(r440.dropped).toEqual(['outdoor']);
+    // outdoor = 400–500 nits: a brightest column at 400 · 1.25^k covers the share k of it
+    const top = (k: number) => 400 * 1.25 ** k;
+    const above = scenarioOf(scenarioReference(upTo(top(SCENARIO_MIN_COVERAGE + 0.03))), 'outdoor');
+    expect(above.coverage).toBeCloseTo(SCENARIO_MIN_COVERAGE + 0.03, 9);
+    expect(above.used).toBe(true);
+    const rBelow = scenarioReference(upTo(top(SCENARIO_MIN_COVERAGE - 0.03)));
+    const below = scenarioOf(rBelow, 'outdoor');
+    expect(below.coverage).toBeCloseTo(SCENARIO_MIN_COVERAGE - 0.03, 9);
+    expect(below.mean).toBeCloseTo(0.5, 12); // computed, but not counted
+    expect(below.used).toBe(false);
+    expect(usedMean(rBelow, 'outdoor')).toBeNull();
+    expect(rBelow.dropped).toEqual(['outdoor']);
+    // exactly half covered still counts
+    expect(scenarioOf(scenarioReference(upTo(top(0.5))), 'outdoor').used).toBe(true);
   });
 
   it('a weight of 0 takes a scenario out without flagging a renormalisation', () => {
@@ -178,6 +183,20 @@ describe('independence from the view', () => {
     const d = computeRecordStats(shown, { clipLowGray: true, maxNits: 500, sliceGray: 127, scenarios: cfg });
     expect(d.scenario.composite).not.toBe(a.scenario.composite);
     expect(d.scenario).toBe(scenarioReference(shown, cfg));
+  });
+});
+
+describe('bundled records', () => {
+  const load = (f: string) => JSON.parse(fs.readFileSync(path.resolve(__dirname, '../../public/datasets', f), 'utf8')) as Dataset;
+  it('Xiaomi 18 Pro Max (Pro off): a half-covered night still counts (why the cut is 40 %, not 50 %)', () => {
+    const shown = processRecord(rawDataset(validateDataset(load('xiaomi18promax_adaptive_pro_off.json'))), { denoise: true }).record;
+    const ref = scenarioReference(shown);
+    const night = scenarioOf(ref, 'night');
+    expect(night.coverage).toBeGreaterThan(SCENARIO_MIN_COVERAGE);
+    expect(night.coverage).toBeLessThan(0.5); // the denoise shows its black-level readings as no data
+    expect(night.used).toBe(true);
+    expect(ref.dropped).toEqual([]);
+    expect(scenarioGrade(ref.composite!)).toBe('visible');
   });
 });
 
