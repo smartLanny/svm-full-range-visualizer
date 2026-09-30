@@ -11,5 +11,11 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    <script>
+      // GitHub Pages serves the repository root, where this file is the unbuilt Vite entry: open the
+      // offline release instead. Built pages no longer reference /src/main.tsx, so this never fires there.
+      if (/\.github\.io$/.test(location.hostname) && document.querySelector('script[src="/src/main.tsx"]'))
+        location.replace('release/SVM-Visualizer.html' + location.hash);
+    </script>
   </body>
 </html>

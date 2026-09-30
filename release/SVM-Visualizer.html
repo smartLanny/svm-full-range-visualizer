@@ -2,7 +2,7 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <meta name="svm-build-inputs" content="sha256:1f26af1249b5d606cfb56c50d654f3c464b35446031c34b4cfaa75ae405c45bf" />
+    <meta name="svm-build-inputs" content="sha256:7f82bbcbc9de396c3f543c19a6f0b4edbed64d474c6ed51636c339c773b931ce" />
     <meta name="svm-version" content="2.0.0" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="dark" />
@@ -5033,5 +5033,11 @@ ${i.detail}`:i.label,onClick:()=>t(i.id),className:et("group flex w-full min-w-0
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      // GitHub Pages serves the repository root, where this file is the unbuilt Vite entry: open the
+      // offline release instead. Built pages no longer reference /src/main.tsx, so this never fires there.
+      if (/\.github\.io$/.test(location.hostname) && document.querySelector('script[src="/src/main.tsx"]'))
+        location.replace('release/SVM-Visualizer.html' + location.hash);
+    </script>
   </body>
 </html>
