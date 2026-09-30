@@ -490,11 +490,20 @@ export class Engine {
       ins: {
         top: (((ov?.title ?? true) ? 84 : 30) + cap) * S,
         right,
-        bottom: (62 + (cb && portrait ? 64 : 0) + (this.exporting ? 0 : this.uiInset)) * S,
+        bottom: (62 + (cb && portrait ? this.portraitColorbarRoom(n) : 0) + (this.exporting ? 0 : this.uiInset)) * S,
         left: 70 * S,
       },
       opt: { pad, capBand: cap * S, lumBand: (n >= 3 ? LUM_BAND_GRID : LUM_BAND) * S },
     };
+  }
+
+  /**
+   * Portrait frames: room under the plot's axis band for the horizontal colorbar (CSS px). Grids of
+   * 3–6 panels fill their cells (no centering slack below the plot), so they reserve the colorbar's
+   * full height; single / two-panel frames keep their layout.
+   */
+  private portraitColorbarRoom(n: number): number {
+    return n >= 3 ? 80 : 64;
   }
 
   /** Grid of the current model's views. */
@@ -822,7 +831,7 @@ export class Engine {
     const tt = title ? this.titleText() : null;
     const titleExtra = tt ? (tt.lines.length - 1) * Math.ceil(TITLE_LINE) + Math.max(0, tt.subLines.length - 1) * Math.ceil(SUBTITLE_LINE) : 0;
     let top = (title ? 84 + titleExtra : 30) + captions;
-    let bottom = 62 + (cb && portrait ? 64 : 0);
+    let bottom = 62 + (cb && portrait ? this.portraitColorbarRoom(this.viewPanels()) : 0);
     let left = 70;
     if (preset === 'perspective') {
       top += 6;
