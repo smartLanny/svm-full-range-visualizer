@@ -78,3 +78,33 @@ describe('JSON round trip keeps the English aliases', () => {
     expect(back.id).not.toBe(r.record!.id);
   });
 });
+
+describe('side-by-side panel strings (zh + en)', () => {
+  const keys = [
+    'shell.inspector.scene3d.pickPanel',
+    'shell.inspector.scene3d.removePanel',
+    'shell.inspector.scene3d.addPanel',
+    'shell.inspector.scene3d.panelsFull',
+    'shell.inspector.scene3d.fillVisible',
+    'shell.inspector.scene3d.fillVisibleHint',
+    'shell.inspector.scene3d.panelsHint',
+    'shell.sidebar.addToCompare',
+    'shell.sidebar.removeFromCompare',
+    'shell.sidebar.compareFull',
+    'shell.sidebar.compareMin',
+    'shell.sidebar.isPanel',
+    'shell.sidebar.isPanelUnused',
+    'scene3d.export.sideBySideN',
+  ];
+  it('exist in both languages, English without CJK, placeholders filled', () => {
+    const bad: string[] = [];
+    const vars = { p: 'C', n: 4, max: 6 };
+    for (const k of keys)
+      for (const lang of ['zh', 'en'] as const) {
+        const s = translate(lang, k, vars);
+        if (s === k || /\{\w+\}/.test(s) || (lang === 'en' && /[一-鿿]/.test(s))) bad.push(`${lang}:${k}`);
+      }
+    expect(bad).toEqual([]);
+    expect(translate('zh', 'scene3d.export.sideBySideN', { n: 6 })).toBe('并排对比_6条');
+  });
+});
