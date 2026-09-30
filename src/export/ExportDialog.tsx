@@ -418,32 +418,49 @@ export default function ExportDialog({ open, onClose, target }: ExportDialogProp
           </Row>
 
           {isVideo && anim && (
-            <>
-              <Row label={t('export.fps.label')} hint={t('export.fps.hint')}>
-                <Segmented<string>
-                  fullWidth
-                  size="md"
-                  value={String(prefs.fps)}
-                  onChange={(v) => patch({ fps: Number(v) as ExportFps })}
-                  aria-label={t('export.fps.label')}
-                  options={FPS_OPTIONS.map((f) => ({ value: String(f), label: `${f} fps` }))}
-                />
-              </Row>
-              <div className="grid grid-cols-2 gap-x-4 gap-y-2 rounded-lg bg-surface-1 px-3 py-2.5 text-2xs ring-1 ring-inset ring-line">
-                <div className="flex min-w-0 flex-col gap-0.5">
-                  <span className="text-ink-3">{t('export.animation')}</span>
-                  <span className="font-mono tabular-nums text-ink-1">{t('export.durationFrames', { duration: formatDuration(frames / prefs.fps), frames })}</span>
-                </div>
-                <div className="flex min-w-0 flex-col gap-0.5">
-                  <span className="text-ink-3">{t('export.estimate')}</span>
-                  <span className="font-mono tabular-nums text-ink-1">≈ {formatBytes(estimateVideoBytes(size, prefs.fps, anim.duration))}</span>
-                </div>
-                <div className="col-span-2 flex flex-col gap-0.5 border-t border-line pt-2">
-                  <span className="text-ink-3">{t('export.encoder.label')}</span>
-                  <span data-testid="export-encoder">{encoderLine}</span>
-                </div>
+            <Row label={t('export.fps.label')} hint={t('export.fps.hint')}>
+              <Segmented<string>
+                fullWidth
+                size="md"
+                value={String(prefs.fps)}
+                onChange={(v) => patch({ fps: Number(v) as ExportFps })}
+                aria-label={t('export.fps.label')}
+                options={FPS_OPTIONS.map((f) => ({ value: String(f), label: `${f} fps` }))}
+              />
+            </Row>
+          )}
+
+          {/* The chosen content in full (the list truncates its detail) and what the file will be. */}
+          {content && (
+            <div className="flex flex-col gap-2 rounded-lg bg-surface-1 px-3 py-2.5 text-2xs ring-1 ring-inset ring-line" data-testid="export-summary">
+              <div className="flex min-w-0 flex-col gap-0.5">
+                <span className="text-xs font-medium text-ink-1">{content.label}</span>
+                {content.detail && <span className="leading-snug text-ink-3">{content.detail}</span>}
               </div>
-            </>
+              {isVideo && anim ? (
+                <div className="grid grid-cols-2 gap-x-4 gap-y-2 border-t border-line pt-2">
+                  <div className="flex min-w-0 flex-col gap-0.5">
+                    <span className="text-ink-3">{t('export.animation')}</span>
+                    <span className="font-mono tabular-nums text-ink-1">{t('export.durationFrames', { duration: formatDuration(frames / prefs.fps), frames })}</span>
+                  </div>
+                  <div className="flex min-w-0 flex-col gap-0.5">
+                    <span className="text-ink-3">{t('export.estimate')}</span>
+                    <span className="font-mono tabular-nums text-ink-1">≈ {formatBytes(estimateVideoBytes(size, prefs.fps, anim.duration))}</span>
+                  </div>
+                  <div className="col-span-2 flex flex-col gap-0.5 border-t border-line pt-2">
+                    <span className="text-ink-3">{t('export.encoder.label')}</span>
+                    <span data-testid="export-encoder">{encoderLine}</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between gap-3 border-t border-line pt-2">
+                  <span className="text-ink-3">{t('export.format')}</span>
+                  <span className="font-mono tabular-nums text-ink-1">
+                    PNG · {size.width}×{size.height}
+                  </span>
+                </div>
+              )}
+            </div>
           )}
         </div>
       </div>

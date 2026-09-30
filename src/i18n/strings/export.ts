@@ -57,6 +57,7 @@ const strings: StringsModule = {
     layoutNote: '并排 / 差值布局下，视频只演示记录 A 的开场动画；图片按当前布局导出。',
     durationFrames: '{duration} · {frames} 帧',
     estimate: '预计大小',
+    format: '文件格式',
     output: '输出文件',
     encoder: {
       label: '编码',
@@ -153,6 +154,7 @@ const strings: StringsModule = {
     layoutNote: 'In side-by-side / diff layout the video shows the intro of record A only; images keep the current layout.',
     durationFrames: '{duration} · {frames} frames',
     estimate: 'Estimated size',
+    format: 'File format',
     output: 'Output file',
     encoder: {
       label: 'Encoding',
