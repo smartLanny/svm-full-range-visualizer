@@ -83,6 +83,7 @@ const strings: StringsModule = {
     export: {
       intro: '开场动画',
       introOnlyA: '开场动画（仅 A：{name}）',
+      sideBySideN: '并排对比_{n}条',
     },
     valuesHint: {
       single: '数值未显示：格子太小，放大窗口后显示',
@@ -183,6 +184,7 @@ const strings: StringsModule = {
     export: {
       intro: 'Intro animation',
       introOnlyA: 'Intro animation (A only: {name})',
+      sideBySideN: 'side-by-side_{n}_records',
     },
     valuesHint: {
       single: 'Values hidden: cells too small — enlarge the window',

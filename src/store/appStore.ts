@@ -386,6 +386,9 @@ export const selectComparePanelIds = (s: AppState): string[] => {
   const ids = new Set(s.records.map((r) => r.id));
   return [s.activeId, s.compareId, ...s.compareExtraIds].filter((id, i, all): id is string => id !== null && ids.has(id) && all.indexOf(id) === i);
 };
+/** Records of the extra side-by-side panels C–F, in order (a new array per call). */
+export const selectCompareExtras = (s: AppState): SvmRecord[] =>
+  s.compareExtraIds.map((id) => s.records.find((r) => r.id === id)).filter((r): r is SvmRecord => !!r);
 /** Records of the side-by-side panels, in panel order (see selectComparePanelIds). */
 export const selectComparePanels = (s: AppState): SvmRecord[] => {
   const byId = new Map(s.records.map((r) => [r.id, r]));

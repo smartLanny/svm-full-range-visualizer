@@ -5,8 +5,8 @@
  * (gray increases away from the viewer / upward in top view), y = value · SY · heightScale.
  * Pure data — no three.js objects — so it can be unit tested.
  */
-import type { SceneLayout, SvmRecord } from '../../types';
-import { CONTOUR_LEVELS } from '../../types';
+import type { PanelLetter, SceneLayout, SvmRecord } from '../../types';
+import { CONTOUR_LEVELS, MAX_COMPARE_PANELS, PANEL_LETTERS } from '../../types';
 import { cellEdges, diffRecords, gridView, sampleView, terrainNitsTicks, type GridView } from '../../data/grid';
 
 /** World units per log10(nits + 1). */
@@ -22,7 +22,8 @@ export const BAR_GAP = 0.12;
 /** Maximum absolute bar gap per side (world units), so big cells don't look sparse. */
 export const BAR_GAP_MAX = 0.05;
 
-export type PanelId = 'A' | 'B' | 'D';
+/** Side-by-side panel letters (A–F, see PANEL_LETTERS); 'Δ' = the difference-map panel. */
+export type PanelId = PanelLetter | 'Δ';
 export type ValueKind = 'svm' | 'diff';
 
 export interface PanelModel {
@@ -94,6 +95,8 @@ export interface ModelInput {
   layout: SceneLayout;
   a: SvmRecord | null;
   b: SvmRecord | null;
+  /** Side-by-side: the extra panels C–F after A and B (ignored by the other layouts). */
+  extras?: readonly SvmRecord[];
   clipLowGray: boolean;
   maxNits: number | null;
   colorMax: number;
@@ -198,7 +201,7 @@ export function buildModel(input: ModelInput): ModelResult {
     const ex = extents(diff.view);
     const domain: Domain = { lx0: ex.lx0, lx1: ex.lx1, g0: ex.g0, g1: ex.g1 };
     const { mapX, mapZ } = mappers(domain, 0, sz);
-    const panel = makePanel('D', a, diff.view, 'diff', diff.values, mapX, mapZ, 0);
+    const panel = makePanel('Δ', a, diff.view, 'diff', diff.values, mapX, mapZ, 0);
     panel.other = b!;
     panel.otherValues = diff.view.points.map((row, r) =>
       row.map((_, c) => {
@@ -210,7 +213,7 @@ export function buildModel(input: ModelInput): ModelResult {
     return { ok: true, model: finish(input, 'diff', [panel], domain, range) };
   }
 
-  const recs = layout === 'sideBySide' ? [a, b!] : [a];
+  const recs = layout === 'sideBySide' ? [a, b!, ...(input.extras ?? [])].slice(0, MAX_COMPARE_PANELS) : [a];
   const views = recs.map((r) => gridView(r, opts));
   if (views.some((v) => v.grays.length === 0 || v.x.length === 0)) return { ok: false, reason: 'empty' };
   const exs = views.map(extents);
@@ -221,11 +224,13 @@ export function buildModel(input: ModelInput): ModelResult {
     g1: Math.max(...exs.map((e) => e.g1)),
   };
   const width = (domain.lx1 - domain.lx0) * SX;
+  // Side by side: the panels lie in a row in world space (each view's camera is moved to its
+  // panel, docs/adr/0002), centered on the single-panel mapping; their letters follow the order.
   const panels = recs.map((rec, i) => {
-    const offset = recs.length === 1 ? 0 : (i === 0 ? -1 : 1) * (width + PANEL_GAP) * 0.5;
+    const offset = (i - (recs.length - 1) / 2) * (width + PANEL_GAP);
     const { mapX, mapZ } = mappers(domain, offset, sz);
     const values = views[i].points.map((row) => row.map((p) => (p && Number.isFinite(p.svm) ? p.svm : null)));
-    return makePanel(recs.length === 1 ? 'A' : i === 0 ? 'A' : 'B', rec, views[i], 'svm', values, mapX, mapZ, offset);
+    return makePanel(PANEL_LETTERS[i], rec, views[i], 'svm', values, mapX, mapZ, offset);
   });
   return { ok: true, model: finish(input, 'svm', panels, domain, input.colorMax) };
 }

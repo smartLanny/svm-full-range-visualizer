@@ -1,7 +1,7 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { Box, Hash, Maximize2, Minus, Plus } from 'lucide-react';
-import { getAppState, selectActiveRecord, selectCompareRecord, useAppStore, type AppState } from '../store/appStore';
+import { getAppState, selectActiveRecord, selectCompareExtras, selectCompareRecord, useAppStore, type AppState } from '../store/appStore';
 import { getT, useT } from '../i18n';
 import { IconButton, Segmented } from '../ui';
 import { cn } from '../ui/cn';
@@ -25,6 +25,8 @@ function readSettings(st: AppState): EngineSettings {
     lang: st.lang,
     a: selectActiveRecord(st),
     b: selectCompareRecord(st),
+    // Side-by-side panels C–F (the engine ignores them in the other layouts).
+    extras: selectCompareExtras(st),
     clipLowGray: st.clipLowGray,
     maxNits: st.maxNits,
     representation: st.representation,
@@ -47,6 +49,7 @@ const RELEVANT: (keyof AppState)[] = [
   'records',
   'activeId',
   'compareId',
+  'compareExtraIds',
   'clipLowGray',
   'maxNits',
   'representation',
