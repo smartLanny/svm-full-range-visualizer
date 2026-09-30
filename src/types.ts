@@ -63,6 +63,12 @@ export type ViewPreset = 'perspective' | 'top' | 'front' | 'side';
 /** What the 3D stage shows. */
 export type SceneLayout = 'single' | 'sideBySide' | 'diff';
 
+/** Side-by-side panel letters: A (activeId), B (compareId), then the extra panels C–F. */
+export const PANEL_LETTERS = ['A', 'B', 'C', 'D', 'E', 'F'] as const;
+export type PanelLetter = (typeof PANEL_LETTERS)[number];
+/** Most records compared side by side (A, B + up to four extra panels). */
+export const MAX_COMPARE_PANELS = PANEL_LETTERS.length;
+
 export type LightingMode = 'studio' | 'flat';
 
 /** 2D cross-section mode. */

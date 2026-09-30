@@ -244,7 +244,7 @@ export function startAutoSave(): () => void {
       lastSettings = settingsJson;
       writes.push([KEY.settings, settings]);
     }
-    const prefs: RecordPrefs = { hiddenIds: s.hiddenIds, activeId: s.activeId, compareId: s.compareId, deviceColors: s.deviceColors };
+    const prefs: RecordPrefs = { hiddenIds: s.hiddenIds, activeId: s.activeId, compareId: s.compareId, compareExtraIds: s.compareExtraIds, deviceColors: s.deviceColors };
     const prefsJson = JSON.stringify(prefs);
     if (prefsJson !== lastPrefs) {
       lastPrefs = prefsJson;
