@@ -1,8 +1,8 @@
 /**
  * Export contract between views and the export module (docs/adr/0010).
  *
- * A view that can be exported (3D terrain, 2D chart, later the stats page) registers an
- * ExportTarget while mounted. It lists what it can export — its CONTENTS (addendum 2026-09-30):
+ * A view that can be exported (3D terrain, 2D chart, stats page) registers an ExportTarget while
+ * mounted. It lists what it can export — its CONTENTS (addendum 2026-09-30):
  * the frame on screen, other renderings of the same data (the 3D layout in top view, the other 2D
  * slice, …) and its animations. The dialog shows that list for the active tab; the exporter then
  * drives the chosen content offscreen:
@@ -25,7 +25,9 @@
  *   app store or persisted settings, and the on-screen view is exactly what it was after end()
  *   (no flash while exporting, no state change afterwards).
  * - Content ids are stable strings per view (the dialog remembers the last choice per view);
- *   CURRENT_CONTENT = exactly what is on screen now.
+ *   CURRENT_CONTENT = exactly what is on screen now. A view whose screen is a page rather than a
+ *   picture (the stats page) may list only its renderings instead ('cards', 'table'), marking the
+ *   one on screen `current`; it still accepts CURRENT_CONTENT / undefined as "the one on screen".
  *
  * Backward compatibility: a target without contents() exports two implicit contents — the frame on
  * screen (CURRENT_CONTENT) and, if animation() returns one, its animation (ANIMATION_CONTENT) —
