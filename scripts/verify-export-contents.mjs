@@ -14,16 +14,24 @@
  * - the on-screen view is exactly restored (screenshots before / after are identical) and the app
  *   store (hence the persisted settings) never changes during an export;
  * - videos (unless --quick): 3D intro and both 2D sweeps decode with the expected size / duration
- *   and non-black frames (frames are saved as PNGs next to the files for a visual check).
+ *   and non-black frames (frames are saved as PNGs next to the files for a visual check);
+ * - the stats page (addendum "stats page"): the header button is enabled, the dialog offers the
+ *   cards and the table (images), files are named SVM_统计摘要_16条_1920x1080.png /
+ *   SVM_统计表格_…, have the chosen size in 16:9 / 9:16 / 1:1, equal a render of known layout
+ *   (the renderer's own placement of every card / table band), every card has its title text and
+ *   heatmap, a card drawn by the exporter matches the card on screen, English names, fewer records.
  *
  *   npx vite --port 5315 &
- *   LC_ALL=C.UTF-8 PW_MODULE=/path/to/playwright/index.mjs node scripts/verify-export-contents.mjs http://127.0.0.1:5315/ [outDir] [--quick]
+ *   LC_ALL=C.UTF-8 PW_MODULE=/path/to/playwright/index.mjs node scripts/verify-export-contents.mjs http://127.0.0.1:5315/ [outDir] [--quick] [--only=3d|2d|stats|header]
  */
 import fs from 'fs';
 import path from 'path';
 
 const args = process.argv.slice(2).filter((a) => !a.startsWith('--'));
 const QUICK = process.argv.includes('--quick');
+/** Run one section only (3d, 2d, stats, header). */
+const ONLY = (process.argv.find((a) => a.startsWith('--only=')) ?? '').slice(7) || null;
+const run = (section) => !ONLY || ONLY === section;
 const base = (args[0] || 'http://127.0.0.1:5315/').replace(/\/?$/, '/');
 const outDir = args[1] || 'snap-out/export-contents';
 fs.mkdirSync(outDir, { recursive: true });
@@ -97,6 +105,43 @@ function installHelpers() {
       return { mean: sum / (pa.d.length / 4), big: big / (pa.d.length / 4) };
     },
     /**
+     * Pixels of the region (x, y, w, h) of an image: share of bright, unsaturated "text" pixels
+     * (ink-1 / ink-2 on the dark theme) and of saturated (data-colored) pixels.
+     */
+    async region(b64, x, y, w, h) {
+      const p = await pixels(b64);
+      let bright = 0;
+      let sat = 0;
+      let n = 0;
+      for (let yy = Math.max(0, Math.round(y)); yy < Math.min(p.h, Math.round(y + h)); yy++) {
+        for (let xx = Math.max(0, Math.round(x)); xx < Math.min(p.w, Math.round(x + w)); xx++) {
+          const i = (yy * p.w + xx) * 4;
+          n++;
+          const mx = Math.max(p.d[i], p.d[i + 1], p.d[i + 2]);
+          const mn = Math.min(p.d[i], p.d[i + 1], p.d[i + 2]);
+          if (mx > 170 && mx - mn < 40) bright++;
+          if (saturated(p.d, i)) sat++;
+        }
+      }
+      return { bright: bright / Math.max(1, n), sat: sat / Math.max(1, n) };
+    },
+    /** Mean absolute difference (0–255) of two same-size images outside the rectangles `mask` ([x, y, w, h]). */
+    async diffMasked(a, b, mask = []) {
+      const pa = await pixels(a);
+      const pb = await pixels(b, pa.w, pa.h);
+      let sum = 0;
+      let n = 0;
+      for (let y = 0; y < pa.h; y++) {
+        for (let x = 0; x < pa.w; x++) {
+          if (mask.some(([mx, my, mw, mh]) => x >= mx && x < mx + mw && y >= my && y < my + mh)) continue;
+          const i = (y * pa.w + x) * 4;
+          sum += (Math.abs(pa.d[i] - pb.d[i]) + Math.abs(pa.d[i + 1] - pb.d[i + 1]) + Math.abs(pa.d[i + 2] - pb.d[i + 2])) / 3;
+          n++;
+        }
+      }
+      return sum / Math.max(1, n);
+    },
+    /**
      * Left edge of the colored plot per row (first saturated pixel from the left) between the
      * fractions y0..y1 of the height: a top view (orthographic heatmap) has a vertical edge.
      */
@@ -158,7 +203,8 @@ const settingsOf = (page) =>
 async function screen(page, name) {
   await page.mouse.move(4, 896);
   await page.waitForTimeout(350);
-  const sel = (await page.evaluate(() => window.__svm.store.getState().tab)) === 'chart2d' ? 'canvas[role=img]' : '[data-testid=scene3d] canvas';
+  const tab = await page.evaluate(() => window.__svm.store.getState().tab);
+  const sel = tab === 'chart2d' ? 'canvas[role=img]' : tab === 'stats' ? '[data-testid=stats-view]' : '[data-testid=scene3d] canvas';
   const buf = await page.locator(sel).first().screenshot();
   fs.writeFileSync(path.join(outDir, `${name}.png`), buf);
   return buf.toString('base64');
@@ -269,7 +315,7 @@ const setStore = (page, fn) => page.evaluate(fn);
 const settle = (page, ms = 1600) => page.waitForTimeout(ms);
 
 // =================================================================================== 3D
-{
+if (run('3d')) {
   const { page, problems } = await open();
   const viewSize = await page.evaluate(() => window.__svm3d.screenSize());
   info(`3D canvas drawing buffer ${viewSize.width}x${viewSize.height}`);
@@ -455,7 +501,7 @@ const settle = (page, ms = 1600) => page.waitForTimeout(ms);
 }
 
 // =================================================================================== 2D
-{
+if (run('2d')) {
   const { page, problems } = await open();
   await setStore(page, () => window.__svm.store.getState().patch({ tab: 'chart2d', sliceMode: 'gray', sliceGray: 127, sliceNits: 100, axisMode: 'standard' }));
   await settle(page, 1200);
@@ -514,8 +560,181 @@ const settle = (page, ms = 1600) => page.waitForTimeout(ms);
   await page.close();
 }
 
+// =================================================================================== stats
+if (run('stats')) {
+  const { page, problems } = await open();
+  await setStore(page, () => window.__svm.store.getState().set('tab', 'stats'));
+  await page.waitForSelector('[data-testid=stats-view] article');
+  await settle(page, 1200);
+  const n = await page.evaluate(() => window.__svm.store.getState().records.filter((r) => !window.__svm.store.getState().hiddenIds.includes(r.id)).length);
+  ok(await page.isEnabled('[data-testid=export-button]'), `stats: header "导出" enabled (${n} visible records)`);
+  const title = await page.getAttribute('[data-testid=export-button] >> xpath=..', 'title');
+  ok(/卡片/.test(title ?? '') && /表格/.test(title ?? ''), `stats: tooltip lists the choices ("${title}")`);
+  await openDialog(page);
+  let items = await listed(page);
+  ok(items.map((c) => `${c.id}:${c.kind}`).join(',') === 'cards:image,table:image', `stats: contents ${items.map((c) => `${c.id}:${c.kind}`).join(', ')}`);
+  ok(items.find((c) => c.checked)?.id === 'cards' && items.filter((c) => c.onScreen).map((c) => c.id).join(',') === 'cards', 'stats: cards on screen → "统计卡片" marked 屏幕上 and preselected');
+  ok(items.map((c) => c.label).join(',') === '统计卡片,统计表格', `stats: labels ${items.map((c) => c.label).join(', ')}`);
+  await page.screenshot({ path: path.join(outDir, 'dialog-stats.png') });
+  await page.keyboard.press('Escape');
+
+  /** The export equals the renderer's output for that size (layout known from the same call). */
+  const known = (w, h, content) => page.evaluate(([w, h, c]) => window.__svmStatsExport.render(w, h, c), [w, h, content]);
+  const region = (file, r) => page.evaluate(([b, r]) => window.__vx.region(b, r.x, r.y, r.w, r.h), [b64(file), r]);
+
+  // --- cards, 1080p 16:9 ---------------------------------------------------------------------
+  const cards = await exportContent(page, 'cards', { tag: 'stats-cards' });
+  ok(cards.name === `SVM_统计摘要_${n}条_1920x1080.png`, `stats-cards: name ${cards.name}`);
+  await checkPng(page, cards.file, { width: 1920, height: 1080 }, 'stats-cards', { minSat: 0.05, minFg: 0.2 });
+  let ref = await known(1920, 1080, 'cards');
+  fs.writeFileSync(path.join(outDir, 'stats-cards-known.png'), Buffer.from(ref.png.split(',')[1], 'base64'));
+  let d = await page.evaluate(([a, b]) => window.__vx.diff(a, b, 960), [b64(cards.file), ref.png.split(',')[1]]);
+  ok(d.mean < 0.5, `stats-cards: equals the render of known layout (mean diff ${d.mean.toFixed(3)})`);
+  const g = ref.info.grid;
+  ok(g.cols * g.rows >= n && ref.info.cards.length === n, `stats-cards: ${n} cards on a ${g.cols}×${g.rows} grid, card ${Math.round(g.cardW)}×${Math.round(g.cardH)} design px at ×${g.scale.toFixed(2)}`);
+  const s = g.scale;
+  const head = await region(cards.file, { x: ref.info.header.x + 20, y: ref.info.header.y, w: 360 * ref.info.scale, h: ref.info.header.h });
+  ok(head.bright > 0.01, `stats-cards: title / scope text in the header band (${(head.bright * 100).toFixed(1)} % text px)`);
+  let textOk = 0;
+  let heatOk = 0;
+  for (const c of ref.info.cards) {
+    const name = await region(cards.file, { x: c.x + 66 * s, y: c.y + 14 * s, w: c.w - 82 * s, h: 20 * s });
+    const hero = await region(cards.file, { x: c.x + 16 * s, y: c.y + 80 * s, w: 80 * s, h: 40 * s });
+    const heat = await region(cards.file, { x: c.x + 60 * s, y: c.y + c.h * 0.58, w: c.w - 80 * s, h: 60 * s });
+    if (name.bright > 0.04 && hero.bright > 0.08) textOk++;
+    if (heat.sat > 0.3) heatOk++;
+  }
+  ok(textOk === n, `stats-cards: every card has its name and safe share drawn (${textOk} / ${n})`);
+  ok(heatOk === n, `stats-cards: every card has its heatmap thumbnail (${heatOk} / ${n})`);
+
+  // --- a card drawn by the exporter vs the card on screen (fidelity) -------------------------
+  {
+    const idx = await page.evaluate(() => {
+      const arts = [...document.querySelectorAll('[data-testid=stats-view] article')];
+      const plain = arts.findIndex((a) => !a.textContent.includes('已剔除'));
+      const badge = arts.findIndex((a) => a.textContent.includes('已剔除'));
+      return [plain, badge].filter((i) => i >= 0);
+    });
+    const shots = [];
+    for (const i of idx) {
+      const el = page.locator('[data-testid=stats-view] article').nth(i);
+      await el.scrollIntoViewIfNeeded();
+      await page.mouse.move(4, 896);
+      await page.waitForTimeout(300);
+      const box = await el.boundingBox();
+      const full = await page.screenshot();
+      const dom = await page.evaluate(
+        async ([b, x, y, w, h]) => {
+          const im = new Image();
+          await new Promise((r) => {
+            im.onload = r;
+            im.src = `data:image/png;base64,${b}`;
+          });
+          const c = document.createElement('canvas');
+          c.width = Math.round(w);
+          c.height = Math.round(h);
+          c.getContext('2d').drawImage(im, -Math.round(x), -Math.round(y));
+          return c.toDataURL('image/png').split(',')[1];
+        },
+        [full.toString('base64'), box.x, box.y, box.width, box.height],
+      );
+      const cv = (await page.evaluate(([i, w, h]) => window.__svmStatsExport.card(i, w, h, 1), [i, box.width, box.height])).split(',')[1];
+      fs.writeFileSync(path.join(outDir, `stats-card${i}-screen.png`), Buffer.from(dom, 'base64'));
+      fs.writeFileSync(path.join(outDir, `stats-card${i}-export.png`), Buffer.from(cv, 'base64'));
+      // The "在 3D 中查看" button (top right) is left out of pictures.
+      const mask = [[Math.round(box.width) - 120, 0, 120, 40]];
+      shots.push({ i, dom, cv, mask });
+    }
+    for (const sh of shots) {
+      const same = await page.evaluate(([a, b, m]) => window.__vx.diffMasked(a, b, m), [sh.dom, sh.cv, sh.mask]);
+      const other = shots.find((o) => o.i !== sh.i);
+      const cross = other ? await page.evaluate(([a, b, m]) => window.__vx.diffMasked(a, b, m), [other.dom, sh.cv, sh.mask]) : null;
+      // Residual: glyph anti-aliasing / hinting (canvas vs DOM text) and half-pixel card positions.
+      ok(same < 6 && (cross === null || cross > same * 3), `stats: card ${sh.i} drawn by the exporter matches the card on screen (mean diff ${same.toFixed(2)}${cross !== null ? `; vs another card ${cross.toFixed(2)}` : ''})`);
+    }
+    await page.evaluate(() => document.querySelector('[data-testid=stats-view] .overflow-auto')?.scrollTo(0, 0));
+    await page.waitForTimeout(200);
+  }
+
+  // --- table, 1080×1920 (portrait: two stacked bands) ------------------------------------------
+  const table = await exportContent(page, 'table', { aspect: '9:16', tag: 'stats-table-portrait' });
+  ok(table.name === `SVM_统计表格_${n}条_1080x1920.png`, `stats-table: name ${table.name}`);
+  await checkPng(page, table.file, { width: 1080, height: 1920 }, 'stats-table-portrait', { minSat: 0.01, minFg: 0.05 });
+  ref = await known(1080, 1920, 'table');
+  fs.writeFileSync(path.join(outDir, 'stats-table-portrait-known.png'), Buffer.from(ref.png.split(',')[1], 'base64'));
+  d = await page.evaluate(([a, b]) => window.__vx.diff(a, b, 540), [b64(table.file), ref.png.split(',')[1]]);
+  ok(d.mean < 0.5, `stats-table-portrait: equals the render of known layout (mean diff ${d.mean.toFixed(3)})`);
+  ok(
+    ref.info.bands.length === 2 && ref.info.bands[0].cols[0] === 'record' && ref.info.bands[1].cols.join(',') === 'record,at0,at1,at2,at3,coverage',
+    `stats-table-portrait: two bands (${ref.info.bands.map((b) => b.cols.length).join(' + ')} columns, record column repeated)`,
+  );
+  for (const [bi, b] of ref.info.bands.entries()) {
+    const sc = ref.info.scale;
+    const rows = await region(table.file, { x: b.box.x + 60 * sc, y: b.box.y + 68 * sc, w: 120 * sc, h: b.box.h - 68 * sc });
+    ok(rows.bright > 0.02, `stats-table-portrait: band ${bi + 1} has its record names (${(rows.bright * 100).toFixed(1)} % text px)`);
+  }
+  const tableLand = await exportContent(page, 'table', { tag: 'stats-table' });
+  await checkPng(page, tableLand.file, { width: 1920, height: 1080 }, 'stats-table', { minSat: 0.01, minFg: 0.05 });
+  ref = await known(1920, 1080, 'table');
+  ok(ref.info.bands.length === 1 && ref.info.bands[0].cols.length === 13, `stats-table: landscape = one band of ${ref.info.bands[0].cols.length} columns`);
+
+  // remembered choice: the table again, though the cards are on screen
+  await openDialog(page);
+  items = await listed(page);
+  ok(items.find((c) => c.checked)?.id === 'table', `stats: remembered "统计表格" preselected (${items.find((c) => c.checked)?.id})`);
+  await page.keyboard.press('Escape');
+
+  // --- cards 4K square ---------------------------------------------------------------------------
+  const sq = await exportContent(page, 'cards', { quality: '2160', aspect: '1:1', tag: 'stats-cards-square' });
+  ok(sq.name === `SVM_统计摘要_${n}条_2160x2160.png`, `stats-cards-square: name ${sq.name}`);
+  await checkPng(page, sq.file, { width: 2160, height: 2160 }, 'stats-cards-square', { minSat: 0.05, minFg: 0.15 });
+  ref = await known(2160, 2160, 'cards');
+  d = await page.evaluate(([a, b]) => window.__vx.diff(a, b, 720), [b64(sq.file), ref.png.split(',')[1]]);
+  ok(d.mean < 0.5, `stats-cards-square: equals the render of known layout, ${ref.info.grid.cols}×${ref.info.grid.rows} grid (mean diff ${d.mean.toFixed(3)})`);
+
+  // --- table on screen: it is the one marked 屏幕上 ------------------------------------------------
+  await page.click('[data-testid=stats-controls] button:has-text("表格")');
+  await settle(page, 600);
+  await openDialog(page);
+  items = await listed(page);
+  ok(items.filter((c) => c.onScreen).map((c) => c.id).join(',') === 'table', `stats: table on screen → marked 屏幕上 (${items.filter((c) => c.onScreen).map((c) => c.id)})`);
+  await page.keyboard.press('Escape');
+  await exportContent(page, 'table', { tag: 'stats-table-onscreen', quality: 'window' });
+  await page.click('[data-testid=stats-controls] button:has-text("卡片")');
+  await settle(page, 600);
+
+  // --- English, fewer records ------------------------------------------------------------------
+  await setStore(page, () => window.__svm.store.getState().set('lang', 'en'));
+  await settle(page, 600);
+  await openDialog(page);
+  items = await listed(page);
+  ok(items.map((c) => c.label).join(',') === 'Stats cards,Stats table', `stats en: labels ${items.map((c) => c.label).join(', ')}`);
+  await page.keyboard.press('Escape');
+  const en = await exportContent(page, 'cards', { tag: 'stats-cards-en' });
+  ok(en.name === `SVM_summary_stats_${n}_records_1920x1080.png`, `stats en: name ${en.name}`);
+  await checkPng(page, en.file, { width: 1920, height: 1080 }, 'stats-cards-en', { minSat: 0.05, minFg: 0.2 });
+  await setStore(page, () => {
+    const st = window.__svm.store.getState();
+    st.set('lang', 'zh');
+    st.setHidden(st.records.slice(3).map((r) => r.id), true);
+  });
+  await settle(page, 800);
+  const three = await exportContent(page, 'cards', { tag: 'stats-cards-3' });
+  ok(three.name === 'SVM_统计摘要_3条_1920x1080.png', `stats 3 records: name ${three.name}`);
+  ref = await known(1920, 1080, 'cards');
+  ok(ref.info.grid.cols === 3 && ref.info.grid.rows === 1 && ref.info.grid.scale > 1.2, `stats 3 records: one row of 3 larger cards (×${ref.info.grid.scale.toFixed(2)})`);
+  d = await page.evaluate(([a, b]) => window.__vx.diff(a, b, 960), [b64(three.file), ref.png.split(',')[1]]);
+  ok(d.mean < 0.5, `stats 3 records: equals the render of known layout (mean diff ${d.mean.toFixed(3)})`);
+  await setStore(page, () => {
+    const st = window.__svm.store.getState();
+    st.setHidden(st.records.map((r) => r.id), false);
+  });
+  ok(problems.length === 0, `stats: no page problems ${problems.join(' | ')}`);
+  await page.close();
+}
+
 // =================================================================================== header button
-{
+if (run('header')) {
   const { page, problems } = await open();
   const title3d = await page.getAttribute('[data-testid=export-button] >> xpath=..', 'title');
   ok(/俯视|并排/.test(title3d ?? ''), `header: 3D tooltip lists the choices ("${title3d}")`);
@@ -523,6 +742,10 @@ const settle = (page, ms = 1600) => page.waitForTimeout(ms);
   await page.waitForTimeout(400);
   const title2d = await page.getAttribute('[data-testid=export-button] >> xpath=..', 'title');
   ok(/截面|扫描/.test(title2d ?? ''), `header: 2D tooltip lists the choices ("${title2d}")`);
+  await page.evaluate(() => window.__svm.store.getState().set('tab', 'stats'));
+  await page.waitForTimeout(400);
+  const titleStats = await page.getAttribute('[data-testid=export-button] >> xpath=..', 'title');
+  ok((await page.isEnabled('[data-testid=export-button]')) && /卡片|表格/.test(titleStats ?? ''), `header: stats button enabled, tooltip "${titleStats}"`);
   ok(problems.length === 0, `header: no page problems ${problems.join(' | ')}`);
   await page.close();
 }
