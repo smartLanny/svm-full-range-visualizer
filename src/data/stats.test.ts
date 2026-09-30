@@ -8,6 +8,7 @@ import { detectAnomalies, excludeAnomalies } from './anomalies';
 import { recordStyles } from './colors';
 import { buildScene, type ChartInputs } from '../chart2d/scene';
 import { buildTable } from '../chart2d/table';
+import { settleSlice, smoothSliceAtGray } from '../chart2d/slices';
 
 const load = (f: string) => JSON.parse(fs.readFileSync(path.resolve(__dirname, '../../public/datasets', f), 'utf8')) as Dataset;
 const BUNDLED = fs.readdirSync(path.resolve(__dirname, '../../public/datasets')).filter((f) => f.endsWith('.json') && f !== 'manifest.json');
@@ -350,12 +351,18 @@ describe('computeRecordStats — bundled records', () => {
           expect(top[top.length - 1].svm).toBeGreaterThanOrEqual(0.4);
         }
 
-        // svmAt agrees with the gray slice
+        // svmAt agrees with the gray slice: null outside its range, and inside it only across a
+        // gap of the 2D curve (a column whose reading was excluded or is missing at this gray).
         const slice = sliceAtGray(ds, 127);
+        const kept = settleSlice(smoothSliceAtGray(ds, 127)).sort((a, b) => a.x - b.x);
         s.svmAt.forEach(({ nits, svm }, k) => {
           expect(nits).toBe(SVM_AT_NITS[k]);
           if (nits < slice[0].nits || nits > slice[slice.length - 1].nits) expect(svm).toBeNull();
-          else expect(svm).not.toBeNull();
+          else if (svm === null) {
+            const i = kept.findIndex((p, j) => j + 1 < kept.length && p.x <= nits && nits <= kept[j + 1].x);
+            expect(i).toBeGreaterThanOrEqual(0);
+            expect(Math.abs(kept[i + 1].key - kept[i].key)).toBeGreaterThan(1);
+          }
         });
       }
     });

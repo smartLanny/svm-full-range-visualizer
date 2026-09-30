@@ -12,5 +12,7 @@
   {"file": "huawei_mate80rs_low_frequency.json", "device": "华为 Mate 80 RS", "deviceEn": "Huawei Mate 80 RS", "mode": "低频闪", "modeEn": "Low-flicker"},
   {"file": "huawei_mate80rs_low_frequency_60hz.json", "device": "华为 Mate 80 RS", "deviceEn": "Huawei Mate 80 RS", "mode": "低频闪 60Hz", "modeEn": "Low-flicker 60Hz"},
   {"file": "xiaomi18promax_adaptive_pro_off.json", "device": "小米 18 Pro Max", "deviceEn": "Xiaomi 18 Pro Max", "mode": "自适应刷新 Pro 关", "modeEn": "Adaptive refresh Pro off"},
-  {"file": "xiaomi18promax_adaptive_pro_on.json", "device": "小米 18 Pro Max", "deviceEn": "Xiaomi 18 Pro Max", "mode": "自适应刷新 Pro 开", "modeEn": "Adaptive refresh Pro on"}
+  {"file": "xiaomi18promax_adaptive_pro_on.json", "device": "小米 18 Pro Max", "deviceEn": "Xiaomi 18 Pro Max", "mode": "自适应刷新 Pro 开", "modeEn": "Adaptive refresh Pro on"},
+  {"file": "iPhone18ProMax.json", "device": "iPhone 18 Pro Max", "mode": "标准", "modeEn": "Standard"},
+  {"file": "iPhone18ProMax_smooth.json", "device": "iPhone 18 Pro Max", "mode": "平滑脉冲", "modeEn": "Smooth pulse"}
 ]

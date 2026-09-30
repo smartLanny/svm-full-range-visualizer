@@ -102,9 +102,9 @@ function check(rec: SvmRecord, c: Case): string[] {
 }
 
 describe('sweeps never pop (all bundled records, 60 fps)', () => {
-  it('has the bundled records, including the two with excluded cells', () => {
-    expect(records.length).toBe(14);
-    expect(records.filter((r) => r.excluded?.length).length).toBe(2);
+  it('has the bundled records, including the four with excluded cells', () => {
+    expect(records.length).toBe(16);
+    expect(records.filter((r) => r.excluded?.length).length).toBe(4);
   });
   for (const c of cases) {
     it(`${c.mode} sweep, ${c.axisMode} axes${c.clip ? '' : ', low grays shown'}`, () => {
