@@ -55,10 +55,11 @@ export const DEFAULT_SCENARIOS: ScenarioConfig = {
 /**
  * A scenario enters the composite only when valid cells cover at least this share of its
  * rectangle (log-luminance × gray area): below it the mean describes too small a part of the
- * scenario, so its weight goes to the others instead. 40 % rather than exactly half: the bundled
- * Xiaomi 18 Pro Max (Pro off) covers 49.98 % of the night scenario once the denoise has turned its
- * black-level readings into "no data" — a 50 % cut would sit on a real record and drop its strong
- * night (5.19), making its composite look like the best of all (0.83 instead of 2.14).
+ * scenario, so its weight goes to the others instead. 40 % rather than exactly half: the first
+ * Xiaomi 18 Pro Max (Pro off) session (test-fixtures/xiaomi18promax_v1_off.json) covers 49.98 % of
+ * the night scenario once the denoise has turned its black-level readings into "no data" — a 50 %
+ * cut would sit on a real record and drop its strong night (5.19), making its composite look like
+ * the best of all (0.83 instead of 2.14).
  */
 export const SCENARIO_MIN_COVERAGE = 0.4;
 

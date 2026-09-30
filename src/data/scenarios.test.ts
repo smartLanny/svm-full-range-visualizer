@@ -187,9 +187,11 @@ describe('independence from the view', () => {
 });
 
 describe('bundled records', () => {
-  const load = (f: string) => JSON.parse(fs.readFileSync(path.resolve(__dirname, '../../public/datasets', f), 'utf8')) as Dataset;
-  it('Xiaomi 18 Pro Max (Pro off): a half-covered night still counts (why the cut is 40 %, not 50 %)', () => {
-    const shown = processRecord(rawDataset(validateDataset(load('xiaomi18promax_adaptive_pro_off.json'))), { denoise: true }).record;
+  // The first Xiaomi 18 Pro Max session (superseded by a re-test) is kept in test-fixtures/.
+  const load = (f: string) =>
+    JSON.parse(fs.readFileSync(path.resolve(__dirname, f.includes('_v1_') ? '../../test-fixtures' : '../../public/datasets', f), 'utf8')) as Dataset;
+  it('Xiaomi 18 Pro Max (Pro off), first session: a half-covered night still counts (why the cut is 40 %, not 50 %)', () => {
+    const shown = processRecord(rawDataset(validateDataset(load('xiaomi18promax_v1_off.json'))), { denoise: true }).record;
     const ref = scenarioReference(shown);
     const night = scenarioOf(ref, 'night');
     expect(night.coverage).toBeGreaterThan(SCENARIO_MIN_COVERAGE);
@@ -197,6 +199,16 @@ describe('bundled records', () => {
     expect(night.used).toBe(true);
     expect(ref.dropped).toEqual([]);
     expect(scenarioGrade(ref.composite!)).toBe('visible');
+  });
+  it('the re-tested Xiaomi 18 Pro Max covers every scenario fully', () => {
+    for (const [f, composite] of [
+      ['xiaomi18promax_adaptive_pro_off.json', 1.66],
+      ['xiaomi18promax_adaptive_pro_on.json', 1.13],
+    ] as const) {
+      const ref = scenarioReference(processRecord(rawDataset(validateDataset(load(f))), { denoise: true }).record);
+      for (const id of ['night', 'indoor', 'outdoor'] as const) expect(scenarioOf(ref, id).coverage).toBeCloseTo(1, 6);
+      expect(ref.composite!).toBeCloseTo(composite, 2);
+    }
   });
 });
 
