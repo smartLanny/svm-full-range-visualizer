@@ -340,11 +340,12 @@ function Inspector3D() {
   const twoPlus = records.length >= 2;
   const showB = s.layout !== 'single';
   const diff = s.layout === 'diff';
-  const overlayKeys: (keyof Overlays)[] = ['contours', 'values', 'axes', 'colorbar', 'title'];
+  const overlayKeys: (keyof Overlays)[] = ['contours', 'values', 'scenarios', 'axes', 'colorbar', 'title'];
   const overlayHints: Partial<Record<keyof Overlays, string>> = {
     // Diff contours are ± ΔSVM levels whose spacing follows the diverging color range.
     contours: t(diff ? 'shell.inspector.scene3d.contoursHintDiff' : 'shell.inspector.scene3d.contoursHint'),
     values: t('shell.inspector.scene3d.valuesHint'),
+    scenarios: t('shell.inspector.scene3d.scenariosHint'),
   };
 
   return (
@@ -494,7 +495,7 @@ function Inspector3D() {
 
       <Section title={t('shell.inspector.scene3d.overlays')} icon={<ScanLine size={12} />}>
         {overlayKeys.map((k) => (
-          <Switch key={k} checked={s.overlays[k]} onChange={(v) => setOverlay(k, v)} label={t(`shell.inspector.scene3d.${k}`)} description={overlayHints[k]} />
+          <Switch key={k} checked={!!s.overlays[k]} onChange={(v) => setOverlay(k, v)} label={t(`shell.inspector.scene3d.${k}`)} description={overlayHints[k]} />
         ))}
       </Section>
 

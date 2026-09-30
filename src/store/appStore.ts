@@ -14,6 +14,7 @@ import type {
   ViewPreset,
 } from '../types';
 import { ColormapType, DEFAULT_MAX_NITS, MAX_COMPARE_PANELS } from '../types';
+import { DEFAULT_SCENARIOS, type ScenarioConfig } from '../data/scenarios';
 
 /** Animated views. */
 export type AnimTab = 'scene3d' | 'chart2d';
@@ -26,6 +27,11 @@ export interface Overlays {
   colorbar: boolean;
   /** In-canvas title (record name / slice). */
   title: boolean;
+  /**
+   * Outlines of the scenario-reference rectangles (夜间 / 室内 / 户外) in the top view. Default off;
+   * optional so that older saves / literals without it read as off.
+   */
+  scenarios?: boolean;
 }
 
 /** Persisted user settings. Everything here survives reloads (docs/adr/0007). */
@@ -69,6 +75,12 @@ export interface Settings {
   stageAspect: StageAspect;
   /** Pure black background in presentation mode. */
   presentBlack: boolean;
+
+  /**
+   * Scenario-weighted SVM reference (docs/adr/0009 addendum): per scenario (夜间 / 室内 / 户外) the
+   * level-luminance and gray range and the weight. Validated per scenario on load (bootstrap.ts).
+   */
+  scenarios: ScenarioConfig;
 }
 
 /**
@@ -93,13 +105,14 @@ export const DEFAULT_SETTINGS: Settings = {
   heightScale: 1,
   heightCap: 6,
   colorMax: 4,
-  overlays: { contours: true, values: false, axes: true, colorbar: true, title: true },
+  overlays: { contours: true, values: false, axes: true, colorbar: true, title: true, scenarios: false },
   sliceMode: 'gray',
   sliceGray: 127,
   sliceNits: 100,
   axisMode: 'adaptive',
   stageAspect: 'fit',
   presentBlack: false,
+  scenarios: DEFAULT_SCENARIOS,
 };
 
 /** Persisted per-record preferences. */

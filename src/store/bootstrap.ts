@@ -1,6 +1,7 @@
 import { loadBundledRecords } from '../data/bundled';
 import { validateDataset } from '../data/records';
 import { rawDataset } from '../data/denoise';
+import { sanitizeScenarios } from '../data/scenarios';
 import { ColormapType, type SvmRecord } from '../types';
 import { cleanExtras, DEFAULT_SETTINGS, useAppStore, type Overlays, type RecordPrefs, type Settings } from './appStore';
 import { applyBundledEdit, loadPersisted, setBundledManifest, startAutoSave } from './persistence';
@@ -45,6 +46,8 @@ const SETTING_CHECKS: { [K in keyof Settings]: Check } = {
   axisMode: oneOf('standard', 'adaptive', 'free'),
   stageAspect: oneOf('fit', '16:9', '9:16', '1:1'),
   presentBlack: isBool,
+  // An object here; every scenario is then checked on its own (sanitizeScenarios).
+  scenarios: (v) => !!v && typeof v === 'object' && !Array.isArray(v),
 };
 
 /**
@@ -68,6 +71,9 @@ export function sanitizeSettings(saved: unknown): Partial<Settings> {
     for (const k of Object.keys(overlays) as (keyof Overlays)[]) if (typeof o[k] === 'boolean') overlays[k] = o[k] as boolean;
     out.overlays = overlays;
   }
+  // Scenario reference: a new key (no revision needed); an invalid scenario falls back to its
+  // default, the valid ones are kept.
+  if (out.scenarios) out.scenarios = sanitizeScenarios(out.scenarios);
   return out;
 }
 
