@@ -410,9 +410,10 @@ function cardPass(p: Pen, e: Env, row: StatsRow, cw: number, h: number | null): 
   const critMark = mark('critical', s.criticalShare);
   p.text(t('stats.col.critical'), R, y0 + 15, 16, 12, 400, C.ink2, 'right');
   const critBase = baseline(y0 + 35, 20, 20);
+  // flex gap-1 + ml-0.5 between the number and "%"
   const pw = p.textB('%', R, critBase, 14, 500, C.ink3, 'right');
-  const cvw = p.textB(s.criticalShare === null ? '—' : (s.criticalShare * 100).toFixed(1), R - pw - 2, critBase, 20, 600, critMark === 'best' ? C.accentHover : C.ink1, 'right');
-  if (critMark === 'caveat') p.icon('warn', R - pw - 2 - cvw - 4 - 11, y0 + 35 + 4.5, 11, C.amber);
+  const cvw = p.textB(s.criticalShare === null ? '—' : (s.criticalShare * 100).toFixed(1), R - pw - 6, critBase, 20, 600, critMark === 'best' ? C.accentHover : C.ink1, 'right');
+  if (critMark === 'caveat') p.icon('warn', R - pw - 6 - cvw - 4 - 11, y0 + 35 + 4.5, 11, C.amber);
 
   shareBar(p, row, 16, y0 + 67, iw, 20, false);
 
@@ -482,7 +483,8 @@ function cardPass(p: Pen, e: Env, row: StatsRow, cw: number, h: number | null): 
     if (mm.value === null) p.textB('—', vx, vb, 15, 600, C.ink4);
     else {
       vx += p.textB(mm.value, vx, vb, 15, 600, mm.mark === 'best' ? C.accentHover : C.ink1);
-      if (mm.unit) p.textB(mm.unit, vx + 4, vb, 10, 400, C.ink3);
+      // flex gap-1 + ml-1 before the unit
+      if (mm.unit) p.textB(mm.unit, vx + 8, vb, 10, 400, C.ink3);
     }
     if (mm.sub) p.text(ellipsize(mm.sub, colW, 10, 400, p.m), x, mt + 38, 14, 10, 400, mm.subColor ?? C.ink3);
   });
@@ -955,14 +957,45 @@ export function renderStatsExport(canvas: HTMLCanvasElement, input: StatsExportI
   const measure = new Pen(null, m);
   const pen = new Pen(ctx, m);
   const rows = input.rows;
-  const hs0 = chromeScale(width, height);
 
   // legend strip: the table's legend line (as under the table on screen); the cards only carry
   // the low-coverage footnote when some record is left out of the ranking
   const footnote: StripItem[] = input.rank.low.size > 0 ? [{ kind: 'warn', text: t('stats.caveat.footnote') }] : [];
   const items: StripItem[] = content === 'table' && rows.length ? [{ kind: 'best', text: t('stats.bestHint') }, ...footnote, { kind: 'text', text: t('stats.metric.svmAtHint') }] : rows.length ? footnote : [];
-  const lines = items.length ? stripLines(measure, items, width / hs0 - 2 * STRIP.padX) : [];
-  const frame = pageFrame(width, height, lines.length);
+
+  // Cards: uniform card height per width (grid rows stretch to their tallest card).
+  const memo = new Map<number, number>();
+  const heightAt = (cw: number) => {
+    let h = memo.get(cw);
+    if (h === undefined) {
+      h = Math.max(...rows.map((r) => cardPass(measure, e, r, cw, null)));
+      memo.set(cw, h);
+    }
+    return h;
+  };
+  // Table: natural column widths and band heights.
+  const cols = tableCols(t);
+  const natural = content === 'table' && rows.length ? naturalWidths(measure, e, cols, rows) : [];
+  const bandHeight = (idx: number[]) => HEAD_H + rowHeights(measure, e, idx.map((i) => cols[i]), rows).reduce((a, h) => a + h, 0);
+
+  // Layout for a chrome scale hs. The chrome (title band, legend strip) follows the content when
+  // few records make the content large (up to 1.5× the base scale), so the title never looks lost.
+  const hs0 = chromeScale(width, height);
+  const plan = (hs: number) => {
+    const lines = items.length ? stripLines(measure, items, width / hs - 2 * STRIP.padX) : [];
+    const frame = pageFrame(width, height, lines.length, hs);
+    if (!rows.length) return { lines, frame, s: hs };
+    if (content === 'cards') {
+      const grid = chooseCardGrid(rows.length, frame.body, heightAt, 2.2 * hs0);
+      return { lines, frame, grid, s: grid.scale };
+    }
+    const fit = fitTable(natural, frame.body, bandHeight, tableSplit(cols), 1.8 * hs0);
+    return { lines, frame, fit, s: fit.scale };
+  };
+  let P = plan(hs0);
+  const hs1 = Math.min(1.5 * hs0, Math.max(hs0, P.s));
+  if (hs1 > hs0 * 1.02) P = plan(hs1);
+  const { frame, lines } = P;
   const { hs, body } = frame;
 
   ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -975,18 +1008,8 @@ export function renderStatsExport(canvas: HTMLCanvasElement, input: StatsExportI
 
   if (!rows.length) {
     drawEmpty(ctx, pen, e, body, hs);
-  } else if (content === 'cards') {
-    // Uniform card height per width (grid rows stretch to their tallest card).
-    const memo = new Map<number, number>();
-    const heightAt = (cw: number) => {
-      let h = memo.get(cw);
-      if (h === undefined) {
-        h = Math.max(...rows.map((r) => cardPass(measure, e, r, cw, null)));
-        memo.set(cw, h);
-      }
-      return h;
-    };
-    const grid = chooseCardGrid(rows.length, body, heightAt, 2.2 * hs);
+  } else if (P.grid) {
+    const grid = P.grid;
     const s = grid.scale;
     const gx = body.x + (body.w - grid.width) / 2;
     const gy = body.y + (body.h - grid.height) / 2;
@@ -1001,18 +1024,21 @@ export function renderStatsExport(canvas: HTMLCanvasElement, input: StatsExportI
       cards.push({ x, y, w: grid.cardW * s, h: grid.cardH * s });
     });
     Object.assign(info, { scale: s, grid, cards });
-  } else {
-    const cols = tableCols(t);
-    const natural = naturalWidths(measure, e, cols, rows);
-    const bandHeight = (idx: number[]) => HEAD_H + rowHeights(measure, e, idx.map((i) => cols[i]), rows).reduce((a, h) => a + h, 0);
-    const fit: TableFit = fitTable(natural, body, bandHeight, tableSplit(cols), 2.2 * hs);
+  } else if (P.fit) {
+    const fit: TableFit = P.fit;
     const s = fit.scale;
-    const totalH = fit.bandH.reduce((a, h) => a + h, 0) + (fit.bands.length - 1) * fit.gap;
+    // Width-limited (square / portrait): rows get up to 50 % more padding instead of a large
+    // empty band above and below the table.
+    const rowsH = fit.bandH.reduce((a, h) => a + h - HEAD_H, 0);
+    const spare = body.h / s - (fit.bandH.reduce((a, h) => a + h, 0) + (fit.bands.length - 1) * fit.gap);
+    const stretch = spare > 0 ? Math.min(0.5, spare / rowsH) : 0;
+    const bandHs = fit.bandH.map((h) => HEAD_H + (h - HEAD_H) * (1 + stretch));
+    const totalH = bandHs.reduce((a, h) => a + h, 0) + (fit.bands.length - 1) * fit.gap;
     const tx = Math.round(body.x + (body.w - fit.bandW * s) / 2);
     let ty = body.y + (body.h - totalH * s) / 2;
     const bands: { cols: string[]; box: Box }[] = [];
     fit.bands.forEach((idx, bi) => {
-      const hts = rowHeights(measure, e, idx.map((i) => cols[i]), rows);
+      const hts = rowHeights(measure, e, idx.map((i) => cols[i]), rows).map((h) => h * (1 + stretch));
       const y = Math.round(ty);
       ctx.setTransform(s, 0, 0, s, tx, y);
       const h = tablePass(pen, e, cols, idx, fit.widths[bi], rows, hts);

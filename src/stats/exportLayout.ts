@@ -123,11 +123,10 @@ export const BODY_PAD = 20;
 export const STRIP = { padX: 24, padY: 8, line: 14, gapY: 4 } as const;
 
 /**
- * The page frame in output px: title band on top, an optional legend strip of `stripLines`
- * lines at the bottom, and the body between them minus its padding.
+ * The page frame in output px for chrome scale `hs`: title band on top, an optional legend strip
+ * of `stripLines` lines at the bottom, and the body between them minus its padding.
  */
-export function pageFrame(width: number, height: number, stripLines: number): { hs: number; header: Box; strip: Box | null; body: Box } {
-  const hs = chromeScale(width, height);
+export function pageFrame(width: number, height: number, stripLines: number, hs = chromeScale(width, height)): { hs: number; header: Box; strip: Box | null; body: Box } {
   const headerH = Math.round(HEADER_H * hs);
   const stripH = stripLines > 0 ? Math.round((STRIP.padY * 2 + stripLines * STRIP.line + (stripLines - 1) * STRIP.gapY) * hs) : 0;
   const pad = Math.round(BODY_PAD * hs);
