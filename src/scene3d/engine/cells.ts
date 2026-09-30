@@ -62,14 +62,18 @@ export function depthScaleFor(cellAspect: number): number {
   return Math.floor(k * 4 + 1e-6) / 4;
 }
 
+/** Deepest plate of a grid cell (fillDepthScale). */
+export const MAX_FILL_DEPTH = 2;
+
 /**
  * Depth stretch letting a plate (width / depth `plateAspect` at depth 1) fill a plot area of
- * w × h px: between 1 and 1.5, quantised down to eighths (never deeper than the area). Used for
- * grids of 3–6 panels, whose axis bands take a bigger share of each cell than a single frame's.
+ * w × h px: between 1 and MAX_FILL_DEPTH, quantised down to eighths (never deeper than the area).
+ * Used for grids of 3–6 panels, whose axis bands take a bigger share of each cell than a single
+ * frame's, and whose cells are often much taller than a plate (e.g. 2 × 2 in 9:16).
  */
 export function fillDepthScale(plot: { w: number; h: number }, plateAspect = NOMINAL_PLATE_ASPECT): number {
   if (!(plot.w > 0 && plot.h > 0)) return 1;
-  const k = Math.min(1.5, Math.max(1, (plateAspect * plot.h) / plot.w));
+  const k = Math.min(MAX_FILL_DEPTH, Math.max(1, (plateAspect * plot.h) / plot.w));
   return Math.floor(k * 8 + 1e-6) / 8;
 }
 

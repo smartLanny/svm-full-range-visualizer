@@ -104,6 +104,12 @@ const PRESET_ORIENT: Record<Exclude<ViewPreset, 'perspective'>, { theta: number;
 const CELL_PAD = 24;
 /** Several rows of cells: band under each plot for its luminance axis labels, CSS px. */
 const LUM_BAND = 62;
+/**
+ * Grids of 3–6 panels (small multiples): axis titles only on the outer panels (luminance title on
+ * the last row, gray title on the first panel of each row), so the band under an inner row holds
+ * just its tick labels, CSS px.
+ */
+const LUM_BAND_GRID = 34;
 /** Several rows of cells: extra room between a plot's axis labels and the next row's captions, CSS px. */
 const STACK_PAD = 12;
 
@@ -440,7 +446,7 @@ export class Engine {
 
   private nominalSplit() {
     const S = this.pxScale;
-    return { pad: CELL_PAD * S, capBand: (26 + STACK_PAD) * S, lumBand: LUM_BAND * S };
+    return { pad: CELL_PAD * S, capBand: (26 + STACK_PAD) * S, lumBand: LUM_BAND_GRID * S };
   }
 
   /** Grid of the current model's views. */
@@ -720,7 +726,8 @@ export class Engine {
     // row above clear of its captions.
     const grid = this.grid();
     const capBand = this.captionBand() + (grid.rows > 1 ? STACK_PAD : 0);
-    return splitCells(this.vp, ins, this.viewPanels(), grid, { pad: CELL_PAD * S, capBand: capBand * S, lumBand: LUM_BAND * S });
+    const n = this.viewPanels();
+    return splitCells(this.vp, ins, n, grid, { pad: CELL_PAD * S, capBand: capBand * S, lumBand: (n >= 3 ? LUM_BAND_GRID : LUM_BAND) * S });
   }
 
   /** Size of a view's cell: the viewport every camera pose is fitted in (all cells are congruent). */
@@ -2030,6 +2037,7 @@ export class Engine {
     };
 
     // Per-view context (camera, axes, clip, axis visibility, label directions, tick extents).
+    const lay = this.cellLayout();
     const ctxs = this.views.map((view, vi) => {
       this.activeCam = view.cam;
       const ax = view.axes;
@@ -2046,8 +2054,12 @@ export class Engine {
       };
       const lz = e.lumFront ? b.z1 : b.z0;
       const gxE = e.grayLeft ? b.x0 : b.x1;
-      const lumVis = smoothstep(50, 140, axisLen(new THREE.Vector3(b.x0, 0, lz), new THREE.Vector3(b.x1, 0, lz)));
-      const grayVis = smoothstep(50, 140, axisLen(new THREE.Vector3(gxE, 0, b.z0), new THREE.Vector3(gxE, 0, b.z1)));
+      // Small multiples (3–6 panels) have small plates, not degenerate axes: the length thresholds
+      // scale with the cell (a cell under 400 CSS px scales them down).
+      const cell = lay.cells[vi] ?? lay.cells[0];
+      const k = this.views.length >= 3 ? Math.min(1, Math.min(cell.w, cell.h) / S / 400) : 1;
+      const lumVis = smoothstep(50 * k, 140 * k, axisLen(new THREE.Vector3(b.x0, 0, lz), new THREE.Vector3(b.x1, 0, lz)));
+      const grayVis = smoothstep(50 * k, 140 * k, axisLen(new THREE.Vector3(gxE, 0, b.z0), new THREE.Vector3(gxE, 0, b.z1)));
       // The value axis fades only when it collapses; seen end-on is the polar-angle factor (alphaOf).
       // Never by its length: a low height cap or a small side-by-side cell makes it short, not
       // degenerate — its title stays and the tick collision pass thins crowded ticks.
@@ -2087,9 +2099,19 @@ export class Engine {
         tickExtent[key] = Math.max(tickExtent[key] ?? 0, Math.abs(d.x) * tt.w + Math.abs(d.y) * tt.h);
       }
       const topGray = m.grayTicks.length ? m.grayTicks[m.grayTicks.length - 1] : 255;
+      // Small multiples (3–6 panels): an axis title only on the outer panels of the grid. A title
+      // below / above its axis (a horizontal axis on screen) shows on the last / first row; one
+      // left / right of it (a vertical axis) on the first / last panel of each row.
+      const slot = lay.slots[vi];
+      const showsTitle = (_spec: AxisLabelSpec, d: { x: number; y: number }) => {
+        if (this.views.length < 3 || !slot) return true;
+        if (Math.abs(d.y) >= Math.abs(d.x)) return d.y <= 0 ? slot.row === lay.rows - 1 : slot.row === 0;
+        return d.x <= 0 ? slot.first : slot.last;
+      };
       return {
         view,
-        region: this.views.length > 1 ? this.cellLayout().regions[vi] : null,
+        showsTitle,
+        region: this.views.length > 1 ? lay.regions[vi] : null,
         clip: this.clips[vi] ?? null,
         specs,
         dirFor,
@@ -2114,6 +2136,7 @@ export class Engine {
           const anchorW = c.anchorOf(spec);
           const tt = this.text.get(spec.text, spec.style, S);
           const d = c.dirFor(spec);
+          if (pass === 'title' && !c.showsTitle(spec, d)) continue;
           const a = this.project(anchorW);
           if (!a.ok) continue;
           // Plot clipped (zoomed / panned): in orthographic views the axes are pinned to the clip

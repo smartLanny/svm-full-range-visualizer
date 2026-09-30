@@ -214,8 +214,8 @@ describe('side-by-side cells: 2–6 panels on a grid', () => {
 
   it('narrow cells deepen the plate (quantised)', () => {
     expect([2, 1, 0.85, 0.7, 0.6, 0.5, 0.3].map(depthScaleFor)).toEqual([1, 1, 1, 1, 1.25, 1.5, 1.5]);
-    // Grids: the plate fills the plot area (never deeper than it, at most 1.5).
-    expect([300, 220, 200, 150, 100].map((w) => fillDepthScale({ w, h: 200 }))).toEqual([1, 1.25, 1.375, 1.5, 1.5]);
+    // Grids: the plate fills the plot area (never deeper than it, at most 2).
+    expect([300, 220, 200, 150, 120, 100].map((w) => fillDepthScale({ w, h: 200 }))).toEqual([1, 1.25, 1.375, 1.875, 2, 2]);
     expect(fillDepthScale({ w: 0, h: 200 })).toBe(1);
   });
 });
