@@ -146,6 +146,10 @@ describe('stats card layout (single pass: measure = draw)', () => {
     expect(wide).toBeGreaterThan(narrow);
     for (let i = 0; i < rows.length; i++) {
       const h = cardHeight(inp, i, 318, measure);
+      if (rows[i].stats.cellCount === 0) {
+        expect(h).toBeLessThan(450); // no thumbnail is drawn when the selected luminance range has no valid cells
+        continue;
+      }
       expect(h).toBeGreaterThan(450);
       expect(h).toBeLessThan(700);
     }

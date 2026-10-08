@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import type { SvmRecord } from '../../types';
 import { MAX_COMPARE_PANELS } from '../../types';
+import { gridView } from '../../data/grid';
 import { buildModel, SX, SZ, type SceneModel } from './model';
 import { PLATE_ASPECT, plateDepthScale, plateHeight } from './plate';
 
@@ -16,6 +17,8 @@ const all: SvmRecord[] = fs
 
 const domainAspect = (m: SceneModel) => ((m.domain.lx1 - m.domain.lx0) * SX) / ((m.domain.g1 - m.domain.g0) * m.sz);
 const rectAspect = (r: { x0: number; x1: number; z0: number; z1: number }) => (r.x1 - r.x0) / (r.z1 - r.z0);
+const hasVisibleCells = (rec: SvmRecord, clipLowGray: boolean, maxNits: number | null) =>
+  gridView(rec, { clipLowGray, maxNits }).points.some((row) => row.some(Boolean));
 
 describe('plate aspect (docs/adr/0002, stable heatmap proportions)', () => {
   it('is wider than tall, between a square and the widest former landscape default', () => {
@@ -51,6 +54,7 @@ describe('plate aspect (docs/adr/0002, stable heatmap proportions)', () => {
         for (const maxNits of [500, 200, 100, 50, null]) {
           const res = buildModel({ layout: 'single', a: rec, b: null, clipLowGray, maxNits, colorMax: 4, heightCap: 6 });
           if (!res.ok) continue;
+          if (!hasVisibleCells(rec, clipLowGray, maxNits)) continue;
           const m = res.model;
           // One panel: its rect is the domain.
           const a = rectAspect(m.panels[0].rect);
@@ -72,15 +76,26 @@ describe('plate aspect (docs/adr/0002, stable heatmap proportions)', () => {
           if (Math.abs(domainAspect(m) - PLATE_ASPECT) > 1e-6) off.push(`n=${n} ${maxNits}: domain ${domainAspect(m).toFixed(3)}`);
           for (const p of m.panels) {
             // A panel covers its own record's part of the shared domain (shared axes): a record with
-            // a shorter luminance / gray range than the others is a little narrower / wider.
+            // a shorter luminance / gray range than the others is narrower / wider. Sparse records
+            // can legitimately occupy less than a square when their source has only a few columns.
+            if (!hasVisibleCells(p.record, true, maxNits)) continue;
             const a = rectAspect(p.rect);
-            if (a > 1.5 || a < 1) off.push(`n=${n} ${maxNits} ${p.id} ${p.record.id}: ${a.toFixed(3)}`);
+            const { matrix } = p.record;
+            const totalColumns = matrix.cols.length;
+            const populatedColumns = matrix.cols.reduce((n, _, c) => {
+              const level = matrix.headerNits[c];
+              const withinCap = Number.isFinite(level) && level > 0 && (maxNits === null || level <= maxNits);
+              return n + (withinCap && matrix.grid.some((row) => !!row[c]) ? 1 : 0);
+            }, 0);
+            const sparse = totalColumns > 0 && populatedColumns * 2 < totalColumns;
+            if (a > 1.5 || a <= 0 || (!sparse && a < 1)) off.push(`n=${n} ${maxNits} ${p.id} ${p.record.id}: ${a.toFixed(3)}`);
           }
         }
       }
     for (let i = 0; i + 1 < all.length; i++) {
       const res = buildModel({ layout: 'diff', a: all[i], b: all[i + 1], clipLowGray: true, maxNits: 500, colorMax: 4, heightCap: 6 });
       if (!res.ok) continue;
+      if (!hasVisibleCells(all[i], true, 500) || !hasVisibleCells(all[i + 1], true, 500)) continue;
       const a = rectAspect(res.model.panels[0].rect);
       if (Math.abs(a - PLATE_ASPECT) > 1e-6) off.push(`diff ${all[i].id} − ${all[i + 1].id}: ${a.toFixed(3)}`);
     }

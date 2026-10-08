@@ -336,6 +336,15 @@ describe('computeRecordStats — bundled records', () => {
           .filter((p): p is DataPoint => !!p)
           .map((p) => p.svm);
         expect(s.cellCount).toBe(vals.length);
+        if (vals.length === 0) {
+          expect(s.safeShare).toBeNull();
+          expect(s.midShare).toBeNull();
+          expect(s.criticalShare).toBeNull();
+          expect(s.meanSvm).toBeNull();
+          expect(s.peak).toBeNull();
+          expect(s.validExtent).toBeNull();
+          continue;
+        }
         expect(s.safeShare! + s.midShare! + s.criticalShare!).toBeCloseTo(1, 9);
         for (const x of [s.safeShare!, s.midShare!, s.criticalShare!]) expect(x).toBeGreaterThanOrEqual(0);
         expect(s.meanSvm!).toBeGreaterThanOrEqual(Math.min(...vals));
