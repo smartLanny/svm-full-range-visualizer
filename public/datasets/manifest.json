@@ -15,5 +15,9 @@
   {"file": "xiaomi18promax_adaptive_pro_on.json", "device": "小米 18 Pro Max", "deviceEn": "Xiaomi 18 Pro Max", "mode": "自适应刷新 Pro 开", "modeEn": "Adaptive refresh Pro on"},
   {"file": "iPhone18ProMax.json", "device": "iPhone 18 Pro Max", "mode": "标准", "modeEn": "Standard"},
   {"file": "iPhone18ProMax_smooth.json", "device": "iPhone 18 Pro Max", "mode": "平滑脉冲", "modeEn": "Smooth pulse"},
-  {"file": "huawei_mate90promax.json", "device": "华为 Mate 90 Pro Max 典藏版", "mode": "默认", "modeEn": "Default"}
+  {"file": "huawei_mate90promax.json", "device": "华为 Mate 90 Pro Max 典藏版", "mode": "默认", "modeEn": "Default"},
+  {"file": "iPhoneDuo_inner_120hz.json", "device": "iPhone Duo 内屏", "deviceEn": "iPhone Duo Inner display", "mode": "普通 120Hz", "modeEn": "Standard 120Hz"},
+  {"file": "iPhoneDuo_inner_smooth_120hz.json", "device": "iPhone Duo 内屏", "deviceEn": "iPhone Duo Inner display", "mode": "脉冲平滑 120Hz", "modeEn": "Smooth pulse 120Hz"},
+  {"file": "iPhoneDuo_outer_120hz.json", "device": "iPhone Duo 外屏", "deviceEn": "iPhone Duo Outer display", "mode": "普通 120Hz", "modeEn": "Standard 120Hz"},
+  {"file": "iPhoneDuo_outer_smooth_120hz.json", "device": "iPhone Duo 外屏", "deviceEn": "iPhone Duo Outer display", "mode": "脉冲平滑 120Hz", "modeEn": "Smooth pulse 120Hz"}
 ]

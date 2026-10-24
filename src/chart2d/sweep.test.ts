@@ -111,8 +111,8 @@ function check(rec: SvmRecord, c: Case, steps = true): string[] {
 }
 
 describe('sweeps never pop (all bundled records, 60 fps)', () => {
-  it('has the 17 bundled records, raw, most of them changed by the denoise', () => {
-    expect(records.length).toBe(17);
+  it('has the 21 bundled records, raw, most of them changed by the denoise', () => {
+    expect(records.length).toBe(21);
     expect(raw.every((r) => r.excluded === undefined)).toBe(true);
     expect(records.filter((r, i) => r !== raw[i]).length).toBeGreaterThanOrEqual(14);
   });
