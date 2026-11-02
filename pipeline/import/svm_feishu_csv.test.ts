@@ -5,7 +5,7 @@
 import fs from 'fs';
 import path from 'path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { ROOT, runPython, tempDir, writeJsonFile } from '../testing/python';
+import { ROOT, runPython, tempDir, writeJsonFile, type PyRun } from '../testing/python';
 
 const SCRIPT = 'pipeline/import/svm_feishu_csv.py';
 const DATASETS = path.join(ROOT, 'public/datasets');
@@ -26,7 +26,7 @@ function makeRoot(entries: unknown[]) {
   return t.dir;
 }
 
-function importDuo(root: string, extra: string[] = []) {
+function importDuo(root: string, extra: string[] = []): PyRun[] {
   return example.inputs.map((input: { path: string; options: unknown }, i: number) => {
     const spec = path.join(root, `spec-${i}.json`);
     writeJsonFile(spec, input.options);

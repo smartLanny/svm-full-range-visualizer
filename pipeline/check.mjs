@@ -27,7 +27,7 @@ const MEASURED = ['complete', 'partial', 'metrics-only'];
 const ENTRY_KEYS = {
   svm: { required: ['record', 'manifestDevice', 'mode', 'display', 'state', 'stateBasis', 'unit'], optional: ['modeEn', 'note'] },
   angle: { required: ['profile', 'standaloneDevice', 'display', 'state', 'stateBasis', 'measured', 'unit'], optional: ['status', 'substituteOf', 'note'] },
-  uniformity: { required: ['condition', 'label', 'pattern', 'referenceNits', 'display', 'state', 'stateBasis', 'unit', 'maps', 'metrics'], optional: [] },
+  uniformity: { required: ['condition', 'label', 'pattern', 'referenceNits', 'display', 'state', 'stateBasis', 'unit', 'maps', 'metrics'], optional: ['whiteMeasuredNits'] },
   reflectance: { required: ['condition', 'label', 'display', 'state', 'stateBasis', 'unit', 'date', 'measuredAt', 'rawSampleId', 'sourceName'], optional: ['panel'] },
 };
 const DEVICE_KEYS = ['id', 'name', 'brand', 'aliases', 'displays', 'units', 'availability', ...DATA_TYPES];
@@ -269,9 +269,14 @@ export function runCheck({ root = REPO_ROOT } = {}) {
     for (const f of fs.existsSync(mapsDir) ? fs.readdirSync(mapsDir) : []) {
       if (!seenAssets.has(`maps/${f}`)) uni.err(`data/uniformity/maps/${f} 没有被 index.json 引用`);
     }
-    for (const phone of unif.phones ?? []) {
+    for (const phone of [...(unif.phones ?? []), ...(unif.metricsOnly ?? [])]) {
       for (const c of phone.conditions ?? []) {
         const w = `${phone.id} / ${c.id}`;
+        if (!c.metrics?.luminance) uni.err(`${w}: 缺少亮度指标`);
+        if ('whiteMeasuredNits' in c) {
+          if (!isNum(c.whiteMeasuredNits) || !(c.whiteMeasuredNits > 0)) uni.err(`${w}: 实测白场 whiteMeasuredNits = ${c.whiteMeasuredNits} 应为正数`);
+          if (!isStr(c.whiteMeasuredSource?.note)) uni.err(`${w}: 实测白场缺少来源说明 whiteMeasuredSource.note`);
+        }
         const lum = c.metrics?.luminance;
         if (lum) {
           if (!(lum.typical > 0)) uni.err(`${w}: 典型亮度应大于 0`);
@@ -298,6 +303,7 @@ export function runCheck({ root = REPO_ROOT } = {}) {
       const got = (e.maps ?? []).map((m) => `${m.kind}:${m.asset}`).sort().join(',');
       if (want !== got) uni.err(`${k}: 热力图列表与 index.json 不一致`);
       if (e.label !== c.label || e.referenceNits !== c.referenceNits) uni.err(`${k}: 标签或设定亮度与 index.json 不一致`);
+      if ((e.whiteMeasuredNits ?? null) !== (c.whiteMeasuredNits ?? null)) uni.err(`${k}: 实测白场与 index.json 不一致`);
     }
     for (const k of idx.keys()) if (!used.has(k)) uni.err(`index.json 的 ${k} 不属于目录里的任何机型`);
     const status = (id) => devices.find((d) => d.id === id)?.availability?.uniformity?.status;

@@ -57,6 +57,8 @@ export interface UniformityEntry extends EntryBase {
   /** Assets are relative to data/uniformity/. */
   maps: { kind: 'luminance' | 'colorTemperature'; asset: string; sourceKey: string }[];
   metrics: ('luminance' | 'colorTemperature')[];
+  /** Measured full-white luminance at this condition's brightness setting (a batch provided it). */
+  whiteMeasuredNits?: number;
 }
 
 export interface ReflectanceEntry extends Omit<EntryBase, 'display'> {

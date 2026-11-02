@@ -40,6 +40,9 @@ export class CatalogError extends Error {
 /** 「外屏」/「防窥膜」/「外屏 · 防窥膜」: the display and state names, without repeating one that equals the other. */
 const variantLabel = (e) => [...new Set([DISPLAYS[e.display]?.zh, STATES[e.state]?.zh].filter(Boolean))].join(' · ');
 
+/** Measured full-white luminance of a uniformity condition, only when a batch recorded one. */
+const whiteOf = (c) => (typeof c.whiteMeasuredNits === 'number' ? { whiteMeasuredNits: c.whiteMeasuredNits } : {});
+
 const dateOf = (measuredAt) => (typeof measuredAt === 'string' && /^\d{4}-\d{2}-\d{2}/.test(measuredAt) ? measuredAt.slice(0, 10) : null);
 
 export function buildCatalog(root = REPO_ROOT) {
@@ -140,6 +143,7 @@ export function buildCatalog(root = REPO_ROOT) {
         unit: null,
         maps: Object.entries(c.maps ?? {}).map(([kind, m]) => ({ kind, asset: m.asset, sourceKey: m.sourceKey })),
         metrics: Object.keys(c.metrics ?? {}),
+        ...whiteOf(c),
       });
     }
     unifStatus.set(d.id, { status: d.uniformity.some((e) => e.maps.length) ? 'complete' : 'metrics-only' });
@@ -151,6 +155,7 @@ export function buildCatalog(root = REPO_ROOT) {
       d.uniformity.push({
         condition: c.id, label: c.label, pattern: c.pattern ?? null, referenceNits: c.referenceNits ?? null,
         display: 'main', state: 'default', stateBasis: 'convention', unit: null, maps: [], metrics: Object.keys(c.metrics ?? {}),
+        ...whiteOf(c),
       });
     }
     unifStatus.set(d.id, (m.conditions ?? []).length
