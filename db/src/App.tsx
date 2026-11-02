@@ -5,6 +5,7 @@ import { Shell } from './components/Shell';
 import { Home } from './pages/Home';
 import { DevicePage } from './pages/DevicePage';
 import { ComparePage } from './pages/ComparePage';
+import { RankingPage } from './pages/RankingPage';
 import { Loading, Missing } from './components/ui';
 
 function useRoute(): Route {
@@ -48,7 +49,9 @@ export function App() {
         ? `${name(route.id)} · 屏幕数据库`
         : route.page === 'compare'
           ? `${route.ids.map(name).join(' vs ')} · 屏幕数据库`
-          : '屏幕数据库 · 野生的装机宅';
+          : route.page === 'rank'
+            ? '均匀度排行榜 · 屏幕数据库'
+            : '屏幕数据库 · 野生的装机宅';
   }, [route, catalog]);
 
   let body: React.ReactNode;
@@ -58,6 +61,7 @@ export function App() {
   else if (route.page === 'home') body = <Home catalog={catalog.data} q={route.q} has={route.has} />;
   else if (route.page === 'device') body = <DevicePage key={route.id} catalog={catalog.data} id={route.id} section={route.section} />;
   else if (route.page === 'compare') body = <ComparePage catalog={catalog.data} ids={route.ids} />;
+  else if (route.page === 'rank') body = <RankingPage catalog={catalog.data} cond={route.cond} by={route.by} />;
   else
     body = (
       <Missing

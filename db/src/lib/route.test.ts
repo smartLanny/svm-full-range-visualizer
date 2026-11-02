@@ -11,6 +11,9 @@ describe('hash routing', () => {
     expect(parseRoute('#/d/iphone-18-pro-max/uniformity')).toEqual({ page: 'device', id: 'iphone-18-pro-max', section: 'uniformity' });
     expect(parseRoute('#/c/xiaomi-18-pro-max,iphone-18-pro-max')).toEqual({ page: 'compare', ids: ['xiaomi-18-pro-max', 'iphone-18-pro-max'] });
     expect(parseRoute('#/c/iphone-duo')).toEqual({ page: 'compare', ids: ['iphone-duo'] });
+    expect(parseRoute('#/rank')).toEqual({ page: 'rank', cond: '300', by: 'area' });
+    expect(parseRoute('#/rank?cond=10&by=deviation')).toEqual({ page: 'rank', cond: '10', by: 'deviation' });
+    expect(parseRoute('#/rank?cond=7&by=x')).toEqual({ page: 'rank', cond: '300', by: 'area' });
   });
 
   it('dedupes compare ids and rejects malformed paths', () => {
@@ -29,6 +32,8 @@ describe('hash routing', () => {
       { page: 'device', id: 'iphone-duo', section: null },
       { page: 'device', id: 'iphone-duo', section: 'angle' },
       { page: 'compare', ids: ['a-1', 'b-2'] },
+      { page: 'rank', cond: '300', by: 'area' },
+      { page: 'rank', cond: '100', by: 'cctArea' },
     ];
     for (const r of routes) expect(parseRoute(formatRoute(r))).toEqual(r);
   });

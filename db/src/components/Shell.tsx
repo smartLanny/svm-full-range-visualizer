@@ -1,6 +1,6 @@
 import React from 'react';
 import { ArrowUpRight } from 'lucide-react';
-import type { Route } from '../lib/route';
+import { rankHref, type Route } from '../lib/route';
 import { loadSiteInfo, useAsync } from '../lib/data';
 import { dataVersionLine } from '../lib/siteInfo';
 import { VIEW_ANGLE_SIM_URL } from '../lib/angle';
@@ -64,14 +64,26 @@ export function Shell({ route, children }: { route: Route; children: React.React
               <span className="truncate text-[11px] text-ink-3">野生的装机宅</span>
             </span>
           </a>
-          {route.page !== 'home' && (
+          <div className="ml-1 flex items-center sm:ml-2">
+            {route.page !== 'home' && (
+              <a
+                href="#/"
+                className="hidden h-8 items-center rounded-full px-3 text-[13px] text-ink-2 transition-colors hover:bg-surface-3 hover:text-ink-1 sm:inline-flex"
+              >
+                全部机型
+              </a>
+            )}
             <a
-              href="#/"
-              className="ml-2 hidden h-8 items-center rounded-full px-3 text-[13px] text-ink-2 transition-colors hover:bg-surface-3 hover:text-ink-1 sm:inline-flex"
+              href={rankHref()}
+              aria-current={route.page === 'rank' ? 'page' : undefined}
+              className={
+                'inline-flex h-8 items-center whitespace-nowrap rounded-full px-3 text-[13px] transition-colors hover:bg-surface-3 hover:text-ink-1 ' +
+                (route.page === 'rank' ? 'bg-surface-3 text-ink-1' : 'text-ink-2')
+              }
             >
-              全部机型
+              均匀度排行
             </a>
-          )}
+          </div>
           <nav className="ml-auto flex items-center gap-0.5" aria-label="相关工具">
             <ToolLink href={SVM_TOOL_URL}>频闪工具</ToolLink>
             <span className="hidden sm:inline">
