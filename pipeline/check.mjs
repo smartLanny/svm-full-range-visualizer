@@ -19,6 +19,8 @@ import { compareReflectanceToRaw, curveGridProblems, uniformityAssets } from './
 import { CatalogError, OUTPUT as CATALOG_FILE, buildCatalog } from './catalog/build_catalog.mjs';
 import { AVAILABILITY, DATA_TYPES, DISPLAYS, ID_RE, STATES, STATE_BASIS } from './catalog/vocabulary.mjs';
 import { DIRECTIONS, THETAS } from './angle/summarise.mjs';
+import { BATCH_DIR, CHANGELOG_FILE, VERSION_FILE, readBatches, validateBatch } from './lib/batch.mjs';
+import { RELEASE_FILE, releaseState } from './lib/release.mjs';
 
 const UNIFORMITY_CONDITIONS = ['300', '100', '10'];
 const UNIFORMITY_KINDS = ['luminance', 'colorTemperature'];
@@ -27,7 +29,7 @@ const MEASURED = ['complete', 'partial', 'metrics-only'];
 const ENTRY_KEYS = {
   svm: { required: ['record', 'manifestDevice', 'mode', 'display', 'state', 'stateBasis', 'unit'], optional: ['modeEn', 'note'] },
   angle: { required: ['profile', 'standaloneDevice', 'display', 'state', 'stateBasis', 'measured', 'unit'], optional: ['status', 'substituteOf', 'note'] },
-  uniformity: { required: ['condition', 'label', 'pattern', 'referenceNits', 'display', 'state', 'stateBasis', 'unit', 'maps', 'metrics'], optional: [] },
+  uniformity: { required: ['condition', 'label', 'pattern', 'referenceNits', 'display', 'state', 'stateBasis', 'unit', 'maps', 'metrics'], optional: ['whiteMeasuredNits'] },
   reflectance: { required: ['condition', 'label', 'display', 'state', 'stateBasis', 'unit', 'date', 'measuredAt', 'rawSampleId', 'sourceName'], optional: ['panel'] },
 };
 const DEVICE_KEYS = ['id', 'name', 'brand', 'aliases', 'displays', 'units', 'availability', ...DATA_TYPES];
@@ -269,9 +271,14 @@ export function runCheck({ root = REPO_ROOT } = {}) {
     for (const f of fs.existsSync(mapsDir) ? fs.readdirSync(mapsDir) : []) {
       if (!seenAssets.has(`maps/${f}`)) uni.err(`data/uniformity/maps/${f} 没有被 index.json 引用`);
     }
-    for (const phone of unif.phones ?? []) {
+    for (const phone of [...(unif.phones ?? []), ...(unif.metricsOnly ?? [])]) {
       for (const c of phone.conditions ?? []) {
         const w = `${phone.id} / ${c.id}`;
+        if (!c.metrics?.luminance) uni.err(`${w}: 缺少亮度指标`);
+        if ('whiteMeasuredNits' in c) {
+          if (!isNum(c.whiteMeasuredNits) || !(c.whiteMeasuredNits > 0)) uni.err(`${w}: 实测白场 whiteMeasuredNits = ${c.whiteMeasuredNits} 应为正数`);
+          if (!isStr(c.whiteMeasuredSource?.note)) uni.err(`${w}: 实测白场缺少来源说明 whiteMeasuredSource.note`);
+        }
         const lum = c.metrics?.luminance;
         if (lum) {
           if (!(lum.typical > 0)) uni.err(`${w}: 典型亮度应大于 0`);
@@ -298,6 +305,7 @@ export function runCheck({ root = REPO_ROOT } = {}) {
       const got = (e.maps ?? []).map((m) => `${m.kind}:${m.asset}`).sort().join(',');
       if (want !== got) uni.err(`${k}: 热力图列表与 index.json 不一致`);
       if (e.label !== c.label || e.referenceNits !== c.referenceNits) uni.err(`${k}: 标签或设定亮度与 index.json 不一致`);
+      if ((e.whiteMeasuredNits ?? null) !== (c.whiteMeasuredNits ?? null)) uni.err(`${k}: 实测白场与 index.json 不一致`);
     }
     for (const k of idx.keys()) if (!used.has(k)) uni.err(`index.json 的 ${k} 不属于目录里的任何机型`);
     const status = (id) => devices.find((d) => d.id === id)?.availability?.uniformity?.status;
@@ -306,7 +314,7 @@ export function runCheck({ root = REPO_ROOT } = {}) {
       if (s !== ((m.conditions ?? []).length ? 'metrics-only' : 'pending-import')) uni.err(`${m.id}: atlas 标为仅指标，目录状态却是 ${s}`);
     }
     for (const m of unif.notRecorded ?? []) if (status(m.id) !== 'not-measured') uni.err(`${m.id}: atlas 记为未测，目录状态却是 ${status(m.id)}`);
-    uni.info(`${(unif.phones ?? []).length} 台有热力图，${mapCount}/${assets.length} 张热力图哈希一致；atlas 标为仅指标 ${(unif.metricsOnly ?? []).length} 台（指标未导出的记为已测待导入），记为未测 ${(unif.notRecorded ?? []).length} 台`);
+    uni.info(`${(unif.phones ?? []).length} 台有热力图，${mapCount}/${assets.length} 张热力图哈希一致；仅指标 ${(unif.metricsOnly ?? []).filter((m) => (m.conditions ?? []).length).length} 台、已测待导入 ${(unif.metricsOnly ?? []).filter((m) => !(m.conditions ?? []).length).length} 台、记为未测 ${(unif.notRecorded ?? []).length} 台`);
   }
 
   // ======================================================================================
@@ -347,27 +355,91 @@ export function runCheck({ root = REPO_ROOT } = {}) {
   }
 
   // ======================================================================================
-  const prov = section('来源与哈希（data/provenance.json）');
+  const bat = section('批次与数据版本（data/batches、version.json、CHANGELOG.md）');
+  const version = load(bat, VERSION_FILE);
+  const overrides = load(bat, 'data/catalog-overrides.json');
+  const batches = readBatches(root);
+  const listed = Array.isArray(version?.batches) ? version.batches : [];
+  if (version) {
+    if (version.schemaVersion !== 1) bat.err(`${VERSION_FILE}: schemaVersion 应为 1`);
+    if (!/^\d{4}\.\d{2}\.\d{2}(?:\.\d+)?$/.test(version.dataVersion ?? '')) bat.err(`${VERSION_FILE}: dataVersion「${version.dataVersion}」应为 YYYY.MM.DD 或 YYYY.MM.DD.n`);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(version.date ?? '') || version.dataVersion?.slice(0, 10) !== version.date?.replace(/-/g, '.')) bat.err(`${VERSION_FILE}: date ${version.date} 与 dataVersion ${version.dataVersion} 不一致`);
+    if (!Array.isArray(version.batches)) bat.err(`${VERSION_FILE}: batches 应为数组`);
+    if (version.batch !== null && version.batch !== listed.at(-1)) bat.err(`${VERSION_FILE}: batch 应为 null 或最后导入的批次 ${listed.at(-1)}`);
+    if (catalog?.counts && JSON.stringify(version.counts) !== JSON.stringify(catalog.counts)) {
+      bat.err(`${VERSION_FILE} 的数量与 ${CATALOG_FILE} 不一致：数据变了却没有记录版本（导入数据走 npm run db:import；可视角同步等批次外的改动用 npm run db:import -- --record "<说明>"）`);
+    }
+  }
+  const deviceIds = new Set((overrides?.devices ?? []).map((d) => d.id));
+  for (const b of batches) {
+    const where = `${BATCH_DIR}/${b.name}`;
+    if (!b.batch.exists) bat.err(`${where}: 缺少 batch.json`);
+    else if (b.batch.error) bat.err(`${where}/batch.json 不是合法 JSON：${b.batch.error}`);
+    else {
+      for (const p of validateBatch(b.batch.value, { deviceIds })) bat.err(`${where}/batch.json: ${p}`);
+      if (b.batch.value.id !== b.name) bat.err(`${where}: 目录名与批次 id「${b.batch.value.id}」不一致`);
+    }
+    const isListed = listed.includes(b.name);
+    if (b.audit.exists && !isListed) bat.err(`${where}: 有 audit.json，但 ${VERSION_FILE} 没有列出这个批次`);
+    if (!b.audit.exists && isListed) bat.err(`${where}: ${VERSION_FILE} 列出了它，却没有 audit.json`);
+    if (!b.audit.exists && !isListed) bat.warn(`${where}: 尚未导入（只有 batch.json）`);
+    if (b.audit.error) bat.err(`${where}/audit.json 不是合法 JSON：${b.audit.error}`);
+    else if (b.audit.exists && b.audit.value.batch !== b.name) bat.err(`${where}/audit.json 的 batch 字段不是 ${b.name}`);
+    // CSV sources kept with the batch are the bytes that were imported
+    for (const input of b.audit.value?.inputs ?? []) {
+      const copy = input.details?.source?.sourceCopy;
+      if (!copy) continue;
+      if (!fs.existsSync(file(copy))) bat.err(`${where}: 源文件副本 ${copy} 不存在`);
+      else if (sha256(fs.readFileSync(file(copy))) !== input.sha256) bat.err(`${where}: 源文件副本 ${copy} 的 sha256 与批次记录不一致`);
+    }
+  }
+  for (const id of listed) if (!batches.some((b) => b.name === id)) bat.err(`${VERSION_FILE} 列出的批次 ${id} 在 ${BATCH_DIR} 里没有目录`);
+  if (new Set(listed).size !== listed.length) bat.err(`${VERSION_FILE}: batches 有重复`);
+  const changelogText = fs.existsSync(file(CHANGELOG_FILE)) ? fs.readFileSync(file(CHANGELOG_FILE), 'utf8') : null;
+  if (changelogText === null) bat.err(`${CHANGELOG_FILE} 不存在`);
+  else {
+    for (const id of listed) if (!changelogText.includes(`\`${id}\``)) bat.err(`${CHANGELOG_FILE} 没有批次 ${id} 的条目`);
+    if (version?.dataVersion && !changelogText.includes(`## ${version.dataVersion} `)) bat.err(`${CHANGELOG_FILE} 没有当前数据版本 ${version.dataVersion} 的条目`);
+  }
+  const imported = listed.map((id) => batches.find((b) => b.name === id)).filter((b) => b?.audit?.value);
+  if (version) bat.info(`数据版本 ${version.dataVersion}（${version.date}），已导入 ${imported.length} 个批次${batches.length > imported.length ? `，${batches.length - imported.length} 个待导入` : ''}`);
+
+  // ======================================================================================
+  const prov = section('来源与哈希（data/provenance.json + 批次）');
   const provenance = load(prov, 'data/provenance.json');
   if (provenance) {
-    const files = provenance.atlas?.files ?? [];
-    let ok = 0;
-    for (const f of files) {
-      const p = file(f.path);
-      if (!fs.existsSync(p)) prov.err(`${f.path} 不存在`);
-      else if (sha256(fs.readFileSync(p)) !== f.sha256) prov.err(`${f.path} 与 provenance.json 记录的 sha256 不一致：迁移来的原始数据不能手改`);
-      else ok++;
+    // expected sha256 of every tracked file: the atlas migration, then each imported batch in order
+    const expected = new Map();
+    for (const f of provenance.atlas?.files ?? []) expected.set(f.path, { sha: f.sha256, origin: 'atlas' });
+    for (const b of imported) {
+      for (const f of b.audit.value.files ?? []) {
+        const prev = expected.get(f.path);
+        if (prev && f.sha256Before !== prev.sha) prov.err(`批次 ${b.name} 记录的 ${f.path} 导入前 sha256 与上一状态（${prev.origin === 'atlas' ? 'atlas 迁移' : prev.origin}）不一致：哈希链断了`);
+        expected.set(f.path, { sha: f.sha256After, origin: `批次 ${b.name}` });
+      }
     }
-    const listed = new Set(files.map((f) => f.path));
+    let okAtlas = 0, okBatch = 0;
+    for (const [p, e] of expected) {
+      const exists = fs.existsSync(file(p));
+      if (e.sha === null) { if (exists) prov.err(`${p} 已被${e.origin} 删除，却又出现了`); continue; }
+      if (!exists) { prov.err(`${p} 不存在`); continue; }
+      if (sha256(fs.readFileSync(file(p))) !== e.sha) {
+        prov.err(e.origin === 'atlas'
+          ? `${p} 与 provenance.json 记录的 sha256 不一致：迁移来的原始数据不能手改`
+          : `${p} 与${e.origin} 导入后记录的 sha256 不一致：数据不能手改，改动要走新批次（npm run db:import）`);
+      } else if (e.origin === 'atlas') okAtlas++;
+      else okBatch++;
+    }
     const walk = (dir) => (fs.existsSync(dir) ? fs.readdirSync(dir).flatMap((n) => { const p = path.join(dir, n); return fs.statSync(p).isDirectory() ? walk(p) : [p]; }) : []);
     for (const p of [...walk(file('data/uniformity')), ...walk(file('data/reflectance'))]) {
       const r = rel(root, p);
-      if (!listed.has(r)) prov.err(`${r} 没有在 provenance.json 中登记来源`);
+      if (!expected.has(r)) prov.err(`${r} 没有在 provenance.json 中登记来源（也不是任何批次导入的）`);
     }
     if (provenance.svmCrossCheck?.differences?.length) {
       for (const d of provenance.svmCrossCheck.differences) prov.warn(`atlas 频闪快照差异：${d}`);
     }
-    prov.info(`atlas ${String(provenance.atlas?.commit).slice(0, 7)} 迁移的 ${ok}/${files.length} 个文件哈希一致`);
+    const atlasTotal = [...expected.values()].filter((e) => e.origin === 'atlas').length;
+    prov.info(`atlas ${String(provenance.atlas?.commit).slice(0, 7)} 迁移的 ${okAtlas}/${atlasTotal} 个文件哈希一致${okBatch || imported.length ? `；批次导入的 ${okBatch} 个文件哈希一致` : ''}`);
   }
   const attrs = fs.existsSync(file('.gitattributes')) ? fs.readFileSync(file('.gitattributes'), 'utf8') : '';
   if (!/^data\/uniformity\/maps\/\*\* export-ignore$/m.test(attrs)) prov.warn('.gitattributes 缺少 data/uniformity/maps/** export-ignore');
@@ -384,6 +456,14 @@ export function runCheck({ root = REPO_ROOT } = {}) {
     else gen.err(`生成器出错：${e.message}`);
   }
 
+  // ======================================================================================
+  const rls = section(`工作台离线版（${RELEASE_FILE}）`);
+  const release = releaseState(root);
+  if (!release.applicable) rls.info('不是完整仓库（没有 src/ 或离线版），跳过');
+  else if (release.fresh) rls.info('与当前 src/、public/（含 public/datasets）一致');
+  else if (process.env.SVM_SKIP_RELEASE_CHECK) rls.warn('离线版已过期（设置了 SVM_SKIP_RELEASE_CHECK，暂不报错）');
+  else rls.err('离线版不是由当前 src/、public/（含 public/datasets）构建的：运行 npm run build:standalone 并提交 release/SVM-Visualizer.html');
+
   const errors = sections.flatMap((s) => s.errors.map((m) => `[${s.title}] ${m}`));
   const warnings = sections.flatMap((s) => s.warnings.map((m) => `[${s.title}] ${m}`));
   return {
@@ -399,6 +479,8 @@ export function runCheck({ root = REPO_ROOT } = {}) {
       angleProfilesMeasured: [...profiles.values()].filter((p) => p.measured).length,
       uniformityMaps: mapCount,
       reflectanceSamples: entriesOf('reflectance').length,
+      dataVersion: version?.dataVersion ?? null,
+      batchesImported: imported.length,
       standaloneCommit: summary?.standalone?.commit ?? null,
       atlasCommit: provenance?.atlas?.commit ?? null,
     },
@@ -411,6 +493,7 @@ export function formatReport(r) {
     '屏幕数据库校验（db:check）',
     `  机型 ${s.devices} 台：频闪 ${s.byType.svm} 台 · 可视角 ${s.byType.angle} 台 · 均匀度 ${s.byType.uniformity} 台 · 反射率 ${s.byType.reflectance} 台`,
     `  频闪 ${s.svmRecords} 条记录 · 可视角 ${s.angleProfiles} 个 profile（实测 ${s.angleProfilesMeasured}）· 均匀度热力图 ${s.uniformityMaps} 张 · 反射率样品 ${s.reflectanceSamples} 个`,
+    `  数据版本 ${s.dataVersion ?? '?'}（已导入 ${s.batchesImported} 个批次）`,
     `  可视角来自独立项目 ${s.standaloneCommit?.slice(0, 7) ?? '?'}；均匀度、反射率迁移自 atlas ${s.atlasCommit?.slice(0, 7) ?? '?'}`,
     '',
   ];

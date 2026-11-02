@@ -37,7 +37,10 @@ export function makeFixture({ copyMaps = false } = {}): Fixture {
   fs.copyFileSync(path.join(ROOT, '.gitattributes'), path.join(root, '.gitattributes'));
   const p = (rel: string) => path.join(root, rel);
   const readJson = (rel: string) => JSON.parse(fs.readFileSync(p(rel), 'utf8'));
-  const writeJson = (rel: string, value: unknown) => fs.writeFileSync(p(rel), `${JSON.stringify(value, null, 2)}\n`);
+  const writeJson = (rel: string, value: unknown) => {
+    fs.mkdirSync(path.dirname(p(rel)), { recursive: true });
+    fs.writeFileSync(p(rel), `${JSON.stringify(value, null, 2)}\n`);
+  };
   return {
     root,
     path: p,

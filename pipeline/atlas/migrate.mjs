@@ -151,11 +151,20 @@ if (errors.length) {
   process.exit(1);
 }
 
+// Files a later batch (npm run db:import) changed on purpose: the atlas copy is their history, not their state.
+const batchChanged = new Map();
+const versionPath = path.join(root, 'data/version.json');
+for (const id of fs.existsSync(versionPath) ? readJson(versionPath).batches ?? [] : []) {
+  const auditPath = path.join(root, 'data/batches', id, 'audit.json');
+  if (fs.existsSync(auditPath)) for (const f of readJson(auditPath).files ?? []) batchChanged.set(f.path, id);
+}
+
 if (args.check) {
   const drift = [];
   for (const f of files) {
     const p = path.join(root, f.path);
-    if (!fs.existsSync(p)) drift.push(`${f.path} 不存在`);
+    if (batchChanged.has(f.path)) console.log(`  · ${f.path} 已由批次 ${batchChanged.get(f.path)} 更新，不再与 atlas 比较（db:check 核对批次哈希链）`);
+    else if (!fs.existsSync(p)) drift.push(`${f.path} 不存在`);
     else if (sha256(fs.readFileSync(p)) !== f.sha256) drift.push(`${f.path} 与 atlas ${commit.slice(0, 7)} 不同`);
   }
   const provPath = path.join(root, 'data/provenance.json');
@@ -166,6 +175,10 @@ if (args.check) {
   }
   console.log(`atlas 迁移一致：${files.length} 个文件与 ${commit.slice(0, 7)} 逐字节相同。`);
 } else {
+  if (batchChanged.size && !args.force) {
+    console.error(`拒绝覆盖：${[...batchChanged.keys()].join('、')} 已由导入批次更新，重新迁移会把它们退回 atlas 的版本。确需如此请加 --force（之后 db:check 的哈希链会报错）。`);
+    process.exit(1);
+  }
   for (const f of files) {
     const p = path.join(root, f.path);
     fs.mkdirSync(path.dirname(p), { recursive: true });

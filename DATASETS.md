@@ -26,7 +26,7 @@
 - `device` / `mode`（v2 导出时写入，可选）：机型与模式
 - `excluded`（可选，旧格式）：旧版“剔除”从网格里挪出的原始测量点。应用加载时会把它们放回 `matrix.grid`（记录永远保存原始读数），导出的 JSON 不再写这个字段。iPhone 18 Pro Max 的内置文件仍带着它，加载后与其他记录一样是原始数据。
 
-屏幕数据库的机型目录 `data/devices.json` 把这里的每条记录归到一台机型（及其屏幕、状态）下，见 [`data/README.md`](data/README.md)；manifest 本身不改。
+屏幕数据库的机型目录 `data/devices.json` 把这里的每条记录归到一台机型（及其屏幕、状态）下，见 [`data/README.md`](data/README.md)；manifest 本身不改。新的飞书表 CSV 导出可以用 `npm run db:import` 按批次导入（`pipeline/import/svm_feishu_csv.py`，见 [`pipeline/README.md`](pipeline/README.md)）。
 
 `manifest.json` 中每条记录的字段：`file`（文件名，区分大小写）、`device`、`mode`，以及可选的英文名 `deviceEn`、`modeEn`。应用按清单顺序加载；2D 图中同一 `device` 同一颜色（按首次出现顺序分配），不同 `mode` 用不同线型。新增记录请追加到末尾，这样已有机型的颜色不会变化。
 

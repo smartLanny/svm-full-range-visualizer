@@ -6,8 +6,8 @@
 |---|---|---|
 | 频闪 SVM（亮度 × 灰阶） | `public/datasets/`（**唯一来源**，工作台与数据库共用） | 飞书表导入 |
 | 可视角 | `data/angle/summary.json`（摘要）；完整数据和仿真在独立项目 [phone-view-angle-sim](https://github.com/smartLanny/phone-view-angle-sim) | 运行独立项目自己的模型生成 |
-| 均匀度（Radiant 热力图） | `data/uniformity/` | 迁自 phone-screen-atlas `0c2846d`，原样 |
-| 反射率（SCI / SCE 光谱） | `data/reflectance/` | 迁自 phone-screen-atlas `0c2846d`，原样 |
+| 均匀度（Radiant 热力图） | `data/uniformity/` | 迁自 phone-screen-atlas `0c2846d`；之后的变化走批次导入 |
+| 反射率（SCI / SCE 光谱） | `data/reflectance/` | 迁自 phone-screen-atlas `0c2846d`；之后的变化走批次导入 |
 
 `data/devices.json`（机型目录）把它们串起来。数据库代码不放进 `src/`，`src/` 也不引用 `data/`、`db/`、`pipeline/`，所以改数据库**不会**让工作台离线版 `release/SVM-Visualizer.html` 过期（`pipeline/isolation.test.ts` 保证）。
 
@@ -19,6 +19,9 @@ data/
   devices.json                       机型目录（生成，不要手改）
   catalog-overrides.json             机型资料（手工维护：名称、品牌、别名、屏幕、样机与面板码、源名称映射）
   provenance.json                    迁移来源：atlas 提交号、每个文件的 sha256、频闪交叉核对结果（生成）
+  version.json                       数据版本、日期、已导入的批次、各类数量（db:import 写）
+  CHANGELOG.md                       数据更新记录，最新的在最上面（db:import 写）
+  batches/<批次 id>/                 每个导入批次：batch.json（输入清单）、audit.json（哈希与核对）、sources/（频闪 CSV 原样）
   angle/summary.json                 可视角摘要（生成）
   uniformity/index.json              均匀度指标与热力图索引（原样）
   uniformity/maps/*.png              15 张热力图（原样；不进 GitHub「Download ZIP」）
@@ -26,7 +29,10 @@ data/
   reflectance/raw/phone-samples.json 仪器导出 XML 的白名单原始读数（原样）
   reflectance/source-manifest.json   旧 PNG 数字化路线的来源清单（原样，仅作记录）
 
-pipeline/                            生成与校验脚本（Node，无依赖）
+pipeline/                            生成、导入与校验脚本（Node 与 Python 标准库，无依赖）；更新流程见 pipeline/README.md
+  db_import.mjs                      npm run db:import（批次导入）
+  import/*.py                        频闪飞书 CSV、均匀度指标、反射率 XML 导入器
+  mac/collect_batch.py               Mac 上从 NAS 收集批次文件
   check.mjs                          npm run db:check
   catalog/build_catalog.mjs          npm run db:catalog
   catalog/vocabulary.mjs             状态、屏幕、可用性等词表
@@ -35,7 +41,7 @@ pipeline/                            生成与校验脚本（Node，无依赖）
 db/catalog/types.ts                  上述生成文件的 TypeScript 类型
 ```
 
-「原样」的文件逐字节来自 atlas 的 git 对象，`provenance.json` 记了每个文件的 sha256，`db:check` 逐个复核：**这些文件不能手改**，要改就从源数据重新导入。
+「原样」的文件逐字节来自 atlas 的 git 对象，`provenance.json` 记了每个文件的 sha256，`db:check` 逐个复核：**这些文件不能手改**，要改就从源数据重新导入（`npm run db:import`，见 [`pipeline/README.md`](../pipeline/README.md)）。批次导入改过的文件，按「atlas → 批次 1 → 批次 2 …」的哈希链核对，每个批次的 `audit.json` 记了导入前后的 sha256。
 
 ## 常用命令
 
@@ -45,9 +51,11 @@ db/catalog/types.ts                  上述生成文件的 TypeScript 类型
 | `npm run db:catalog` | 改了 `catalog-overrides.json` 或任何源数据后，重新生成 `devices.json` |
 | `npm run db:angle` | 独立可视角项目更新后，重新生成 `angle/summary.json`。需要本地 checkout：环境变量 `VAS_DIR`，或放在本仓库旁边的 `../phone-view-angle-sim` |
 | `npm run db:angle -- --check` | 只核对摘要是否与独立项目当前提交一致 |
-| `npm run db:migrate-atlas -- --check` | 核对迁移来的文件仍与 atlas `0c2846d` 逐字节相同 |
+| `npm run db:migrate-atlas -- --check` | 核对迁移来的文件仍与 atlas `0c2846d` 逐字节相同（批次更新过的文件跳过） |
+| `npm run db:import -- <batch.json> [--dry-run]` | 导入一个批次：核对输入文件、运行导入器、更新目录 / 版本 / 更新记录，见 [`pipeline/README.md`](../pipeline/README.md) |
+| `npm run db:import -- --record "<说明>"` | 批次以外的数据变化（例如 `db:angle`）记一个版本和一条更新记录 |
 
-数据有变化时的顺序：导入源数据 →（可视角有变化时）`db:angle` → `db:catalog` → `db:check` → `npm test`。新机型要先在 `catalog-overrides.json` 的 `devices` 里加一条，否则 `db:catalog` 会报「对应不到目录里的机型」，不会自己猜。
+数据有变化时的顺序：新测量走 `npm run db:import`（它会自己重建目录、跑 `db:check`）；可视角有变化时 `db:angle` → `db:catalog` → `db:import -- --record "…"`；最后 `npm test`。新机型要先在 `catalog-overrides.json` 的 `devices` 里加一条，否则 `db:catalog` 会报「对应不到目录里的机型」，不会自己猜。
 
 ## 机型 id
 
@@ -160,5 +168,7 @@ db/catalog/types.ts                  上述生成文件的 TypeScript 类型
 3. 可视角：目录里的 profile 都在摘要里、摘要里的 profile 都有归属，`measured` 一致，数值齐全且合理，未测的不带数值。
 4. 均匀度：每张热力图存在且 sha256 与索引一致，没有多余文件，指标在合理范围，目录与索引一一对应，「仅指标 / 未测」与可用性一致。
 5. 反射率：每条曲线 31 个点、400–700 nm、步长 10 nm、值在 0–100 %，并与原始读数逐点一致；目录与索引一一对应。
-6. 来源：`provenance.json` 登记的文件哈希不变，`uniformity/`、`reflectance/` 下没有未登记的文件。
-7. `devices.json` 与生成器的输出逐字节一致（忘了 `db:catalog` 会报错）。
+6. 批次与数据版本：每个批次文件合格；导入过的批次都有 `audit.json`、在 `version.json` 里、在 `CHANGELOG.md` 里有条目；`version.json` 的数量与目录一致（数据变了却没记版本会报错）。
+7. 来源：哈希链「atlas 迁移（`provenance.json`）→ 各批次」连续，每个文件当前的 sha256 等于最后一次登记的值；`uniformity/`、`reflectance/` 下没有未登记的文件。
+8. `devices.json` 与生成器的输出逐字节一致（忘了 `db:catalog` 会报错）。
+9. 工作台离线版的指纹与当前 `src/`、`public/`（含 `public/datasets`）一致：频闪数据变了要 `npm run build:standalone`。

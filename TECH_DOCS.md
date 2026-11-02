@@ -195,6 +195,7 @@ npm run build:standalone  # 单文件离线版 → release/SVM-Visualizer.html
 npm run typecheck   # tsc --noEmit（工作台 tsconfig.json + 数据库 tsconfig.db.json）
 npm test            # vitest：src/**/*.test.ts，以及数据库的 pipeline/**/*.test.ts、db/**/*.test.ts
 npm run db:check    # 屏幕数据库校验（data/README.md）
+npm run db:import -- <batch.json> --dry-run   # 屏幕数据库批次导入（pipeline/README.md）
 ```
 
 数据库代码在 `db/`、`pipeline/`，数据在 `data/`，都不是离线版的构建输入；`pipeline/isolation.test.ts` 检查 `src/` 不引用它们、构建指纹也不包含它们，所以改数据库不需要重建 `release/SVM-Visualizer.html`。
@@ -217,6 +218,7 @@ npm run db:check    # 屏幕数据库校验（data/README.md）
 4. 在 [`DATASETS.md`](DATASETS.md) 中写明设备、刷新率、调制模式、覆盖范围、测量条件，以及降噪会处理哪些格子（表格里的一行）。
 5. 运行 `npm test`；再运行 `npm run build:standalone` 并提交新的 `release/SVM-Visualizer.html`（否则 `releaseFreshness` 测试会失败）。
 6. 运行 `npm run db:catalog` 把新记录归到屏幕数据库的机型目录（新机型先在 `data/catalog-overrides.json` 里加一条），再运行 `npm run db:check`。
+   飞书表的 CSV 导出也可以直接走批次导入：`npm run db:import`（`pipeline/import/svm_feishu_csv.py`），它会写记录、追加 manifest、重建目录与离线版，见 [`pipeline/README.md`](pipeline/README.md)。
 
 ## 8. 界面文案
 

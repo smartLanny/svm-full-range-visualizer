@@ -18,7 +18,10 @@ describe('db:check on the repository data', () => {
     expect(r.errors).toEqual([]);
     expect(r.ok).toBe(true);
     // every section ran
-    expect(r.sections.map((s: { title: string }) => s.title)).toHaveLength(7);
+    expect(r.sections.map((s: { title: string }) => s.title)).toHaveLength(9);
+    // the offline release is checked in a full checkout
+    expect(r.sections.at(-1)!.title).toMatch(/工作台离线版/);
+    expect(r.sections.at(-1)!.info[0]).toMatch(/一致/);
   });
 
   it('reports the database size it checked', () => {
@@ -128,6 +131,35 @@ describe('db:check on corrupted data', () => {
       outer.metrics = s.profiles.find((p: { id: string }) => p.id === 'p0').metrics;
     });
     failsWith(fx.root, /duo-outer 未测，却带有数值/);
+  });
+
+  it('a data version whose counts no longer match the catalog fails (data changed without a recorded version)', () => {
+    fx = makeFixture();
+    fx.edit('data/version.json', (v) => { v.counts.svmRecords -= 1; });
+    failsWith(fx.root, /version\.json 的数量与 data\/devices\.json 不一致：数据变了却没有记录版本/);
+  });
+
+  it('a changelog without the current data version fails', () => {
+    fx = makeFixture();
+    fx.edit('data/version.json', (v) => { v.dataVersion = '2026.11.09'; v.date = '2026-11-09'; });
+    failsWith(fx.root, /CHANGELOG\.md 没有当前数据版本 2026\.11\.09 的条目/);
+  });
+
+  it('a batch folder that was never imported is a warning; an invalid batch file fails', () => {
+    fx = makeFixture();
+    const example = JSON.parse(fs.readFileSync(path.join(ROOT, 'pipeline/examples/duo-revision91.batch.json'), 'utf8'));
+    fx.writeJson(`data/batches/${example.id}/batch.json`, example);
+    const r = runCheck({ root: fx.root });
+    expect(r.errors).toEqual([]);
+    expect(r.warnings).toContain(`[批次与数据版本（data/batches、version.json、CHANGELOG.md）] data/batches/${example.id}: 尚未导入（只有 batch.json）`);
+    fx.edit(`data/batches/${example.id}/batch.json`, (b) => { b.inputs[0].path = '/Volumes/dav/x.csv'; });
+    failsWith(fx.root, /inputs\[0\]\.path「\/Volumes\/dav\/x\.csv」是绝对路径/);
+  });
+
+  it('the offline release check is skipped outside a full checkout', () => {
+    fx = makeFixture();
+    const sec = runCheck({ root: fx.root }).sections.at(-1);
+    expect(sec!.info[0]).toMatch(/跳过/);
   });
 
   it('an availability status that contradicts the entries fails', () => {

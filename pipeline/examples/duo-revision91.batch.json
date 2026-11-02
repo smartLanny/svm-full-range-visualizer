@@ -1,0 +1,86 @@
+{
+  "schemaVersion": 1,
+  "id": "2026-10-25-iphone-duo-svm",
+  "date": "2026-10-25",
+  "title": "示例批次：iPhone Duo 内外屏 120Hz 频闪（飞书 revision 91）",
+  "notes": "回归用示例，不是待导入的新数据：这 4 条记录已在 public/datasets 中（提交 aa542b7）。用 NAS_ROOT=test-fixtures 运行 db:import --dry-run，结果应为「无变化」。",
+  "inputs": [
+    {
+      "path": "iphone_duo_inner_revision91.csv",
+      "sha256": "624ae370aee68d31cb9e3785725dc7eda6dec60d205f5336e9244266ddfc8424",
+      "bytes": 10595,
+      "type": "svm-feishu-csv",
+      "devices": ["iphone-duo"],
+      "notes": "内屏工作表 rWkrKM 的 A1:AK54；第 1 块普通模式，第 28 行起脉冲平滑。",
+      "options": {
+        "sheet": {
+          "provider": "Feishu spreadsheet read-only CLI snapshot",
+          "revision": 91,
+          "url": "https://gcnookhci7q8.feishu.cn/sheets/LxLdsamxKhAq5CtdRJdcK0h7n1c?sheet=rWkrKM"
+        },
+        "refreshRateHz": 120,
+        "blocks": [
+          {
+            "startRow": 1,
+            "title": "iPhone Duo 内屏",
+            "file": "iPhoneDuo_inner_120hz.json",
+            "device": "iPhone Duo 内屏",
+            "deviceEn": "iPhone Duo Inner display",
+            "mode": "普通 120Hz",
+            "modeEn": "Standard 120Hz",
+            "modeBasis": "工作表标题注明 120Hz；第 1 行未改动的表头即普通模式。"
+          },
+          {
+            "startRow": 28,
+            "title": "iPhone Duo 内屏 脉冲平滑",
+            "file": "iPhoneDuo_inner_smooth_120hz.json",
+            "device": "iPhone Duo 内屏",
+            "deviceEn": "iPhone Duo Inner display",
+            "mode": "脉冲平滑 120Hz",
+            "modeEn": "Smooth pulse 120Hz",
+            "modeBasis": "第 28 行标题写明脉冲平滑。"
+          }
+        ]
+      }
+    },
+    {
+      "path": "iphone_duo_outer_revision91.csv",
+      "sha256": "191143468a77d71f7ff3858e1acc242af3e99f6d2ac2693bf764537e0fc204b4",
+      "bytes": 10594,
+      "type": "svm-feishu-csv",
+      "devices": ["iphone-duo"],
+      "notes": "外屏工作表 ZqTkQh 的 A1:AK54；R27:S27（G1 / 27 %）成对空白，保留为 null。",
+      "options": {
+        "sheet": {
+          "provider": "Feishu spreadsheet read-only CLI snapshot",
+          "revision": 91,
+          "url": "https://gcnookhci7q8.feishu.cn/sheets/LxLdsamxKhAq5CtdRJdcK0h7n1c?sheet=ZqTkQh"
+        },
+        "refreshRateHz": 120,
+        "blocks": [
+          {
+            "startRow": 1,
+            "title": "iPhone Duo 外屏",
+            "file": "iPhoneDuo_outer_120hz.json",
+            "device": "iPhone Duo 外屏",
+            "deviceEn": "iPhone Duo Outer display",
+            "mode": "普通 120Hz",
+            "modeEn": "Standard 120Hz",
+            "modeBasis": "工作表标题注明 120Hz；第 1 行未改动的表头即普通模式。"
+          },
+          {
+            "startRow": 28,
+            "title": "iPhone Duo 外屏 脉冲平滑",
+            "file": "iPhoneDuo_outer_smooth_120hz.json",
+            "device": "iPhone Duo 外屏",
+            "deviceEn": "iPhone Duo Outer display",
+            "mode": "脉冲平滑 120Hz",
+            "modeEn": "Smooth pulse 120Hz",
+            "modeBasis": "第 28 行标题写明脉冲平滑。"
+          }
+        ]
+      }
+    }
+  ],
+  "expect": { "svmRecords": 0 }
+}
