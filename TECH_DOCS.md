@@ -192,9 +192,12 @@ npm run build:standalone  # 单文件离线版 → release/SVM-Visualizer.html
 ## 6. 测试与检查
 
 ```bash
-npm run typecheck   # tsc --noEmit
-npm test            # vitest：src/**/*.test.ts
+npm run typecheck   # tsc --noEmit（工作台 tsconfig.json + 数据库 tsconfig.db.json）
+npm test            # vitest：src/**/*.test.ts，以及数据库的 pipeline/**/*.test.ts、db/**/*.test.ts
+npm run db:check    # 屏幕数据库校验（data/README.md）
 ```
+
+数据库代码在 `db/`、`pipeline/`，数据在 `data/`，都不是离线版的构建输入；`pipeline/isolation.test.ts` 检查 `src/` 不引用它们、构建指纹也不包含它们，所以改数据库不需要重建 `release/SVM-Visualizer.html`。
 
 单元测试覆盖：网格与插值（`data/grid.test.ts`）、降噪（`data/denoise.test.ts`：检测、插值规则、未标记的格与原始读数完全相同等属性测试；`data/denoiseView.test.ts`：显示记录的说明、全部内置记录每条说明的中英文案、3D 提示的格子说明；`chart2d/denoiseMarks.test.ts`：截面点与格子的对应）、旧版剔除（`data/anomalies.test.ts`）、记录解析（`data/records.test.ts`）、统计（`data/stats.test.ts`、`stats/model.test.ts`）、场景加权参考（`data/scenarios.test.ts`：均匀矩阵、部分格裁剪、对数面积加权、缺场景重新分配权重、覆盖率门槛、分级边界、与裁剪 / 上限无关、配置校验；`stats/scenarioExport.test.ts`；`scene3d/engine/scenarioOverlay.test.ts`）、统计页导出的排版与文件名（`stats/export.test.ts`）、2D 截面与样条（`chart2d/chart2d.test.ts`）、3D 模型与开场动画（`scene3d/engine/model.test.ts`、`intro.test.ts`）、导出尺寸 / 帧时间 / 编码参数 / 文件名（`export/presets.test.ts`、`export/exportNames.test.ts`）、离线版是否过期（`export/releaseFreshness.test.ts`）。
 
@@ -213,6 +216,7 @@ npm test            # vitest：src/**/*.test.ts
 3. 在 `public/datasets/manifest.json` **末尾**追加一条：`file`、`device`、`mode`，可选 `deviceEn`、`modeEn`。追加到末尾能保证已有机型的颜色不变。同一台设备的不同模式请使用完全相同的 `device`，这样 2D 图中它们同色、不同线型。
 4. 在 [`DATASETS.md`](DATASETS.md) 中写明设备、刷新率、调制模式、覆盖范围、测量条件，以及降噪会处理哪些格子（表格里的一行）。
 5. 运行 `npm test`；再运行 `npm run build:standalone` 并提交新的 `release/SVM-Visualizer.html`（否则 `releaseFreshness` 测试会失败）。
+6. 运行 `npm run db:catalog` 把新记录归到屏幕数据库的机型目录（新机型先在 `data/catalog-overrides.json` 里加一条），再运行 `npm run db:check`。
 
 ## 8. 界面文案
 
