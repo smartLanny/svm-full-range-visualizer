@@ -1,0 +1,790 @@
+{
+  "schemaVersion": 1,
+  "defaultPhone": "xiaomi-18-pro-max",
+  "defaultCondition": "300",
+  "defaultMap": "luminance",
+  "colorStops": [
+    [
+      0.0,
+      [
+        96,
+        0,
+        200
+      ]
+    ],
+    [
+      0.15,
+      [
+        24,
+        40,
+        255
+      ]
+    ],
+    [
+      0.35,
+      [
+        0,
+        150,
+        255
+      ]
+    ],
+    [
+      0.52,
+      [
+        0,
+        232,
+        232
+      ]
+    ],
+    [
+      0.68,
+      [
+        0,
+        245,
+        160
+      ]
+    ],
+    [
+      0.8,
+      [
+        96,
+        255,
+        0
+      ]
+    ],
+    [
+      0.9,
+      [
+        240,
+        240,
+        0
+      ]
+    ],
+    [
+      1.0,
+      [
+        255,
+        150,
+        0
+      ]
+    ]
+  ],
+  "sources": {
+    "mapsJson": {
+      "path": "data/unif/maps.json",
+      "sha256": "a7932f2e9fa6712d2549acc3de594bc08bd58eb3dce15a0fdc5734293a0d1abd"
+    },
+    "mapsJs": {
+      "path": "data/unif/maps.js",
+      "sha256": "2b72fb20f92a43779bd46158fad24968313e271b04a2480e94463ba941243da3"
+    },
+    "metricsJson": {
+      "path": "data/uniformity_metrics.json",
+      "sha256": "02ac45cf0e225099dada59a3b61a2f02de1b1890804e5396c2086a6cdf2834ba"
+    }
+  },
+  "phones": [
+    {
+      "id": "xiaomi-18-pro-max",
+      "name": "小米 18 Pro Max",
+      "heatmapStatus": "has-maps",
+      "conditions": [
+        {
+          "id": "300",
+          "label": "300 nits 白场",
+          "pattern": "全白场",
+          "referenceNits": 300,
+          "maps": {
+            "luminance": {
+              "asset": "maps/300_lum_mi18pm.png",
+              "sourceKey": "300_lum_mi18pm",
+              "sourceSha256": "d4b600cd41e537663ecf3b53d166d4b2baa225216d1201097979d526c8a2e4b4",
+              "assetSha256": "71fed155c0a9f9915c181565a50febfc2a2cfb0c3a7a3cc4b24c7b196947ee12",
+              "sourceResolution": [
+                1440,
+                677
+              ],
+              "displayResolution": [
+                677,
+                1440
+              ],
+              "sourceMaskBounds": [
+                6,
+                6,
+                1434,
+                671
+              ],
+              "sourceMaskCoverage": 0.948006,
+              "measurementResolution": [
+                2448,
+                1632
+              ],
+              "measurementSourceSha256": "097b2e393b164d9f14235ea611d0c33696ef7b7a0a0eb5cfe8d353479c58d199",
+              "measurementSource": "小米 18 Pro Max/04源数据/均匀性/300亮度.txt",
+              "scale": {
+                "minPercentOfTypical": 68.97,
+                "maxPercentOfTypical": 114.94
+              }
+            },
+            "colorTemperature": {
+              "asset": "maps/300_cct_mi18pm.png",
+              "sourceKey": "300_cct_mi18pm",
+              "sourceSha256": "a3066533091f2a9cb8e7ba5e7a0f254dbd52f52cdbae09006b5ae6412039d517",
+              "assetSha256": "3517708e798025ea2481eb1ec4a237250f32113c88e63bfa0e895fc81779161c",
+              "sourceResolution": [
+                1440,
+                677
+              ],
+              "displayResolution": [
+                677,
+                1440
+              ],
+              "sourceMaskBounds": [
+                6,
+                6,
+                1434,
+                671
+              ],
+              "sourceMaskCoverage": 0.948006,
+              "measurementResolution": [
+                2448,
+                1632
+              ],
+              "measurementSourceSha256": "a4064d216790bfa641c068d594e4d10d086fa86b6ad488a473f20cf35e112d30",
+              "measurementSource": "小米 18 Pro Max/04源数据/均匀性/300色温.txt",
+              "scale": {
+                "minOffsetFromTypicalK": -1090.0,
+                "maxOffsetFromTypicalK": 510.0
+              }
+            }
+          },
+          "metrics": {
+            "luminance": {
+              "typical": 296.120574,
+              "unit": "nit",
+              "ninePointUniformityPct": 89.6397,
+              "areaUniformityPct": 85.112,
+              "deviation10PctArea": 0.2036
+            },
+            "colorTemperature": {
+              "typical": 6797.593,
+              "unit": "K",
+              "ninePointSpreadK": 193.122,
+              "areaSpreadK": 393.776
+            }
+          }
+        },
+        {
+          "id": "100",
+          "label": "100 nits G20",
+          "pattern": "G20",
+          "referenceNits": 100,
+          "maps": {
+            "luminance": {
+              "asset": "maps/100_lum_mi18pm.png",
+              "sourceKey": "100_lum_mi18pm",
+              "sourceSha256": "4caf278ae3ad3f87ecf39b7ede1b9c540ec99348ea2c0d2c51f70c30c671ba9f",
+              "assetSha256": "021d8da19d8fda0c9029ee524f58c6c029bae86e01cc3903b7629a04176ae714",
+              "sourceResolution": [
+                1440,
+                677
+              ],
+              "displayResolution": [
+                677,
+                1440
+              ],
+              "sourceMaskBounds": [
+                6,
+                6,
+                1434,
+                671
+              ],
+              "sourceMaskCoverage": 0.947027,
+              "measurementResolution": [
+                2448,
+                1632
+              ],
+              "measurementSourceSha256": "d73a9d2bbb0ffe10130ff6822b6d171c483bd8e9f00652bda0fa4566fec3ea13",
+              "measurementSource": "小米 18 Pro Max/04源数据/均匀性/100nits g20亮度.txt",
+              "scale": {
+                "minPercentOfTypical": 68.97,
+                "maxPercentOfTypical": 114.94
+              }
+            },
+            "colorTemperature": {
+              "asset": "maps/100_cct_mi18pm.png",
+              "sourceKey": "100_cct_mi18pm",
+              "sourceSha256": "cd6c96b66198cdc1ab75004180e991a29e406ba0d8a2e0e59e1b177cc3e304b2",
+              "assetSha256": "99192e840ad131ade7a00b7ce7d1325eeecefab26a1de6f20e1470622e660e78",
+              "sourceResolution": [
+                1440,
+                677
+              ],
+              "displayResolution": [
+                677,
+                1440
+              ],
+              "sourceMaskBounds": [
+                6,
+                6,
+                1434,
+                671
+              ],
+              "sourceMaskCoverage": 0.947027,
+              "measurementResolution": [
+                2448,
+                1632
+              ],
+              "measurementSourceSha256": "bdfcd8c63c472b2f6c3dbad3519591dd07fa6a5db564477c6eb894132725e070",
+              "measurementSource": "小米 18 Pro Max/04源数据/均匀性/100nits g20色温.txt",
+              "scale": {
+                "minOffsetFromTypicalK": -1090.0,
+                "maxOffsetFromTypicalK": 510.0
+              }
+            }
+          },
+          "metrics": {
+            "luminance": {
+              "typical": 0.373104,
+              "unit": "nit",
+              "ninePointUniformityPct": 82.4432,
+              "areaUniformityPct": 75.8624,
+              "deviation10PctArea": 5.6314
+            },
+            "colorTemperature": {
+              "typical": 7140.141,
+              "unit": "K",
+              "ninePointSpreadK": 1084.011,
+              "areaSpreadK": 1681.036
+            }
+          }
+        },
+        {
+          "id": "10",
+          "label": "10 nits G20",
+          "pattern": "G20",
+          "referenceNits": 10,
+          "maps": {
+            "luminance": {
+              "asset": "maps/10_lum_mi18pm.png",
+              "sourceKey": "10_lum_mi18pm",
+              "sourceSha256": "5d8c721c0af5b2487cc6045c773798dfb9839e222b88a89fa03cdd277c8363ed",
+              "assetSha256": "c9107df3de30e9556ea60cd4348f1743396aba8793bfa64adc87df8d9e2ce82b",
+              "sourceResolution": [
+                1440,
+                674
+              ],
+              "displayResolution": [
+                674,
+                1440
+              ],
+              "sourceMaskBounds": [
+                6,
+                6,
+                1434,
+                668
+              ],
+              "sourceMaskCoverage": 0.949281,
+              "measurementResolution": [
+                2448,
+                1632
+              ],
+              "measurementSourceSha256": "96e6b658c0915cd7fb138d221c460fd3cdae6046d7a9d34d9a1e9a5e206dfaed",
+              "measurementSource": "小米 18 Pro Max/04源数据/均匀性/10nits g20亮度.txt",
+              "scale": {
+                "minPercentOfTypical": 47.3,
+                "maxPercentOfTypical": 135.14
+              }
+            }
+          },
+          "metrics": {
+            "luminance": {
+              "typical": 0.038025,
+              "unit": "nit",
+              "ninePointUniformityPct": 89.8915,
+              "areaUniformityPct": 78.2522,
+              "deviation10PctArea": 1.0304
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "iphone-18-pro-max",
+      "name": "iPhone 18 Pro Max",
+      "heatmapStatus": "has-maps",
+      "conditions": [
+        {
+          "id": "300",
+          "label": "300 nits 白场",
+          "pattern": "全白场",
+          "referenceNits": 300,
+          "maps": {
+            "luminance": {
+              "asset": "maps/300_lum_ip18pm.png",
+              "sourceKey": "300_lum_ip18pm",
+              "sourceSha256": "e95bf9b7817765699c1928c8f62ce70c3f2a35acc18a41b88155c1a6d95c2043",
+              "assetSha256": "f04d29a1dde5a36ba392372ae770b6772288bab1e8d2dcabd776d9dcc380ab99",
+              "sourceResolution": [
+                1440,
+                671
+              ],
+              "displayResolution": [
+                671,
+                1440
+              ],
+              "sourceMaskBounds": [
+                2,
+                2,
+                1438,
+                669
+              ],
+              "sourceMaskCoverage": 0.963702,
+              "measurementResolution": [
+                1964,
+                973
+              ],
+              "measurementSourceSha256": "f4457a1494614cc9ed926b81f4021fcf4842fad7cabc1d35c071039905b9d802",
+              "measurementSource": "Apple iPhone 18 Pro Max/03源文件/均匀性 260920/300nits 亮度均匀性.txt",
+              "scale": {
+                "minPercentOfTypical": 68.97,
+                "maxPercentOfTypical": 114.94
+              }
+            },
+            "colorTemperature": {
+              "asset": "maps/300_cct_ip18pm.png",
+              "sourceKey": "300_cct_ip18pm",
+              "sourceSha256": "8c8a59c2e2a48b549df3fc7f5ea5b577c97d296c7034163d798f6562e1f7cc5a",
+              "assetSha256": "71799b4155c65524978e2b05359b40704f5c8b8d67f3c0412aeb70d39655b0cc",
+              "sourceResolution": [
+                1440,
+                671
+              ],
+              "displayResolution": [
+                671,
+                1440
+              ],
+              "sourceMaskBounds": [
+                2,
+                2,
+                1438,
+                669
+              ],
+              "sourceMaskCoverage": 0.963702,
+              "measurementResolution": [
+                1964,
+                973
+              ],
+              "measurementSourceSha256": "9af33f1bd8faabc8226a3096a8b01adf8cd9de42890af6684ecc20292dced4f1",
+              "measurementSource": "Apple iPhone 18 Pro Max/03源文件/均匀性 260920/300nits 色温均匀性.txt",
+              "scale": {
+                "minOffsetFromTypicalK": -1090.0,
+                "maxOffsetFromTypicalK": 510.0
+              }
+            }
+          },
+          "metrics": {
+            "luminance": {
+              "typical": 333.534173,
+              "unit": "nit",
+              "ninePointUniformityPct": 97.576,
+              "areaUniformityPct": 94.5182,
+              "deviation10PctArea": 0.0
+            },
+            "colorTemperature": {
+              "typical": 7405.301,
+              "unit": "K",
+              "ninePointSpreadK": 132.533,
+              "areaSpreadK": 363.031
+            }
+          }
+        },
+        {
+          "id": "100",
+          "label": "100 nits G20",
+          "pattern": "G20",
+          "referenceNits": 100,
+          "maps": {
+            "luminance": {
+              "asset": "maps/100_lum_ip18pm.png",
+              "sourceKey": "100_lum_ip18pm",
+              "sourceSha256": "84c4338134890f88f6f4d3d4b9d1ed3815de7d8e5cf415e15b8fb896ce10dd1f",
+              "assetSha256": "69e65960ed5417fa679acc16c3e9b3d5643caf7456bc83bdfdc6ba78c6227c5c",
+              "sourceResolution": [
+                1440,
+                671
+              ],
+              "displayResolution": [
+                671,
+                1440
+              ],
+              "sourceMaskBounds": [
+                2,
+                2,
+                1438,
+                669
+              ],
+              "sourceMaskCoverage": 0.962474,
+              "measurementResolution": [
+                1964,
+                973
+              ],
+              "measurementSourceSha256": "9e4f958990544a9309cd75952830f7ecbb66558a3f98898157fb2856c0ace680",
+              "measurementSource": "Apple iPhone 18 Pro Max/03源文件/均匀性 260920/100nits g20 亮度均匀性.txt",
+              "scale": {
+                "minPercentOfTypical": 68.97,
+                "maxPercentOfTypical": 114.94
+              }
+            },
+            "colorTemperature": {
+              "asset": "maps/100_cct_ip18pm.png",
+              "sourceKey": "100_cct_ip18pm",
+              "sourceSha256": "b3919765c7c1a53f41e07d22301bc5abd59dcc0eba558137acf7cf4f817c4106",
+              "assetSha256": "353429277613f70a881dd66cc7e6b04b16c5f1b539ea8717a670dc5fcfc98dc8",
+              "sourceResolution": [
+                1440,
+                671
+              ],
+              "displayResolution": [
+                671,
+                1440
+              ],
+              "sourceMaskBounds": [
+                2,
+                2,
+                1438,
+                669
+              ],
+              "sourceMaskCoverage": 0.962474,
+              "measurementResolution": [
+                1964,
+                973
+              ],
+              "measurementSourceSha256": "a79902127cb4ebcae8d7301d7d2c8303bae479998e39c6e423f6b6967fea0b2f",
+              "measurementSource": "Apple iPhone 18 Pro Max/03源文件/均匀性 260920/100nits g20 色温均匀性.txt",
+              "scale": {
+                "minOffsetFromTypicalK": -1090.0,
+                "maxOffsetFromTypicalK": 510.0
+              }
+            }
+          },
+          "metrics": {
+            "luminance": {
+              "typical": 0.396789,
+              "unit": "nit",
+              "ninePointUniformityPct": 96.8855,
+              "areaUniformityPct": 92.5633,
+              "deviation10PctArea": 0.0
+            },
+            "colorTemperature": {
+              "typical": 7463.025,
+              "unit": "K",
+              "ninePointSpreadK": 395.493,
+              "areaSpreadK": 824.138
+            }
+          }
+        },
+        {
+          "id": "10",
+          "label": "10 nits G20",
+          "pattern": "G20",
+          "referenceNits": 10,
+          "maps": {
+            "luminance": {
+              "asset": "maps/10_lum_ip18pm.png",
+              "sourceKey": "10_lum_ip18pm",
+              "sourceSha256": "e001c85f11d1bc93dd017e822666321d5b19192887361e89d91729dbe8a529b7",
+              "assetSha256": "0ffe9c326c0168ef957e3187496060776412b4765f6c89b572e3c9cb8f207f9d",
+              "sourceResolution": [
+                1440,
+                670
+              ],
+              "displayResolution": [
+                670,
+                1440
+              ],
+              "sourceMaskBounds": [
+                2,
+                2,
+                1438,
+                668
+              ],
+              "sourceMaskCoverage": 0.963228,
+              "measurementResolution": [
+                1964,
+                973
+              ],
+              "measurementSourceSha256": "cde3519392dbe2779c877620ac4a4170c412f8ce3f37e60e68329850b92146e2",
+              "measurementSource": "Apple iPhone 18 Pro Max/03源文件/均匀性 260920/10nits g20 亮度均匀性.txt",
+              "scale": {
+                "minPercentOfTypical": 47.3,
+                "maxPercentOfTypical": 135.14
+              }
+            }
+          },
+          "metrics": {
+            "luminance": {
+              "typical": 0.037227,
+              "unit": "nit",
+              "ninePointUniformityPct": 90.4551,
+              "areaUniformityPct": 85.7253,
+              "deviation10PctArea": 0.0145
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "xiaomi-17-ultra",
+      "name": "小米 17 Ultra 徕卡",
+      "heatmapStatus": "has-maps",
+      "conditions": [
+        {
+          "id": "300",
+          "label": "300 nits 白场",
+          "pattern": "全白场",
+          "referenceNits": 300,
+          "maps": {
+            "luminance": {
+              "asset": "maps/300_lum_mi17u.png",
+              "sourceKey": "300_lum_mi17u",
+              "sourceSha256": "39425a275edc6710bc126029ab6c487f796d322f7b40af2ddbf8ad7b4dcd8379",
+              "assetSha256": "c8a810552802fc73606dd0979cb4ca08aeb542143c0ff226bf2dc88f87ee1bfd",
+              "sourceResolution": [
+                1440,
+                670
+              ],
+              "displayResolution": [
+                670,
+                1440
+              ],
+              "sourceMaskBounds": [
+                1,
+                1,
+                1439,
+                669
+              ],
+              "sourceMaskCoverage": 0.976915,
+              "measurementResolution": [
+                2529,
+                1248
+              ],
+              "measurementSourceSha256": "dd9bb4fa9d92c04847addcaec6d0905feea0ff5fdf72a43e0d70dd274480d2e1",
+              "measurementSource": "小米 17 Ultra 徕卡/04原始数据/小米17Ultra徕卡 300nits 亮度.txt",
+              "scale": {
+                "minPercentOfTypical": 68.97,
+                "maxPercentOfTypical": 114.94
+              }
+            },
+            "colorTemperature": {
+              "asset": "maps/300_cct_mi17u.png",
+              "sourceKey": "300_cct_mi17u",
+              "sourceSha256": "e5c9bba8d5bea12c0edca9839fce7042110beb0ee645c3c626640a278e5c9e4b",
+              "assetSha256": "e6476eb2c4a6690923d6390a4c296b35c5f2e8132f44f7e9ed38df9a076ef5ab",
+              "sourceResolution": [
+                1440,
+                670
+              ],
+              "displayResolution": [
+                670,
+                1440
+              ],
+              "sourceMaskBounds": [
+                1,
+                1,
+                1439,
+                669
+              ],
+              "sourceMaskCoverage": 0.976915,
+              "measurementResolution": [
+                2529,
+                1248
+              ],
+              "measurementSourceSha256": "92da1db3720111ffe87799ae3d2a798e211c81feceaaec53ea7effab2e39adf0",
+              "measurementSource": "小米 17 Ultra 徕卡/04原始数据/小米17Ultra徕卡 300nits 色温.txt",
+              "scale": {
+                "minOffsetFromTypicalK": -1090.0,
+                "maxOffsetFromTypicalK": 510.0
+              }
+            }
+          },
+          "metrics": {
+            "luminance": {
+              "typical": 308.247189,
+              "unit": "nit",
+              "ninePointUniformityPct": 96.3992,
+              "areaUniformityPct": 93.5776,
+              "deviation10PctArea": 0.0
+            },
+            "colorTemperature": {
+              "typical": 6496.667,
+              "unit": "K",
+              "ninePointSpreadK": 201.93,
+              "areaSpreadK": 418.397
+            }
+          }
+        },
+        {
+          "id": "100",
+          "label": "100 nits G20",
+          "pattern": "G20",
+          "referenceNits": 100,
+          "maps": {
+            "luminance": {
+              "asset": "maps/100_lum_mi17u.png",
+              "sourceKey": "100_lum_mi17u",
+              "sourceSha256": "c0d6d6fb102865536242eb78f47869175ef8c6315de9facd3c622cbefeb7201b",
+              "assetSha256": "243aa9dec582191fa7f17a47278abac4b715254eb98a3c40f5994cdf93b47a6f",
+              "sourceResolution": [
+                1440,
+                670
+              ],
+              "displayResolution": [
+                670,
+                1440
+              ],
+              "sourceMaskBounds": [
+                1,
+                1,
+                1439,
+                669
+              ],
+              "sourceMaskCoverage": 0.979176,
+              "measurementResolution": [
+                2521,
+                1292
+              ],
+              "measurementSourceSha256": "98d1a35f60bc8cea17a96618817d459a0c64e96246269ed1b6bad1083a24a3fe",
+              "measurementSource": "小米 17 Ultra 徕卡/04原始数据/260106 100nits g20 亮度.txt",
+              "scale": {
+                "minPercentOfTypical": 68.97,
+                "maxPercentOfTypical": 114.94
+              }
+            },
+            "colorTemperature": {
+              "asset": "maps/100_cct_mi17u.png",
+              "sourceKey": "100_cct_mi17u",
+              "sourceSha256": "a3628ffd9b43a5778020b8f855ca0123bcfaa339d9bfaaa77232ff80a9338cce",
+              "assetSha256": "bb27c4439aa2710cb99cc2dd130b82523e1ebbe6e57403251ca7664e6aba6e65",
+              "sourceResolution": [
+                1440,
+                670
+              ],
+              "displayResolution": [
+                670,
+                1440
+              ],
+              "sourceMaskBounds": [
+                1,
+                1,
+                1439,
+                669
+              ],
+              "sourceMaskCoverage": 0.979176,
+              "measurementResolution": [
+                2521,
+                1292
+              ],
+              "measurementSourceSha256": "a2eb3909237a4a4c48b1d153997f7882c5e803ab2b6270bd15733d51c64b49cd",
+              "measurementSource": "小米 17 Ultra 徕卡/04原始数据/260106 100nits g20 色温.txt",
+              "scale": {
+                "minOffsetFromTypicalK": -1090.0,
+                "maxOffsetFromTypicalK": 510.0
+              }
+            }
+          },
+          "metrics": {
+            "luminance": {
+              "typical": 0.486778,
+              "unit": "nit",
+              "ninePointUniformityPct": 94.8809,
+              "areaUniformityPct": 91.8407,
+              "deviation10PctArea": 0.0
+            },
+            "colorTemperature": {
+              "typical": 7040.311,
+              "unit": "K",
+              "ninePointSpreadK": 280.064,
+              "areaSpreadK": 561.828
+            }
+          }
+        },
+        {
+          "id": "10",
+          "label": "10 nits G20",
+          "pattern": "G20",
+          "referenceNits": 10,
+          "maps": {
+            "luminance": {
+              "asset": "maps/10_lum_mi17u.png",
+              "sourceKey": "10_lum_mi17u",
+              "sourceSha256": "94afe56e2004054e20bb1528a6b73a0d603b0ea255439e90e058364a7a368977",
+              "assetSha256": "b49ca8b43db5c52f24fff3d6c79f9477e4ce928a5a44e923ee28ed7985a2329d",
+              "sourceResolution": [
+                1440,
+                670
+              ],
+              "displayResolution": [
+                670,
+                1440
+              ],
+              "sourceMaskBounds": [
+                1,
+                1,
+                1439,
+                669
+              ],
+              "sourceMaskCoverage": 0.974999,
+              "measurementResolution": [
+                2529,
+                1248
+              ],
+              "measurementSourceSha256": "69b7b3d2846575bbb2148666b1e46e1932cfc8d52b887b81f24ed45dc342969b",
+              "measurementSource": "小米 17 Ultra 徕卡/04原始数据/小米17Ultra徕卡 10nits g20 亮度.txt",
+              "scale": {
+                "minPercentOfTypical": 47.3,
+                "maxPercentOfTypical": 135.14
+              }
+            }
+          },
+          "metrics": {
+            "luminance": {
+              "typical": 0.040846,
+              "unit": "nit",
+              "ninePointUniformityPct": 81.6328,
+              "areaUniformityPct": 68.212,
+              "deviation10PctArea": 14.8635
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "metricsOnly": [
+    {
+      "id": "iphone-17-pro-max",
+      "name": "iPhone 17 Pro Max",
+      "metricSourceId": "ip17pm",
+      "conditions": []
+    },
+    {
+      "id": "huawei-mate-80-rs",
+      "name": "华为 Mate 80 RS",
+      "metricSourceId": "m80rs",
+      "conditions": []
+    },
+    {
+      "id": "huawei-mate-70-air",
+      "name": "华为 Mate 70 Air",
+      "metricSourceId": "m70a",
+      "conditions": []
+    }
+  ],
+  "notRecorded": [
+    {
+      "id": "huawei-mate-90-pro-max",
+      "name": "华为 Mate 90 Pro Max 典藏版",
+      "conditions": []
+    }
+  ]
+}

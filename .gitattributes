@@ -3,3 +3,10 @@
 *.command text eol=lf
 *.sh text eol=lf
 release/*.html -diff linguist-generated
+
+# Screen database (data/): migrated atlas files are verified by sha256 (data/provenance.json),
+# so they are stored byte for byte without line-ending conversion. The heatmap PNGs (~14 MB)
+# stay out of `git archive` / GitHub "Download ZIP".
+data/uniformity/** -text
+data/reflectance/** -text
+data/uniformity/maps/** export-ignore

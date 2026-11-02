@@ -1,0 +1,292 @@
+{
+  "schemaVersion": 1,
+  "note": "本文件由 pipeline/atlas/migrate.mjs 生成。列出的文件从 atlas 仓库指定提交的 git 对象逐字节复制，之后不得手工修改；db:check 会逐个核对 sha256。",
+  "atlas": {
+    "repository": "https://github.com/smartLanny/phone-screen-atlas",
+    "commit": "0c2846dc28ee29076e24ce3010ba2204d9e0a515",
+    "commitDate": "2026-10-09T00:16:25+08:00",
+    "script": "pipeline/atlas/migrate.mjs",
+    "files": [
+      {
+        "path": "data/reflectance/index.json",
+        "atlasPath": "data/reflectance/index.json",
+        "bytes": 303215,
+        "sha256": "395a40def7c94286de548e88195acdc297e8df5d6ec907a3d5133e989f85a6fc"
+      },
+      {
+        "path": "data/reflectance/raw/phone-samples.json",
+        "atlasPath": "data/reflectance/raw/phone-samples.json",
+        "bytes": 94292,
+        "sha256": "c71104dc8756ea636267e3a96c987f2527d31f004515e17eea9582ad363390db"
+      },
+      {
+        "path": "data/reflectance/source-manifest.json",
+        "atlasPath": "data/reflectance/source-manifest.json",
+        "bytes": 25110,
+        "sha256": "0be2ea424d4deae1a7f11470115edba7e9736d68b05a234c495964e744b5a0af"
+      },
+      {
+        "path": "data/uniformity/index.json",
+        "atlasPath": "data/uniformity/index.json",
+        "bytes": 24807,
+        "sha256": "fb6131580452bfd720c5c7412a75c75d25eaca266711a63b8cca1e3030cbd66d"
+      },
+      {
+        "path": "data/uniformity/maps/100_cct_ip18pm.png",
+        "atlasPath": "data/uniformity/maps/100_cct_ip18pm.png",
+        "bytes": 1576099,
+        "sha256": "353429277613f70a881dd66cc7e6b04b16c5f1b539ea8717a670dc5fcfc98dc8"
+      },
+      {
+        "path": "data/uniformity/maps/100_cct_mi17u.png",
+        "atlasPath": "data/uniformity/maps/100_cct_mi17u.png",
+        "bytes": 1309615,
+        "sha256": "bb27c4439aa2710cb99cc2dd130b82523e1ebbe6e57403251ca7664e6aba6e65"
+      },
+      {
+        "path": "data/uniformity/maps/100_cct_mi18pm.png",
+        "atlasPath": "data/uniformity/maps/100_cct_mi18pm.png",
+        "bytes": 1052750,
+        "sha256": "99192e840ad131ade7a00b7ce7d1325eeecefab26a1de6f20e1470622e660e78"
+      },
+      {
+        "path": "data/uniformity/maps/100_lum_ip18pm.png",
+        "atlasPath": "data/uniformity/maps/100_lum_ip18pm.png",
+        "bytes": 913062,
+        "sha256": "69e65960ed5417fa679acc16c3e9b3d5643caf7456bc83bdfdc6ba78c6227c5c"
+      },
+      {
+        "path": "data/uniformity/maps/100_lum_mi17u.png",
+        "atlasPath": "data/uniformity/maps/100_lum_mi17u.png",
+        "bytes": 852563,
+        "sha256": "243aa9dec582191fa7f17a47278abac4b715254eb98a3c40f5994cdf93b47a6f"
+      },
+      {
+        "path": "data/uniformity/maps/100_lum_mi18pm.png",
+        "atlasPath": "data/uniformity/maps/100_lum_mi18pm.png",
+        "bytes": 720735,
+        "sha256": "021d8da19d8fda0c9029ee524f58c6c029bae86e01cc3903b7629a04176ae714"
+      },
+      {
+        "path": "data/uniformity/maps/10_lum_ip18pm.png",
+        "atlasPath": "data/uniformity/maps/10_lum_ip18pm.png",
+        "bytes": 701365,
+        "sha256": "0ffe9c326c0168ef957e3187496060776412b4765f6c89b572e3c9cb8f207f9d"
+      },
+      {
+        "path": "data/uniformity/maps/10_lum_mi17u.png",
+        "atlasPath": "data/uniformity/maps/10_lum_mi17u.png",
+        "bytes": 883421,
+        "sha256": "b49ca8b43db5c52f24fff3d6c79f9477e4ce928a5a44e923ee28ed7985a2329d"
+      },
+      {
+        "path": "data/uniformity/maps/10_lum_mi18pm.png",
+        "atlasPath": "data/uniformity/maps/10_lum_mi18pm.png",
+        "bytes": 751925,
+        "sha256": "c9107df3de30e9556ea60cd4348f1743396aba8793bfa64adc87df8d9e2ce82b"
+      },
+      {
+        "path": "data/uniformity/maps/300_cct_ip18pm.png",
+        "atlasPath": "data/uniformity/maps/300_cct_ip18pm.png",
+        "bytes": 1142734,
+        "sha256": "71799b4155c65524978e2b05359b40704f5c8b8d67f3c0412aeb70d39655b0cc"
+      },
+      {
+        "path": "data/uniformity/maps/300_cct_mi17u.png",
+        "atlasPath": "data/uniformity/maps/300_cct_mi17u.png",
+        "bytes": 1107426,
+        "sha256": "e6476eb2c4a6690923d6390a4c296b35c5f2e8132f44f7e9ed38df9a076ef5ab"
+      },
+      {
+        "path": "data/uniformity/maps/300_cct_mi18pm.png",
+        "atlasPath": "data/uniformity/maps/300_cct_mi18pm.png",
+        "bytes": 892093,
+        "sha256": "3517708e798025ea2481eb1ec4a237250f32113c88e63bfa0e895fc81779161c"
+      },
+      {
+        "path": "data/uniformity/maps/300_lum_ip18pm.png",
+        "atlasPath": "data/uniformity/maps/300_lum_ip18pm.png",
+        "bytes": 661678,
+        "sha256": "f04d29a1dde5a36ba392372ae770b6772288bab1e8d2dcabd776d9dcc380ab99"
+      },
+      {
+        "path": "data/uniformity/maps/300_lum_mi17u.png",
+        "atlasPath": "data/uniformity/maps/300_lum_mi17u.png",
+        "bytes": 695166,
+        "sha256": "c8a810552802fc73606dd0979cb4ca08aeb542143c0ff226bf2dc88f87ee1bfd"
+      },
+      {
+        "path": "data/uniformity/maps/300_lum_mi18pm.png",
+        "atlasPath": "data/uniformity/maps/300_lum_mi18pm.png",
+        "bytes": 475220,
+        "sha256": "71fed155c0a9f9915c181565a50febfc2a2cfb0c3a7a3cc4b24c7b196947ee12"
+      }
+    ],
+    "verification": {
+      "uniformityMaps": {
+        "referenced": 15,
+        "assetSha256Match": 15,
+        "unreferencedFiles": []
+      },
+      "reflectance": {
+        "phones": 24,
+        "conditions": 32,
+        "curves": 64,
+        "curvesMatchingRawFractions": 64,
+        "rawSourceSha256": "6e5a3309401ab5cbe83631d55d99e17b055c25f9cd80c135c112879187a73408",
+        "rawSourceSha256ConsistentWithRawFile": true,
+        "curveSourceSha256Values": [
+          "6e5a3309401ab5cbe83631d55d99e17b055c25f9cd80c135c112879187a73408"
+        ],
+        "note": "rawSourceSha256 是仪器导出文件「反射率.xml」的哈希；该 XML 不在仓库中，这里只能核对各处记录的哈希一致，以及每条曲线与 raw/phone-samples.json 的原始读数逐点一致（读数 × 100）。"
+      }
+    },
+    "notMigrated": [
+      {
+        "path": "data/svm/**",
+        "reason": "频闪以本仓库 public/datasets 为唯一来源；atlas 快照只做交叉核对（见 svmCrossCheck）。"
+      },
+      {
+        "path": "data/reflectance/source/*.png",
+        "reason": "旧的 PNG 数字化路线，仅作对照；现有 64 条曲线全部来自仪器 XML。"
+      }
+    ]
+  },
+  "svmCrossCheck": {
+    "atlasSnapshotCommit": "48bf54c6d52a20179e5471d63e18717d8602c934",
+    "atlasSnapshotCommitIsAncestorOfThisBranch": true,
+    "atlasRecords": 17,
+    "repoRecords": 21,
+    "identicalRecords": 17,
+    "manifestPrefixIdentical": true,
+    "missingFromAtlas": [
+      "iPhoneDuo_inner_120hz.json",
+      "iPhoneDuo_inner_smooth_120hz.json",
+      "iPhoneDuo_outer_120hz.json",
+      "iPhoneDuo_outer_smooth_120hz.json"
+    ],
+    "onlyInAtlas": [],
+    "differences": [],
+    "records": [
+      {
+        "file": "iPhone17ProMax.json",
+        "atlasRawSha256": "1695d3f9a796ef037ab288386f04b5911eb5013c8b064396f03c63f1bc213a89",
+        "atlasIndexSourceSha256": "1695d3f9a796ef037ab288386f04b5911eb5013c8b064396f03c63f1bc213a89",
+        "repoSha256": "1695d3f9a796ef037ab288386f04b5911eb5013c8b064396f03c63f1bc213a89",
+        "identical": true
+      },
+      {
+        "file": "iPhone17ProMax_smooth.json",
+        "atlasRawSha256": "2d14fc71abdcccf2ee8ef023024dd3d0d3fafbf65802d31975d79e57a417da4e",
+        "atlasIndexSourceSha256": "2d14fc71abdcccf2ee8ef023024dd3d0d3fafbf65802d31975d79e57a417da4e",
+        "repoSha256": "2d14fc71abdcccf2ee8ef023024dd3d0d3fafbf65802d31975d79e57a417da4e",
+        "identical": true
+      },
+      {
+        "file": "xiaomi17ultra_leica_dc_120hz.json",
+        "atlasRawSha256": "8dd96914e6e7b0fa81c66cd8a02cd1420f578c1e67ef0b6466938d477c1cad33",
+        "atlasIndexSourceSha256": "8dd96914e6e7b0fa81c66cd8a02cd1420f578c1e67ef0b6466938d477c1cad33",
+        "repoSha256": "8dd96914e6e7b0fa81c66cd8a02cd1420f578c1e67ef0b6466938d477c1cad33",
+        "identical": true
+      },
+      {
+        "file": "xiaomi17ultra_leica_ltpo_120hz.json",
+        "atlasRawSha256": "87689ee657b8d017c4c2fc8544130c344a6446fbe527d45a060062ac0163ddb7",
+        "atlasIndexSourceSha256": "87689ee657b8d017c4c2fc8544130c344a6446fbe527d45a060062ac0163ddb7",
+        "repoSha256": "87689ee657b8d017c4c2fc8544130c344a6446fbe527d45a060062ac0163ddb7",
+        "identical": true
+      },
+      {
+        "file": "huawei_mate70air.json",
+        "atlasRawSha256": "b6245e0ea4a2bae17859dac1272c9f6651c75f721bdf663ce1b8dccc587ad997",
+        "atlasIndexSourceSha256": "b6245e0ea4a2bae17859dac1272c9f6651c75f721bdf663ce1b8dccc587ad997",
+        "repoSha256": "b6245e0ea4a2bae17859dac1272c9f6651c75f721bdf663ce1b8dccc587ad997",
+        "identical": true
+      },
+      {
+        "file": "huawei_mate70air_60hz.json",
+        "atlasRawSha256": "7c49dfb0c25a336296dd3886eda13958146266ae3c73984c273c33596a0aa4d4",
+        "atlasIndexSourceSha256": "7c49dfb0c25a336296dd3886eda13958146266ae3c73984c273c33596a0aa4d4",
+        "repoSha256": "7c49dfb0c25a336296dd3886eda13958146266ae3c73984c273c33596a0aa4d4",
+        "identical": true
+      },
+      {
+        "file": "huawei_mate70air_low_frequency.json",
+        "atlasRawSha256": "e5e30b4b3ffb2d65690f02f1c1fc749cebd6c9e46b9a98d9d4bfd08621fa1a21",
+        "atlasIndexSourceSha256": "e5e30b4b3ffb2d65690f02f1c1fc749cebd6c9e46b9a98d9d4bfd08621fa1a21",
+        "repoSha256": "e5e30b4b3ffb2d65690f02f1c1fc749cebd6c9e46b9a98d9d4bfd08621fa1a21",
+        "identical": true
+      },
+      {
+        "file": "huawei_mate70air_low_frequency_60hz.json",
+        "atlasRawSha256": "60a3a2a46669faf17d542de6d159314900a1af89f27ff0ee25aab44fe33e487c",
+        "atlasIndexSourceSha256": "60a3a2a46669faf17d542de6d159314900a1af89f27ff0ee25aab44fe33e487c",
+        "repoSha256": "60a3a2a46669faf17d542de6d159314900a1af89f27ff0ee25aab44fe33e487c",
+        "identical": true
+      },
+      {
+        "file": "huawei_mate80rs.json",
+        "atlasRawSha256": "d51ae2de1059006a8fe958202893f26bb17e8a8d0657efcf76d1404b0aba2106",
+        "atlasIndexSourceSha256": "d51ae2de1059006a8fe958202893f26bb17e8a8d0657efcf76d1404b0aba2106",
+        "repoSha256": "d51ae2de1059006a8fe958202893f26bb17e8a8d0657efcf76d1404b0aba2106",
+        "identical": true
+      },
+      {
+        "file": "huawei_mate80rs_60hz.json",
+        "atlasRawSha256": "d7f27bada5d3abaf08d4a53de4dd7a88e3809086a60412e68b6df617e0dcde30",
+        "atlasIndexSourceSha256": "d7f27bada5d3abaf08d4a53de4dd7a88e3809086a60412e68b6df617e0dcde30",
+        "repoSha256": "d7f27bada5d3abaf08d4a53de4dd7a88e3809086a60412e68b6df617e0dcde30",
+        "identical": true
+      },
+      {
+        "file": "huawei_mate80rs_low_frequency.json",
+        "atlasRawSha256": "fe8ed434fbb7721fdaa0e09e20c20e7c298b176376dcf8f30b7c9145d33bc61f",
+        "atlasIndexSourceSha256": "fe8ed434fbb7721fdaa0e09e20c20e7c298b176376dcf8f30b7c9145d33bc61f",
+        "repoSha256": "fe8ed434fbb7721fdaa0e09e20c20e7c298b176376dcf8f30b7c9145d33bc61f",
+        "identical": true
+      },
+      {
+        "file": "huawei_mate80rs_low_frequency_60hz.json",
+        "atlasRawSha256": "42f48ba064e0761434f4b5187c49a69b73d4d79ecea7e54b47f02850cffc0565",
+        "atlasIndexSourceSha256": "42f48ba064e0761434f4b5187c49a69b73d4d79ecea7e54b47f02850cffc0565",
+        "repoSha256": "42f48ba064e0761434f4b5187c49a69b73d4d79ecea7e54b47f02850cffc0565",
+        "identical": true
+      },
+      {
+        "file": "xiaomi18promax_adaptive_pro_off.json",
+        "atlasRawSha256": "3a8ee6092168f6a8cbecfbdd7b9456ef64db643ee6e119dcb1a4eaff61fa4a02",
+        "atlasIndexSourceSha256": "3a8ee6092168f6a8cbecfbdd7b9456ef64db643ee6e119dcb1a4eaff61fa4a02",
+        "repoSha256": "3a8ee6092168f6a8cbecfbdd7b9456ef64db643ee6e119dcb1a4eaff61fa4a02",
+        "identical": true
+      },
+      {
+        "file": "xiaomi18promax_adaptive_pro_on.json",
+        "atlasRawSha256": "5e628577682fb8c98a8bac96103a454f4c87518104e1e9712c0a7a4f96dc7ede",
+        "atlasIndexSourceSha256": "5e628577682fb8c98a8bac96103a454f4c87518104e1e9712c0a7a4f96dc7ede",
+        "repoSha256": "5e628577682fb8c98a8bac96103a454f4c87518104e1e9712c0a7a4f96dc7ede",
+        "identical": true
+      },
+      {
+        "file": "iPhone18ProMax.json",
+        "atlasRawSha256": "48f8dd37ba0e1d07d8879841a9ef6ea058fa339b22c9be44dbf88b703c82b957",
+        "atlasIndexSourceSha256": "48f8dd37ba0e1d07d8879841a9ef6ea058fa339b22c9be44dbf88b703c82b957",
+        "repoSha256": "48f8dd37ba0e1d07d8879841a9ef6ea058fa339b22c9be44dbf88b703c82b957",
+        "identical": true
+      },
+      {
+        "file": "iPhone18ProMax_smooth.json",
+        "atlasRawSha256": "c1ca7f37031aaf8fab4face16d6b3135d1b1cde5ee6ac1b009cb2cfc65b4bd0b",
+        "atlasIndexSourceSha256": "c1ca7f37031aaf8fab4face16d6b3135d1b1cde5ee6ac1b009cb2cfc65b4bd0b",
+        "repoSha256": "c1ca7f37031aaf8fab4face16d6b3135d1b1cde5ee6ac1b009cb2cfc65b4bd0b",
+        "identical": true
+      },
+      {
+        "file": "huawei_mate90promax.json",
+        "atlasRawSha256": "dd57a32624a02974379cb0f9eb6424d64c39f5960edc677d048a715609ed70e5",
+        "atlasIndexSourceSha256": "dd57a32624a02974379cb0f9eb6424d64c39f5960edc677d048a715609ed70e5",
+        "repoSha256": "dd57a32624a02974379cb0f9eb6424d64c39f5960edc677d048a715609ed70e5",
+        "identical": true
+      }
+    ]
+  }
+}
