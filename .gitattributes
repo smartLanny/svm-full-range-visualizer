@@ -9,4 +9,5 @@ release/*.html -diff linguist-generated
 # stay out of `git archive` / GitHub "Download ZIP".
 data/uniformity/** -text
 data/reflectance/** -text
+data/uniformity/maps export-ignore
 data/uniformity/maps/** export-ignore
