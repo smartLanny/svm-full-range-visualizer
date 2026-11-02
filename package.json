@@ -8,9 +8,13 @@
     "build": "vite build",
     "build:standalone": "vite build --mode standalone && node scripts/finalize-standalone.mjs",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit -p .",
+    "typecheck": "tsc --noEmit -p . && tsc --noEmit -p tsconfig.db.json",
     "test": "vitest run",
-    "check:release": "vitest run src/export/releaseFreshness.test.ts"
+    "check:release": "vitest run src/export/releaseFreshness.test.ts",
+    "db:check": "node pipeline/check.mjs",
+    "db:catalog": "node pipeline/catalog/build_catalog.mjs",
+    "db:angle": "node pipeline/angle/summarise.mjs",
+    "db:migrate-atlas": "node pipeline/atlas/migrate.mjs"
   },
   "engines": {
     "node": "^20.19.0 || >=22.12.0"

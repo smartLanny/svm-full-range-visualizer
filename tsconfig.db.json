@@ -1,0 +1,22 @@
+{
+  "//": "Type-checks the screen database code (db/, pipeline/) separately from the SVM workbench (tsconfig.json). The pipeline's .mjs scripts are plain Node ESM: allowJs lets the TypeScript tests import them, checkJs stays off.",
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "skipLibCheck": true,
+    "types": ["node", "vite/client"],
+    "moduleResolution": "bundler",
+    "isolatedModules": true,
+    "moduleDetection": "force",
+    "jsx": "react-jsx",
+    "strict": true,
+    "noFallthroughCasesInSwitch": true,
+    "resolveJsonModule": true,
+    "allowImportingTsExtensions": true,
+    "allowJs": true,
+    "checkJs": false,
+    "noEmit": true
+  },
+  "include": ["db", "pipeline"]
+}
