@@ -189,9 +189,9 @@ export function SectionCard({
             <span className="text-xs font-medium tracking-wide">{TYPE_META[type].sub}</span>
           </div>
           <h2 className="mt-1.5 text-[26px] font-semibold leading-8 tracking-tight text-ink-1 sm:text-[30px] sm:leading-9">{title ?? TYPE_META[type].label}</h2>
-          {sub && <div className="mt-1.5 text-[13px] leading-5 text-ink-3">{sub}</div>}
+          {sub && <div className="mt-1.5 max-w-3xl text-[13px] leading-5 text-ink-3">{sub}</div>}
         </div>
-        {controls && <div className="flex min-w-0 flex-wrap items-center gap-2 lg:justify-end">{controls}</div>}
+        {controls && <div className="flex min-w-0 flex-wrap items-center gap-2 lg:shrink-0 lg:justify-end">{controls}</div>}
       </header>
       {children}
     </section>

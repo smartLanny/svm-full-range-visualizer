@@ -36,14 +36,15 @@ export function siteFiles(root) {
 
 /**
  * Data version shown on the page: data/version.json when a batch wrote one, plus the last git
- * commit that touched the data (data/ or public/datasets/). Without git (a downloaded ZIP) the
- * commit fields are null and the page simply leaves them out.
+ * commit that touched a data file the page serves (documentation edits in data/README.md do not
+ * count). Without git (a downloaded ZIP) the commit fields are null and the page leaves them out.
  */
 export function siteInfo(root) {
   let commit = null;
   let date = null;
+  const sources = [...new Set(siteFiles(root).values())];
   try {
-    const line = execFileSync('git', ['-C', root, 'log', '-1', '--format=%h%x09%cI', '--', 'data', 'public/datasets'], {
+    const line = execFileSync('git', ['-C', root, 'log', '-1', '--format=%h%x09%cI', '--', ...sources], {
       stdio: ['ignore', 'pipe', 'ignore'],
     })
       .toString()

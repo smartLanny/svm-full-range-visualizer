@@ -72,7 +72,7 @@ function ProfileTable({ p }: { p: AngleProfileSummary }) {
           ))}
         </tbody>
       </table>
-      <div className="mt-2 text-[11px] text-ink-4">每格：上为白场亮度（相对正视 %），下为色偏 Δu′v′。悬停可看 JNCD。</div>
+      <div className="mt-2 text-[11px] text-ink-4">每格：上为白场亮度（相对正视 %），下为色偏 Δu′v′（桌面端悬停可看 JNCD）。</div>
     </div>
   );
 }
