@@ -4,6 +4,27 @@
 
 <!-- db:import 在这一行下面插入新条目，不要删除这一行 -->
 
+## 2026.11.02.4 · `2026-11-02-unif-maps`
+
+均匀度热力图：9 台仅指标机型补上热力图，新增华为 Mate 90 Pro Max 典藏版、OPPO Find X9
+
+- 均匀度：iPhone 17 Pro Max 补上热力图 5 张（300 nits、100 nits、10 nits；源 id ip17pm）
+- 均匀度：小米 15 Ultra 补上热力图 5 张（300 nits、100 nits、10 nits；源 id mi15u）
+- 均匀度：一加 15 补上热力图 5 张（300 nits、100 nits、10 nits；源 id op15）
+- 均匀度：OPPO Find X9 Ultra 补上热力图 4 张（300 nits、100 nits；源 id x9u）
+- 均匀度：OPPO Find X9s Pro 补上热力图 4 张（300 nits、100 nits、10 nits；源 id x9sp）
+- 均匀度：华为 Mate 80 RS 补上热力图 5 张（300 nits、100 nits、10 nits；源 id m80rs）
+- 均匀度：华为 Mate 70 Air 补上热力图 5 张（300 nits、100 nits、10 nits；源 id m70a）
+- 均匀度：华为 Pura 80 Ultra 补上热力图 4 张（300 nits、100 nits、10 nits；源 id p80u）
+- 均匀度：荣耀 Magic V5 补上热力图 5 张（300 nits、100 nits、10 nits；源 id mv5）
+- 均匀度：华为 Mate 90 Pro Max 典藏版 新增热力图 5 张（300 nits、100 nits、10 nits；源 id m90pm）
+- 均匀度：OPPO Find X9 新增热力图 1 张（100 nits；源 id x9）
+- 数量：均匀度档位 35 → 39；均匀度热力图 15 → 63
+- 改动的数据文件：`data/uniformity/index.json`、`data/uniformity/maps/10_lum_ip17pm.png`、`data/uniformity/maps/10_lum_m70a.png`、`data/uniformity/maps/10_lum_m80rs.png`、`data/uniformity/maps/10_lum_m90pm.png`、`data/uniformity/maps/10_lum_mi15u.png`、`data/uniformity/maps/10_lum_mv5.png`、`data/uniformity/maps/10_lum_op15.png`、`data/uniformity/maps/10_lum_p80u.png`、`data/uniformity/maps/10_lum_x9sp.png`、`data/uniformity/maps/100_cct_ip17pm.png`、`data/uniformity/maps/100_cct_m70a.png`、`data/uniformity/maps/100_cct_m80rs.png`、`data/uniformity/maps/100_cct_m90pm.png`、`data/uniformity/maps/100_cct_mi15u.png`、`data/uniformity/maps/100_cct_mv5.png`、`data/uniformity/maps/100_cct_op15.png`、`data/uniformity/maps/100_cct_x9u.png`、`data/uniformity/maps/100_lum_ip17pm.png`、`data/uniformity/maps/100_lum_m70a.png`、`data/uniformity/maps/100_lum_m80rs.png`、`data/uniformity/maps/100_lum_m90pm.png`、`data/uniformity/maps/100_lum_mi15u.png`、`data/uniformity/maps/100_lum_mv5.png`、`data/uniformity/maps/100_lum_op15.png`、`data/uniformity/maps/100_lum_p80u.png`、`data/uniformity/maps/100_lum_x9.png`、`data/uniformity/maps/100_lum_x9sp.png`、`data/uniformity/maps/100_lum_x9u.png`、`data/uniformity/maps/300_cct_ip17pm.png`、`data/uniformity/maps/300_cct_m70a.png`、`data/uniformity/maps/300_cct_m80rs.png`、`data/uniformity/maps/300_cct_m90pm.png`、`data/uniformity/maps/300_cct_mi15u.png`、`data/uniformity/maps/300_cct_mv5.png`、`data/uniformity/maps/300_cct_op15.png`、`data/uniformity/maps/300_cct_p80u.png`、`data/uniformity/maps/300_cct_x9sp.png`、`data/uniformity/maps/300_cct_x9u.png`、`data/uniformity/maps/300_lum_ip17pm.png`、`data/uniformity/maps/300_lum_m70a.png`、`data/uniformity/maps/300_lum_m80rs.png`、`data/uniformity/maps/300_lum_m90pm.png`、`data/uniformity/maps/300_lum_mi15u.png`、`data/uniformity/maps/300_lum_mv5.png`、`data/uniformity/maps/300_lum_op15.png`、`data/uniformity/maps/300_lum_p80u.png`、`data/uniformity/maps/300_lum_x9sp.png`、`data/uniformity/maps/300_lum_x9u.png`
+- 批次：`data/batches/2026-11-02-unif-maps/`（1 个输入，批次日期 2026-11-02；哈希与逐项核对见 audit.json）
+
+> 用视频项目的 render.py / export_maps.py（pipeline/uniformity/vendor/）对 NAS 上的原始 Radiant 矩阵重新导出，pipeline/uniformity/make_maps.py 打包。9 台已有指标的机型，导出时算出的指标与 uniformity_metrics.json 逐项完全一致（导入器再核对一次）。华为 Mate 90 Pro Max 典藏版的矩阵是 CSV 导出，取默认模式（非低频闪）三档；OPPO Find X9 只有 100 nits G20 一档（NAS 上没有 300 nits 白场和 10 nits G20）。荣耀 Magic V5 为外屏。
+
 ## 2026.11.02.3 · `2026-11-02-unif-fullprec`
 
 均匀度指标换成全精度：9 台仅指标机型改用视频项目的 uniformity_metrics.json

@@ -121,21 +121,22 @@ describe('anchors from the existing data', () => {
     expect(dev('xiaomi-18-pro-max').angle.map((e) => [e.profile, e.state])).toEqual([['p2', 'default'], ['p3', 'privacy']]);
   });
 
-  it('uniformity: three phones with 15 heatmaps; nine metrics-only phones; Mate 90 not measured', () => {
+  it('uniformity: 14 phones, all with heatmaps (63 maps); Find X9 has only 100 nits G20', () => {
     const withMaps = catalog.devices.filter((d) => d.uniformity.some((e) => e.maps.length));
-    expect(withMaps.map((d) => d.id).sort()).toEqual(['iphone-18-pro-max', 'xiaomi-17-ultra', 'xiaomi-18-pro-max']);
-    expect(withMaps.flatMap((d) => d.uniformity.flatMap((e) => e.maps))).toHaveLength(15);
-    for (const d of withMaps) expect(d.uniformity.map((e) => e.condition)).toEqual(['300', '100', '10']);
-    const metricsOnly = catalog.devices.filter((d) => d.availability.uniformity.status === 'metrics-only').map((d) => d.id);
-    expect(metricsOnly.sort()).toEqual([
-      'honor-magic-v5', 'huawei-mate-70-air', 'huawei-mate-80-rs', 'huawei-pura-80-ultra', 'iphone-17-pro-max',
-      'oneplus-15', 'oppo-find-x9-ultra', 'oppo-find-x9s-pro', 'xiaomi-15-ultra',
+    expect(withMaps.map((d) => d.id).sort()).toEqual([
+      'honor-magic-v5', 'huawei-mate-70-air', 'huawei-mate-80-rs', 'huawei-mate-90-pro-max', 'huawei-pura-80-ultra', 'iphone-17-pro-max',
+      'iphone-18-pro-max', 'oneplus-15', 'oppo-find-x9', 'oppo-find-x9-ultra', 'oppo-find-x9s-pro', 'xiaomi-15-ultra', 'xiaomi-17-ultra', 'xiaomi-18-pro-max',
     ]);
-    for (const id of metricsOnly) expect(dev(id).uniformity.every((e) => e.maps.length === 0)).toBe(true);
+    expect(withMaps.flatMap((d) => d.uniformity.flatMap((e) => e.maps))).toHaveLength(63);
+    for (const d of withMaps) expect(d.availability.uniformity.status).toBe('complete');
+    expect(catalog.devices.filter((d) => d.availability.uniformity.status === 'metrics-only')).toEqual([]);
+    for (const id of ['xiaomi-18-pro-max', 'iphone-18-pro-max', 'xiaomi-17-ultra', 'huawei-mate-90-pro-max']) {
+      expect(dev(id).uniformity.map((e) => [e.condition, e.maps.length])).toEqual([['300', 2], ['100', 2], ['10', 1]]);
+    }
     // Magic V5: the outer screen was measured
     expect(dev('honor-magic-v5').uniformity.map((e) => e.display)).toEqual(['outer', 'outer', 'outer']);
     expect(dev('oppo-find-x9-ultra').uniformity.map((e) => e.condition)).toEqual(['300', '100']);
-    expect(dev('huawei-mate-90-pro-max').availability.uniformity.status).toBe('not-measured');
+    expect(dev('oppo-find-x9').uniformity.map((e) => [e.condition, e.maps.length])).toEqual([['100', 1]]);
   });
 
   it('reflectance: Find N5 has 5 conditions over 3 dates; Magic V5 inner / outer', () => {

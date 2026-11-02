@@ -153,7 +153,7 @@ describe('db:import', () => {
     expect(changelog).toContain('均匀度：iPhone 16 Pro Max 新增仅指标数据（300 nits、100 nits，无热力图；源 id ip16pm）');
     expect(changelog).toContain('均匀度：小米 17 Ultra 徕卡 100 nits 档记录实测白场 101.5 nits');
     expect(changelog).toContain('反射率：新增 iPhone Duo · 内屏（XML 样品 900');
-    expect(changelog).toMatch(/数量：频闪记录 17 → 19；均匀度档位 35 → 37；反射率样品 32 → 33/);
+    expect(changelog).toMatch(/数量：频闪记录 17 → 19；均匀度档位 39 → 41；反射率样品 32 → 33/);
 
     const audit = f.readJson(`data/batches/${ID}/audit.json`);
     expect(audit.inputs.map((i: { foundIn: string }) => i.foundIn)).toEqual(['inbox', 'inbox', 'batch', 'inbox']);

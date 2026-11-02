@@ -20,7 +20,7 @@ describe('files served with the database page', () => {
 
   it('includes every heatmap and SVM record of the catalog, but no raw instrument data', () => {
     const served = [...files.keys()];
-    expect(served.filter((f) => f.startsWith('data/uniformity/maps/'))).toHaveLength(15);
+    expect(served.filter((f) => f.startsWith('data/uniformity/maps/'))).toHaveLength(63);
     expect(served.filter((f) => f.startsWith('datasets/') && f !== 'datasets/manifest.json')).toHaveLength(21);
     expect(served).toContain('data/devices.json');
     expect(served.some((f) => f.includes('raw/') || f.includes('provenance') || f.includes('overrides'))).toBe(false);

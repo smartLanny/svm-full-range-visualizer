@@ -147,17 +147,19 @@ describe('uniformity_metrics.py', () => {
   });
 
   it('moves a device recorded as not measured to metrics-only, with a warning', () => {
-    const rows: Row[] = [{ id: 'm90', level: '300', kind: 'lum', cond: '', typ: 300.5, u9: 90, ua: 85, dev10: 0.5 }];
-    const r = run(rows, { devices: { 'huawei-mate-90-pro-max': { sourceId: 'm90' } } });
+    fx = makeFixture();
+    fx.edit(INDEX, (i) => { i.notRecorded = [{ id: 'oppo-find-n5', name: 'OPPO Find N5', conditions: [] }]; });
+    const rows: Row[] = [{ id: 'n5', level: '300', kind: 'lum', cond: '', typ: 300.5, u9: 90, ua: 85, dev10: 0.5 }];
+    const r = run(rows, { devices: { 'oppo-find-n5': { sourceId: 'n5' } } });
     expect(r.status, r.stderr).toBe(0);
     expect(index().notRecorded).toEqual([]);
-    expect(index().metricsOnly.at(-1)).toMatchObject({ id: 'huawei-mate-90-pro-max', name: '华为 Mate 90 Pro Max 典藏版', metricSourceId: 'm90' });
+    expect(index().metricsOnly.at(-1)).toMatchObject({ id: 'oppo-find-n5', metricSourceId: 'n5' });
     expect(r.result.warnings[0]).toMatch(/原记为「未测」/);
   });
 
   it('refuses unknown devices, unknown source ids and files without a device list', () => {
     expect(run(SYNTH_IP16PM, { devices: ['some-new-phone'] }).stderr).toMatch(/some-new-phone 不在 data\/catalog-overrides\.json 中/);
-    expect(run(SYNTH_IP16PM, { devices: { 'huawei-mate-90-pro-max': {} } }).stderr).toMatch(/请在 options\.devices 里写 sourceId（文件里有：ip16pm）/);
+    expect(run(SYNTH_IP16PM, { devices: { 'oppo-find-n5': {} } }).stderr).toMatch(/请在 options\.devices 里写 sourceId（文件里有：ip16pm）/);
     expect(run(SYNTH_IP16PM, {}).stderr).toMatch(/没有列出要导入的机型/);
   });
 });

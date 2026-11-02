@@ -20,9 +20,10 @@ describe('device search', () => {
   });
 
   it('filters by data type', () => {
-    expect(ids('', 'uniformity')).toHaveLength(12);
+    expect(ids('', 'uniformity')).toHaveLength(14);
     expect(ids('', 'uniformity')).toEqual(expect.arrayContaining(['xiaomi-18-pro-max', 'iphone-18-pro-max', 'xiaomi-17-ultra', 'oneplus-15']));
-    expect(ids('', 'uniformity')).not.toContain('huawei-mate-90-pro-max');
+    expect(ids('', 'uniformity')).toEqual(expect.arrayContaining(['huawei-mate-90-pro-max', 'oppo-find-x9']));
+    expect(ids('', 'uniformity')).not.toContain('iphone-duo');
     expect(ids('', 'angle')).toContain('iphone-duo');
   });
 

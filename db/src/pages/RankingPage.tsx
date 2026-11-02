@@ -170,7 +170,9 @@ export function RankingPage({ catalog, cond: cond0, by: by0 }: { catalog: Catalo
               <a href={deviceHref(d.id)} className="hover:text-ink-1 hover:underline">
                 {d.name.zh}
               </a>
-              <span className="text-ink-4">（{STATUS_TEXT[d.availability.uniformity.status]}）</span>
+              <span className="text-ink-4">
+                （{['complete', 'metrics-only'].includes(d.availability.uniformity.status) ? '没测这一档' : STATUS_TEXT[d.availability.uniformity.status]}）
+              </span>
             </React.Fragment>
           ))}
         </div>

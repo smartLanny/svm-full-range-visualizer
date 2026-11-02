@@ -67,6 +67,7 @@ data/version.json 升版本；data/CHANGELOG.md 多一条
 |---|---|---|---|
 | `svm-feishu-csv` | 飞书工作表的 CSV 导出（一张表一台机型） | `import/svm_feishu_csv.py` | `public/datasets/*.json`、`manifest.json`（只追加） |
 | `uniformity-metrics` | 视频项目的 `uniformity_metrics.json` | `import/uniformity_metrics.py` | `data/uniformity/index.json` |
+| `uniformity-maps` | `uniformity/make_maps.py` 打包的热力图 zip | `import/uniformity_maps.py` | `data/uniformity/maps/*.png`、`index.json` |
 | `uniformity-white` | 手工读数（无文件） | `import/uniformity_metrics.py` | `data/uniformity/index.json` 某档的 `whiteMeasuredNits` |
 | `reflectance-xml` | ThreeNH 仪器导出的 `反射率.xml` | `import/reflectance_xml.py` | `data/reflectance/raw/phone-samples.json`、`index.json`、`source-manifest.json` |
 
@@ -149,6 +150,23 @@ data/version.json 升版本；data/CHANGELOG.md 多一条
   - 用当前 `index.json` 反推的指标文件导入三台有热力图的机型，结果**逐字节不变**；
   - 仅指标导入、白场、替换、拒绝等情况都有测试，用的是只存在于临时目录里的合成数字。
 - iPhone 17 Pro Max、Mate 80 RS、Mate 70 Air 目前是「已测待导入」：等你把 NAS 上视频项目里的 `uniformity_metrics.json` 放进批次。源 id 分别是 `ip17pm`、`m80rs`、`m70a`，库里已经登记，`devices` 写成列表就行。
+
+### 3.2b 均匀度热力图：`uniformity/make_maps.py` → `uniformity_maps.py`
+
+热力图分两步，第一步在有 NumPy / SciPy / Pillow 的机器上做，第二步是普通的 `db:import`：
+
+```sh
+python3 pipeline/uniformity/make_maps.py --data-root <NAS>/01单机数据 --ids ip17pm,mi15u \
+    [--extra extra.json] --out inbox/<批次 id>/files/uniformity_maps.zip
+```
+
+- 用的是视频项目自己的脚本（`pipeline/uniformity/vendor/`：`render.py`、`uni.py`、`export_maps.py`，逐字节照搬，哈希写进包里），所以热力图和数字与 `uniformity_metrics.json` 出自同一套计算。`make_maps.py` 只做三件事：把脚本指向 NAS 目录和要导出的机型；也能读 CSV 矩阵（华为 Mate 90 Pro Max 典藏版是 CSV）；把 PNG 无损旋转成竖图、记下每个原始矩阵的 sha256 和尺寸，打成 zip。
+- `--extra`：`render.py` 里没有的机型，格式同 `render.py` 的 `PH`：`[["m90pm", "华为 Mate 90 Pro Max 典藏版", {"300": [["", "<亮度矩阵>", "<色温矩阵或 null>"]], …}]]`，路径相对 `--data-root`，每档第一项是默认条件。
+- 批次里写 `"type": "uniformity-maps"`，`options` 同 `uniformity-metrics`：`{"devices": {"honor-magic-v5": {"sourceId": "mv5", "display": "outer"}}}`。
+- 导入器（只用标准库）核对：PNG 的 sha256、8 位 RGBA、竖图尺寸；色条和库里一致；包里每张图都属于列出的机型。
+  - **仅指标机型**：包里的指标必须和库里的逐项一致（同样的舍入）、档位也一致，然后整台移到 `phones`，带上热力图；已记的实测白场保留。
+  - **库里没有的机型**：直接新增，数字取自包。
+  - **已有热力图的机型**：完全相同则不变，不同则报错（`"replace": true` 才替换）。
 
 ### 3.3 反射率：`reflectance_xml.py`（**等待真实 XML 文件**）
 
@@ -285,6 +303,7 @@ npm run check:release            # 离线版指纹（本流程只读 public/，�
 |---|---|
 | `import/svm_feishu_csv.test.ts` | Duo、Mate 90 逐字节回归；幂等；dry-run；成对空白、覆盖、未声明单元格、标题、manifest 改写都会被拒绝 |
 | `import/uniformity_metrics.test.ts` | 现有索引逐字节回归；仅指标导入；白场与 γ_eff；替换；「未测」机型改为仅指标 |
+| `import/uniformity_maps.test.ts` | 合成热力图包：新增机型、仅指标机型升级（保留外屏）、指标不符、PNG 被改 / 横图 / 色条不同 / 多出机型都会被拒绝；重复导入无变化 |
 | `import/reflectance_xml.test.ts` | 索引逐字节回归；只用 XML 生成时只差 PNG 字段；合成 XML 导入、新增样品、拒绝的情况 |
 | `db_import.test.ts` | 四种输入一起导入的完整流程；dry-run；幂等；哈希链；同一天的 `.2` 版本；失败时不留半个批次；`expect` 不符；`--record`；批次校验 |
 | `mac/collect_batch.test.ts` | 复制和哈希、草稿合并、各种拒绝 |

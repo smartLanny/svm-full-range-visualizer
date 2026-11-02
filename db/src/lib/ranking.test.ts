@@ -11,13 +11,16 @@ const index = read<UniformityIndex>('data/uniformity/index.json');
 describe('uniformity leaderboard', () => {
   it('ranks measured devices best first and lists the rest as missing', () => {
     const r = rankUniformity(catalog.devices, index, '300', 'area');
-    expect(r.rows).toHaveLength(12);
+    expect(r.rows).toHaveLength(13); // Find X9 has no 300 nits white field
     expect(r.rows[0].device.id).toBe('iphone-18-pro-max');
+    expect(r.rows[1].device.id).toBe('huawei-mate-90-pro-max');
+    expect(r.missing.map((d) => d.id)).toContain('oppo-find-x9');
     expect(r.rows.at(-1)!.device.id).toBe('xiaomi-18-pro-max');
     // 一加 15 and 小米 17 Ultra both 93.6 %: same rank
     const tie = r.rows.filter((x) => ['oneplus-15', 'xiaomi-17-ultra'].includes(x.device.id));
-    expect(tie.map((x) => x.rank)).toEqual([2, 2]);
+    expect(tie.map((x) => x.rank)).toEqual([3, 3]);
     expect(r.rows.find((x) => x.device.id === 'honor-magic-v5')!.display).toBe('outer');
+    expect(r.rows.every((x) => x.hasMap)).toBe(true);
     expect(r.rows.length + r.missing.length).toBe(catalog.devices.length);
     expect(r.rows[0].reference).toBeNull(); // white field: no Gamma reference
   });

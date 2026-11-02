@@ -1,0 +1,987 @@
+{
+  "schemaVersion": 1,
+  "batch": "2026-11-02-unif-maps",
+  "importedOn": "2026-11-02",
+  "tool": "pipeline/db_import.mjs",
+  "inputs": [
+    {
+      "type": "uniformity-maps",
+      "path": "uniformity_maps.zip",
+      "sha256": "d7e4cf68daead643d5fa42df42e2294898a2cd6e04abff88788ae2c8b7f8a21a",
+      "bytes": 29203938,
+      "devices": [
+        "iphone-17-pro-max",
+        "xiaomi-15-ultra",
+        "oneplus-15",
+        "oppo-find-x9-ultra",
+        "oppo-find-x9s-pro",
+        "huawei-mate-80-rs",
+        "huawei-mate-70-air",
+        "huawei-pura-80-ultra",
+        "honor-magic-v5",
+        "huawei-mate-90-pro-max",
+        "oppo-find-x9"
+      ],
+      "foundIn": "inbox",
+      "importer": "pipeline/import/uniformity_maps.py",
+      "changedFiles": [
+        "data/uniformity/maps/100_cct_ip17pm.png",
+        "data/uniformity/maps/100_cct_m70a.png",
+        "data/uniformity/maps/100_cct_m80rs.png",
+        "data/uniformity/maps/100_cct_m90pm.png",
+        "data/uniformity/maps/100_cct_mi15u.png",
+        "data/uniformity/maps/100_cct_mv5.png",
+        "data/uniformity/maps/100_cct_op15.png",
+        "data/uniformity/maps/100_cct_x9u.png",
+        "data/uniformity/maps/100_lum_ip17pm.png",
+        "data/uniformity/maps/100_lum_m70a.png",
+        "data/uniformity/maps/100_lum_m80rs.png",
+        "data/uniformity/maps/100_lum_m90pm.png",
+        "data/uniformity/maps/100_lum_mi15u.png",
+        "data/uniformity/maps/100_lum_mv5.png",
+        "data/uniformity/maps/100_lum_op15.png",
+        "data/uniformity/maps/100_lum_p80u.png",
+        "data/uniformity/maps/100_lum_x9.png",
+        "data/uniformity/maps/100_lum_x9sp.png",
+        "data/uniformity/maps/100_lum_x9u.png",
+        "data/uniformity/maps/10_lum_ip17pm.png",
+        "data/uniformity/maps/10_lum_m70a.png",
+        "data/uniformity/maps/10_lum_m80rs.png",
+        "data/uniformity/maps/10_lum_m90pm.png",
+        "data/uniformity/maps/10_lum_mi15u.png",
+        "data/uniformity/maps/10_lum_mv5.png",
+        "data/uniformity/maps/10_lum_op15.png",
+        "data/uniformity/maps/10_lum_p80u.png",
+        "data/uniformity/maps/10_lum_x9sp.png",
+        "data/uniformity/maps/300_cct_ip17pm.png",
+        "data/uniformity/maps/300_cct_m70a.png",
+        "data/uniformity/maps/300_cct_m80rs.png",
+        "data/uniformity/maps/300_cct_m90pm.png",
+        "data/uniformity/maps/300_cct_mi15u.png",
+        "data/uniformity/maps/300_cct_mv5.png",
+        "data/uniformity/maps/300_cct_op15.png",
+        "data/uniformity/maps/300_cct_p80u.png",
+        "data/uniformity/maps/300_cct_x9sp.png",
+        "data/uniformity/maps/300_cct_x9u.png",
+        "data/uniformity/maps/300_lum_ip17pm.png",
+        "data/uniformity/maps/300_lum_m70a.png",
+        "data/uniformity/maps/300_lum_m80rs.png",
+        "data/uniformity/maps/300_lum_m90pm.png",
+        "data/uniformity/maps/300_lum_mi15u.png",
+        "data/uniformity/maps/300_lum_mv5.png",
+        "data/uniformity/maps/300_lum_op15.png",
+        "data/uniformity/maps/300_lum_p80u.png",
+        "data/uniformity/maps/300_lum_x9sp.png",
+        "data/uniformity/maps/300_lum_x9u.png",
+        "data/uniformity/index.json"
+      ],
+      "warnings": [],
+      "details": {
+        "importer": "pipeline/import/uniformity_maps.py",
+        "source": {
+          "file": "uniformity_maps.zip",
+          "sha256": "d7e4cf68daead643d5fa42df42e2294898a2cd6e04abff88788ae2c8b7f8a21a",
+          "bytes": 29203938
+        },
+        "tool": "pipeline/uniformity/make_maps.py",
+        "vendor": {
+          "render.py": "387fc7e478512dc73d40ea0d2590a0df4f45c6a23fc942d57d1058f4768bdf63",
+          "uni.py": "ec467f134d8ea3fcf467e5ddd7b031d720cb8990721bd3d0498a3980af2deba4",
+          "export_maps.py": "2ab1e9bdcd19f6de3494b3018d202b7c0d80b595c164ddeac8af84f57162c635"
+        },
+        "devices": [
+          {
+            "device": "iphone-17-pro-max",
+            "sourceId": "ip17pm",
+            "status": "promoted",
+            "maps": [
+              "100_cct_ip17pm",
+              "100_lum_ip17pm",
+              "10_lum_ip17pm",
+              "300_cct_ip17pm",
+              "300_lum_ip17pm"
+            ]
+          },
+          {
+            "device": "xiaomi-15-ultra",
+            "sourceId": "mi15u",
+            "status": "promoted",
+            "maps": [
+              "100_cct_mi15u",
+              "100_lum_mi15u",
+              "10_lum_mi15u",
+              "300_cct_mi15u",
+              "300_lum_mi15u"
+            ]
+          },
+          {
+            "device": "oneplus-15",
+            "sourceId": "op15",
+            "status": "promoted",
+            "maps": [
+              "100_cct_op15",
+              "100_lum_op15",
+              "10_lum_op15",
+              "300_cct_op15",
+              "300_lum_op15"
+            ]
+          },
+          {
+            "device": "oppo-find-x9-ultra",
+            "sourceId": "x9u",
+            "status": "promoted",
+            "maps": [
+              "100_cct_x9u",
+              "100_lum_x9u",
+              "300_cct_x9u",
+              "300_lum_x9u"
+            ]
+          },
+          {
+            "device": "oppo-find-x9s-pro",
+            "sourceId": "x9sp",
+            "status": "promoted",
+            "maps": [
+              "100_lum_x9sp",
+              "10_lum_x9sp",
+              "300_cct_x9sp",
+              "300_lum_x9sp"
+            ]
+          },
+          {
+            "device": "huawei-mate-80-rs",
+            "sourceId": "m80rs",
+            "status": "promoted",
+            "maps": [
+              "100_cct_m80rs",
+              "100_lum_m80rs",
+              "10_lum_m80rs",
+              "300_cct_m80rs",
+              "300_lum_m80rs"
+            ]
+          },
+          {
+            "device": "huawei-mate-70-air",
+            "sourceId": "m70a",
+            "status": "promoted",
+            "maps": [
+              "100_cct_m70a",
+              "100_lum_m70a",
+              "10_lum_m70a",
+              "300_cct_m70a",
+              "300_lum_m70a"
+            ]
+          },
+          {
+            "device": "huawei-pura-80-ultra",
+            "sourceId": "p80u",
+            "status": "promoted",
+            "maps": [
+              "100_lum_p80u",
+              "10_lum_p80u",
+              "300_cct_p80u",
+              "300_lum_p80u"
+            ]
+          },
+          {
+            "device": "honor-magic-v5",
+            "sourceId": "mv5",
+            "status": "promoted",
+            "maps": [
+              "100_cct_mv5",
+              "100_lum_mv5",
+              "10_lum_mv5",
+              "300_cct_mv5",
+              "300_lum_mv5"
+            ]
+          },
+          {
+            "device": "huawei-mate-90-pro-max",
+            "sourceId": "m90pm",
+            "status": "created",
+            "maps": [
+              "100_cct_m90pm",
+              "100_lum_m90pm",
+              "10_lum_m90pm",
+              "300_cct_m90pm",
+              "300_lum_m90pm"
+            ]
+          },
+          {
+            "device": "oppo-find-x9",
+            "sourceId": "x9",
+            "status": "created",
+            "maps": [
+              "100_lum_x9"
+            ]
+          }
+        ],
+        "maps": {
+          "100_cct_ip17pm": {
+            "assetSha256": "7585fe19f325aa5bdaf5dac36d16870aacc535972d0104c7306d2684119bd370",
+            "sourceSha256": "7601285f0dbb8fdab2578fb578f7b4627a5a56698da5a4bb6de73878f151c041",
+            "measurementSource": "Apple iPhone 17 Pro Max/04_原始数据/Apple iPhone 17 Pro Max 100nits g20 色温.txt",
+            "measurementSourceSha256": "40d54a4d20dac4da051fbe5d5baca95f34398be6aa37592dcd8d4c007913acc5",
+            "measurementResolution": [
+              2983,
+              1252
+            ]
+          },
+          "100_cct_m70a": {
+            "assetSha256": "c12a49e5a788f8fcc07a3895a658c60d6cf41954646b855a9683f96957a00b5a",
+            "sourceSha256": "cbd5bf0c2c48548cf4594339fb8f6403dde7d6331278b85d2f73c9b13900c6ef",
+            "measurementSource": "华为 Mate 70 Air/04_原始数据/均匀性 色温 100nits g20.txt",
+            "measurementSourceSha256": "54dcd058a6512c8a7a1174a0e3b75a9c1011fd1b0a97438d2d3d66ef8124d786",
+            "measurementResolution": [
+              2632,
+              1340
+            ]
+          },
+          "100_cct_m80rs": {
+            "assetSha256": "7578da8c3595753b22040f76c368d48b030a40931ea747c3a91ca46f53ab1039",
+            "sourceSha256": "dc0ca95a03d670f5f8a191ca86a7ce684a71dae0e58a014f0e12b5f80689ffbb",
+            "measurementSource": "华为 Mate 80 RS/04_原始数据/新均匀性/新 华为 mate 80 rs 100nits g20 色温.txt",
+            "measurementSourceSha256": "829c3308632817f1cb964e9ad99e72ce9dda92cdf5ea14ac91ad85063766d964",
+            "measurementResolution": [
+              2578,
+              1320
+            ]
+          },
+          "100_cct_m90pm": {
+            "assetSha256": "b5d467579a60083c36297d43390f172cbf38743f03a7179bece78a9f103a0f48",
+            "sourceSha256": "12bb2e8f3fd745fff5b3a77e68ae492daf3019a4fc259a392ede360146078548",
+            "measurementSource": "华为 Mate 90 Prro Max 典藏版/04源文件/100nits G20色温.csv",
+            "measurementSourceSha256": "54f6860f8fb2d193cace9a7756a600dae3eed0cf3800185287f946b9e442cbc9",
+            "measurementResolution": [
+              1772,
+              827
+            ]
+          },
+          "100_cct_mi15u": {
+            "assetSha256": "0010823e4a4676040fd01fe69ddb510fcd6ac94d2dc21876c51b162dbc87685b",
+            "sourceSha256": "ca92b6f88423e368a2fff1edc539b4d306a02556b944fd9feb87eb4553fd0dec",
+            "measurementSource": "小米 15 Ultra/04_原始数据/100nits g20 色温.txt",
+            "measurementSourceSha256": "5e2b63059640e5b12f0d3937e88f56dec8facbacc974d022de38c090f6e462e0",
+            "measurementResolution": [
+              2833,
+              1368
+            ]
+          },
+          "100_cct_mv5": {
+            "assetSha256": "db0d8c9cbf279f41824baa436220a57be16a12504ad376f40342aa3372f55935",
+            "sourceSha256": "c1f579cbe01210cec4c701e5812f082e9dedcdc2285acbf047179b9cf70cdc4c",
+            "measurementSource": "荣耀 Magic V5/04源文件/荣耀 Magic V5 外屏 100nits g20 色温.txt",
+            "measurementSourceSha256": "4158135995570fdc26c3ce0006c3bd9eead1cf5f02ace3dbebdcb1f9b9ded0ed",
+            "measurementResolution": [
+              3387,
+              1749
+            ]
+          },
+          "100_cct_op15": {
+            "assetSha256": "23c1a2fae792dfa2364ee0637c281195580dd1f6a4c2bb6546184fb9cef2f1cb",
+            "sourceSha256": "e6113ffedbb9a830cd90cabc4224cd33dc37de7c4ee495c970bff6009dbab9af",
+            "measurementSource": "一加 15/04_原始数据/OnePlus 15 100nits G20 色温.txt",
+            "measurementSourceSha256": "1a5755a870998ca262058ed526fb5d6ef65a32e199ab5c3a3bbd585a3021aeea",
+            "measurementResolution": [
+              2584,
+              1218
+            ]
+          },
+          "100_cct_x9u": {
+            "assetSha256": "4049310985699c715002d56867e642f1544bc8f312fb267be1fb1796914fa57e",
+            "sourceSha256": "eddd301fba1e374c3bcd5141dd3da2de21c8cc66458dc2ef806a73a3ca93427c",
+            "measurementSource": "OPPO Find X9 Ultra/04源文件/x9u 100nits g20 色温.txt",
+            "measurementSourceSha256": "1a9ae4986e797c8ed0a7903e44b6d79016b1d1e2a8739701228a7c875b536e3f",
+            "measurementResolution": [
+              3079,
+              1517
+            ]
+          },
+          "100_lum_ip17pm": {
+            "assetSha256": "2c0f65e1f330e76e02b01d08d50b0b97fdc76c5b1629aae140da0256197bdc70",
+            "sourceSha256": "cefe3fff54bddd4028765f139eb1e84139665328cc7dbb3d2c6e8a7a0464ff72",
+            "measurementSource": "Apple iPhone 17 Pro Max/04_原始数据/Apple iPhone 17 Pro Max 100nits g20.txt",
+            "measurementSourceSha256": "41fd827969ca2c8783c1f840b3c819bef63bc08cff039603900e58ac58fd581e",
+            "measurementResolution": [
+              2983,
+              1252
+            ]
+          },
+          "100_lum_m70a": {
+            "assetSha256": "0a8c5a7507a7347f0d836c894c1bc3f185d0604f98b3ebdb3b4a424b2f825af0",
+            "sourceSha256": "adb42d5d7bd2d30099265b423257b680460378721dd9cab725caae3a831c1848",
+            "measurementSource": "华为 Mate 70 Air/04_原始数据/均匀性 亮度 100nits g20.txt",
+            "measurementSourceSha256": "34d02161db9f31c530a2f0ffc54871a7a969c41d1924edebdff46fed13429917",
+            "measurementResolution": [
+              2632,
+              1340
+            ]
+          },
+          "100_lum_m80rs": {
+            "assetSha256": "5dcdbb9a8aa3c34c731c123c7ba19b8d6fd9d88f2b2850a975af507826f9f244",
+            "sourceSha256": "b666969f16c1c8dcdc4caacfe7ae298a7f8168fd916e0c27243f0a75070b35cb",
+            "measurementSource": "华为 Mate 80 RS/04_原始数据/新均匀性/新 华为 mate 80 rs 100nits g20 亮度.txt",
+            "measurementSourceSha256": "66f366ecaa5d95f4f237c78993c81f22626fdce9cc7168864a6f42914845b2d1",
+            "measurementResolution": [
+              2578,
+              1320
+            ]
+          },
+          "100_lum_m90pm": {
+            "assetSha256": "269f013870de655e351a58a34d24d541c2eebf6d0f2e248d7233f60312c13a35",
+            "sourceSha256": "3071eb61486e0aa73395bb3dfbb17fbfae108f44e1b5246c890c289a0fc39e7b",
+            "measurementSource": "华为 Mate 90 Prro Max 典藏版/04源文件/100nits G20亮度.csv",
+            "measurementSourceSha256": "495b2db196e20f6183193f896e8d6351584776fdeaa3cae63808af8df54096ca",
+            "measurementResolution": [
+              1772,
+              827
+            ]
+          },
+          "100_lum_mi15u": {
+            "assetSha256": "89ff5ae2fd0503bdaaf77cd4f2226b01fa7b2c067c8d41f11559f8410b0a1d04",
+            "sourceSha256": "d39febdac8dafa4f57ca8586a3950835618c98ccad7c05dd037f8667eb73048a",
+            "measurementSource": "小米 15 Ultra/04_原始数据/100nits g20 亮度.txt",
+            "measurementSourceSha256": "addb3949ea8ffa61b4be7658729e6b4da25e8f2ee7d6fc78688fb77f18434585",
+            "measurementResolution": [
+              2833,
+              1368
+            ]
+          },
+          "100_lum_mv5": {
+            "assetSha256": "66873dc4f938fa73370e40725952850f04013c2f78636f260f8cfb1ebc77bfa5",
+            "sourceSha256": "f0bbc0614128232d7a12a41851527e52a5120e8b76cf6b496885d3188498383f",
+            "measurementSource": "荣耀 Magic V5/04源文件/荣耀 Magic V5 外屏 100nits g20 亮度.txt",
+            "measurementSourceSha256": "18a6707ce6ed894b29d2390aa315e4dbbf2d3b5ee3b99756fa8a96d045ea400d",
+            "measurementResolution": [
+              3387,
+              1749
+            ]
+          },
+          "100_lum_op15": {
+            "assetSha256": "ac7b56ce82c310f66549e4fe71776447c40f54f553867323a7c534631eb5615e",
+            "sourceSha256": "8a89bd73d5449d6a29ecc57779ba3a05108a82f64488b309ce4b4c6a26c134cd",
+            "measurementSource": "一加 15/04_原始数据/OnePlus 15 100nits G20 亮度.txt",
+            "measurementSourceSha256": "9bf81dab4b5e258282368b0ad27ab315fb85bf4a29a6657d94f8eab266b3d87c",
+            "measurementResolution": [
+              2584,
+              1218
+            ]
+          },
+          "100_lum_p80u": {
+            "assetSha256": "350b3fe20d25b63ccae4eeb0fe9d09d56f431efed37f0c6f5e5ad371795f91e6",
+            "sourceSha256": "f35c31b6b5a221f80d9c24f96e654d8ec5d6b9f7c203b6b1a4e677456576f468",
+            "measurementSource": "华为 Pura 80 Ultra/04_原始数据/pura80 100 gray 亮度.txt",
+            "measurementSourceSha256": "121e4e65f6efb97f1b948faadd763c93ae2b45acd4703a135a81e8ca1db8a88a",
+            "measurementResolution": [
+              2931,
+              1369
+            ]
+          },
+          "100_lum_x9": {
+            "assetSha256": "0aac14c3d8d61d5e3b799cbb11023317de60e321ae1c56bdd930572d223ec106",
+            "sourceSha256": "5e3c00fe78cdfbad6876550fa6c235a35769c2a02af59f903ef017ecfaedbde7",
+            "measurementSource": "OPPO Find X9/04_原始数据/findx9 100nits g20.txt",
+            "measurementSourceSha256": "1d0aedea79413a1f1d82bc426b7eb994622dc4c1a85fa3d2a1a0c1cc4d6b3b0a",
+            "measurementResolution": [
+              2483,
+              1239
+            ]
+          },
+          "100_lum_x9sp": {
+            "assetSha256": "650b1844d7c7af18fcb8e98955599b4b5aee247402b0fe4d29ca00271fdbbe59",
+            "sourceSha256": "12646a121f1d37bfcf936aa0194cfc3eab5d7dce1dd74fedc73f17d2368b54a7",
+            "measurementSource": "OPPO Find X9s Pro/05源文件/OPPO Find X9s Pro 100nits g20 亮度.txt",
+            "measurementSourceSha256": "e64ec5056af6adc61bf14b37966365f4e6c584f97cf8c4e26227eb103b5b00a3",
+            "measurementResolution": [
+              1412,
+              704
+            ]
+          },
+          "100_lum_x9u": {
+            "assetSha256": "36855ce9483a94571ebbd6276e15a4b75e4a8ffae6c935339aaa7f36df31a34f",
+            "sourceSha256": "92305a13a982f9184531a693279078e88a6852c87a85cbf87e61e627c72ccd82",
+            "measurementSource": "OPPO Find X9 Ultra/04源文件/x9u 100nits g20 亮度.txt",
+            "measurementSourceSha256": "3e062a5ecd3f8fa3938dba49c69ef63d194dd8ac6f76db9741aefb1970302d10",
+            "measurementResolution": [
+              3079,
+              1517
+            ]
+          },
+          "10_lum_ip17pm": {
+            "assetSha256": "842a94c1ea2519d514677ba2db0b96676ba66d475c186849fd795721defa70f1",
+            "sourceSha256": "db5cf2d61455bc64ccf4520899a56322ef0d96c8533e67c8e87a0723508531a7",
+            "measurementSource": "Apple iPhone 17 Pro Max/04_原始数据/Apple iPhone 17 Pro Max 10ntis g20.txt",
+            "measurementSourceSha256": "9aa53b92d28e037292444e2eaf3d89116f732001fdc7ec56a73525670aceffad",
+            "measurementResolution": [
+              2983,
+              1252
+            ]
+          },
+          "10_lum_m70a": {
+            "assetSha256": "9b31e13807f26394ecbb244310a272d3fcd8402c5feb0fbad03f9e57f1451c17",
+            "sourceSha256": "61f4eb0cdc37317a84b382cfa1a2e18f210f4e6772d7801892cb35187211068a",
+            "measurementSource": "华为 Mate 70 Air/04_原始数据/均匀性 亮度 10nits g20.txt",
+            "measurementSourceSha256": "a8bb2e4f3917540ad8bebd96bb33060b839fe544e9fb3eb439eae08ab0a15703",
+            "measurementResolution": [
+              2632,
+              1340
+            ]
+          },
+          "10_lum_m80rs": {
+            "assetSha256": "687528748e82324b230ca69c428dba98d72a3e59502faf7ef19d0d4b90760585",
+            "sourceSha256": "f2f43dd09fd5cc417bbc334b95a698d58465d7a7f330a84aeda8d607650f6c69",
+            "measurementSource": "华为 Mate 80 RS/04_原始数据/新均匀性/新 华为 mate 80 rs 10nits g20 亮度.txt",
+            "measurementSourceSha256": "03bb8e584c8f23566a25b287d718cf89c0c25b7c5fee991dddd60146dbf54ced",
+            "measurementResolution": [
+              2578,
+              1320
+            ]
+          },
+          "10_lum_m90pm": {
+            "assetSha256": "185182ef44c0ae360d1d8000050bd64b79e18dcd42016110c2709238113a67c7",
+            "sourceSha256": "6fb04f7bdd4c87daebf757376e189841d1c42804bd37002ea315c7da0241c820",
+            "measurementSource": "华为 Mate 90 Prro Max 典藏版/04源文件/10nits G20亮度.csv",
+            "measurementSourceSha256": "584fdcb33882ac04313daa83265706f17edbcf3dc355372b32b1cee5d5539b1a",
+            "measurementResolution": [
+              1775,
+              826
+            ]
+          },
+          "10_lum_mi15u": {
+            "assetSha256": "3c34a0d90bb1492f94a8f1b7882e4df6bd653b166e96a91dce5cb9c25fa02860",
+            "sourceSha256": "4c34e0092b9396e25fd0a38c075c91161cd2139f35277e6b60cf99022d246dff",
+            "measurementSource": "小米 15 Ultra/04_原始数据/10nits g20 亮度.txt",
+            "measurementSourceSha256": "251c0a1fadb189a77d06adb65e933e7850d00f9234f4589d4fe9d56b3e60da44",
+            "measurementResolution": [
+              2915,
+              1385
+            ]
+          },
+          "10_lum_mv5": {
+            "assetSha256": "72e0f09491f1938bffe10665fd315103acca34ac0e4501083023598f3b074166",
+            "sourceSha256": "c18cd688b76939d8ca293fe279bff074eb890634562913c8f213b88d08a99113",
+            "measurementSource": "荣耀 Magic V5/04源文件/荣耀 Magic V5 外屏 10nits g20 亮度.txt",
+            "measurementSourceSha256": "e6632b793f7c5f90a1c6157bbe09fe36c046c9a06ac066eeb0b64c777e4be417",
+            "measurementResolution": [
+              3387,
+              1749
+            ]
+          },
+          "10_lum_op15": {
+            "assetSha256": "23f510a9a3e20d98d732adfe7980250d8dedfcf075c9c6572e3a14774f1e8601",
+            "sourceSha256": "f98dd442e3d0f33173bf4405c8e09b21ea6b9ab284a072463f38c186a46a4e3a",
+            "measurementSource": "一加 15/04_原始数据/OnePlus 15 10nits G20 亮度.txt",
+            "measurementSourceSha256": "5d7db9eecdee4e3e1a32b5c59da3997603adf77b0fc4ff7715486d129335f4be",
+            "measurementResolution": [
+              2983,
+              1252
+            ]
+          },
+          "10_lum_p80u": {
+            "assetSha256": "088f4773a20d5b7e77a0fc0b66cdee27e62f91e30bf5b1613291884b747024a9",
+            "sourceSha256": "ce58034f7f9ae6e8c032e8c7abee3d3c060cb4aba0bef4f0af8d7f6b61344d9f",
+            "measurementSource": "华为 Pura 80 Ultra/04_原始数据/pura80 10 gray 亮度.txt",
+            "measurementSourceSha256": "b135097c3b12b39d5c919a3f5f1c0d0108e8700ad369828e6996c1e3ea223094",
+            "measurementResolution": [
+              2962,
+              1408
+            ]
+          },
+          "10_lum_x9sp": {
+            "assetSha256": "ac457569448707e1bf1bcd990c2b5e5018da57544628d83426029568c495e3fa",
+            "sourceSha256": "5fa2381e1be72581499dc65567203355d3de713d0a04ed3f9b44707252f0b7a1",
+            "measurementSource": "OPPO Find X9s Pro/05源文件/OPPO Find X9s Pro 10nits g20 亮度.txt",
+            "measurementSourceSha256": "f118be4cde476dc853e37b3b3cdfd285e8d20d01072896090deda585e21d7d8a",
+            "measurementResolution": [
+              1412,
+              704
+            ]
+          },
+          "300_cct_ip17pm": {
+            "assetSha256": "e945b1a810997a01ae3ddc534a974b8f4dc1636313614d87c1ad926ffb2fcb12",
+            "sourceSha256": "113d8edde9a7415fccb5f8cbcfb32c7254fbac0a4fb9c1d0e0cc13a54c387b22",
+            "measurementSource": "Apple iPhone 17 Pro Max/04_原始数据/Apple iPhone 17 Pro Max 300NITS 色温.txt",
+            "measurementSourceSha256": "18e42b5a8ae1a1e0676b7f681f9ffa41e1102f2cf374390052637600a6e81a5a",
+            "measurementResolution": [
+              2983,
+              1252
+            ]
+          },
+          "300_cct_m70a": {
+            "assetSha256": "6e436e6adb8a766d6fde517d804b9deaea9d4f17ef30e525780cef0eeccba21f",
+            "sourceSha256": "058d0e145529ee3a77f6374b7b7606291bf0faaf113abfe27cd85b7261cd2d5e",
+            "measurementSource": "华为 Mate 70 Air/04_原始数据/均匀性 色温 300nits 全屏白场.txt",
+            "measurementSourceSha256": "c8281b8e0048cfecb6782df037b0c5e6062ee8c269fe9acaf00f661742705e85",
+            "measurementResolution": [
+              2632,
+              1340
+            ]
+          },
+          "300_cct_m80rs": {
+            "assetSha256": "93a9fcace96eff14308f67d5c8c5e4c210d374af3816651c48ca8e08b80d52c6",
+            "sourceSha256": "2791f3f700c8e4340df6f4cc7041c15bc338774ab253e7cf38a8e3bf0217872b",
+            "measurementSource": "华为 Mate 80 RS/04_原始数据/新均匀性/新 华为 mate 80 rs 300nits 色温 .txt",
+            "measurementSourceSha256": "952c718b06499bc91c421e0c2e3b6783e2e7969ff2cef090d51eb5598e284e23",
+            "measurementResolution": [
+              2578,
+              1320
+            ]
+          },
+          "300_cct_m90pm": {
+            "assetSha256": "bbc145f9157ee9db42655294e6d525ce7231e19045d0e1fdc54a353bf40c8535",
+            "sourceSha256": "da476aea31952e84aa4748f44101b3905129247cdc753d305fe4262da20d4500",
+            "measurementSource": "华为 Mate 90 Prro Max 典藏版/04源文件/相机测量_300nits 色温均匀性.csv",
+            "measurementSourceSha256": "013063dfbaf16e7c4532b7f00beafe2271d5638f4fa678b443432a06e7f94594",
+            "measurementResolution": [
+              1772,
+              828
+            ]
+          },
+          "300_cct_mi15u": {
+            "assetSha256": "7813fe3f36988164ff08a5cec5c4b23013f53b59f85dcbf8cebf9035602dcf56",
+            "sourceSha256": "0c34d82249aa416edfdfb32474c16becc53be37a5d9f16242511028b208b3c30",
+            "measurementSource": "小米 15 Ultra/04_原始数据/300nits 色温.txt",
+            "measurementSourceSha256": "ad849dd26664644dbe200818b8239ba23ed37acfd2ad051259cec85deb0431a9",
+            "measurementResolution": [
+              4896,
+              3264
+            ]
+          },
+          "300_cct_mv5": {
+            "assetSha256": "6eec101c6e569debf56b8294808640dd0665615b6e9342ab2bf32ffc3b13f0f7",
+            "sourceSha256": "ca0e28bce725d6e2d6ad521c18e4d8c40d472a29e20d5ca83daa7a3ab1f0bb29",
+            "measurementSource": "荣耀 Magic V5/04源文件/荣耀 Magic V5 外屏 300nits 色温.txt",
+            "measurementSourceSha256": "b9ced63e0999b06182e0c72d0a8f048d3add41ed858dd23136663dab40296f80",
+            "measurementResolution": [
+              3387,
+              1749
+            ]
+          },
+          "300_cct_op15": {
+            "assetSha256": "5c3eec4efd968cf8ffe01b6fd9bbb67ccc36fe14f59e03cfc8b7436d2b1d6e01",
+            "sourceSha256": "bba6618d0557a0dca5e39774364e75ba347c913ac2e22f0598f577738fdbb35a",
+            "measurementSource": "一加 15/04_原始数据/一加 15 300NITS cct.txt",
+            "measurementSourceSha256": "b43a87ac29d18a160282fe4e22e7f7212bfeefb2932d9263b7152aa11d8d5857",
+            "measurementResolution": [
+              2584,
+              1218
+            ]
+          },
+          "300_cct_p80u": {
+            "assetSha256": "15d98d81f379398313879304c32674bdf5c1ca49eb06fddede2085342e3ab9aa",
+            "sourceSha256": "ca2a0491abada13eec02663436397941162bcec31ff9dc4cdfaff075bad974f8",
+            "measurementSource": "华为 Pura 80 Ultra/04_原始数据/pura80 300 w 色温.txt",
+            "measurementSourceSha256": "c8d73ccc01b81b0eb21fd25f47aff7e08facd6b97afc9e70fb7802f155f4098c",
+            "measurementResolution": [
+              2994,
+              1399
+            ]
+          },
+          "300_cct_x9sp": {
+            "assetSha256": "b8e1ad54bc03c12b40fb8fff8b6db10ae11c20419077f4764af0948c5bcecd60",
+            "sourceSha256": "1eaf21b3da02967851c1609b739543999b4b06a6c411e4fc0df0aaddd8f21b45",
+            "measurementSource": "OPPO Find X9s Pro/05源文件/OPPO Find X9s Pro 300nits 色温.txt",
+            "measurementSourceSha256": "61016ae86eb018c1a05ec313de261c11e54874efac69a9e5136eba8c6603c494",
+            "measurementResolution": [
+              1412,
+              704
+            ]
+          },
+          "300_cct_x9u": {
+            "assetSha256": "4fe79c78194840156e56cae53ec1aea82a37549f6df901908bbab6c9713882c7",
+            "sourceSha256": "b742df588510dd2cba8a95dc3b5ecdb0db66e21eaa1d7ef919eb6890e83b62b5",
+            "measurementSource": "OPPO Find X9 Ultra/04源文件/x9u 300nits 色温.txt",
+            "measurementSourceSha256": "6efea6e18a910bc9ed5b4c774038fc3c5eb1813625b0cbcae76f2e58246af458",
+            "measurementResolution": [
+              3079,
+              1517
+            ]
+          },
+          "300_lum_ip17pm": {
+            "assetSha256": "b502ba88f3852646a930e8c1da51e6da479f30068ed4658effbf2c6ac2212d40",
+            "sourceSha256": "d31b2d1f89ed6f9ddc6bebcd56f70ac754ba7f98c19519888bdc0efad8230f60",
+            "measurementSource": "Apple iPhone 17 Pro Max/04_原始数据/Apple iPhone 17 Pro Max 300NITS.txt",
+            "measurementSourceSha256": "bd35aa5e96bcf433587036b92f187857db58de6d962db321eafef7b9eb9103bb",
+            "measurementResolution": [
+              2983,
+              1252
+            ]
+          },
+          "300_lum_m70a": {
+            "assetSha256": "d5c5e7b00766230db80ffdb7625b76745a6d1c6ece2fef8cc3b4b696f57e1326",
+            "sourceSha256": "05c0aa76abaf2f394f796ae9834274730a59afd67a1704bf8446fe8ffcf342e0",
+            "measurementSource": "华为 Mate 70 Air/04_原始数据/均匀性 亮度 300nits 全屏白场.txt",
+            "measurementSourceSha256": "eb5eac58d026d02040537b740146ecdecb1623d7572821707923607d9af48cbe",
+            "measurementResolution": [
+              2632,
+              1340
+            ]
+          },
+          "300_lum_m80rs": {
+            "assetSha256": "a6b08c9b7551366e52ab8ce051e54864f69f660b92d6df32c430d6833c375c66",
+            "sourceSha256": "883a19851b5c27f958c46dfa77bbb9593575976a60cba4ee8268d7f976cd2bb5",
+            "measurementSource": "华为 Mate 80 RS/04_原始数据/新均匀性/新 华为 mate 80 rs 300nits 亮度 .txt",
+            "measurementSourceSha256": "8e096862a7e6f42fc61b30a88caad2b0bd3c6eeaa69e17a893bf28b9a7ab9e93",
+            "measurementResolution": [
+              2578,
+              1320
+            ]
+          },
+          "300_lum_m90pm": {
+            "assetSha256": "a2201f166696c11411caeab406adac05830a5494924438e343d09703372bff1c",
+            "sourceSha256": "d7b1ac2a18ea395dfc1f597564e3b556153e3dec70429761d8017f640d8cda92",
+            "measurementSource": "华为 Mate 90 Prro Max 典藏版/04源文件/相机测量_300nits 亮度均匀性.csv",
+            "measurementSourceSha256": "206129417fb8a2bbded05f179118b0abfec3a65f78c9e7c9f5a8010fa81b165f",
+            "measurementResolution": [
+              1772,
+              828
+            ]
+          },
+          "300_lum_mi15u": {
+            "assetSha256": "26001bce155ac9ede8ac3558fc3e4f6488fa37b492d8115918039100064b1441",
+            "sourceSha256": "d40e6b0e9ba73504c3f286c62203c65044c5b318c3cdb7c8e690764ba1469491",
+            "measurementSource": "小米 15 Ultra/04_原始数据/300nits 亮度.txt",
+            "measurementSourceSha256": "54756db714529988d4bf1a9a0e4c716d5a1032e86fa07df46e9275afc4a581bb",
+            "measurementResolution": [
+              4896,
+              3264
+            ]
+          },
+          "300_lum_mv5": {
+            "assetSha256": "c05c6c5e2b4bb5177bffb8ee9c3ceec25f296d784dfc684242989d2ebf853804",
+            "sourceSha256": "0dfdfc7e533841c2375a227544bd0056eb689ce15d3e77bc43155278a10f231e",
+            "measurementSource": "荣耀 Magic V5/04源文件/荣耀 Magic V5 外屏 300nits 亮度.txt",
+            "measurementSourceSha256": "77f3171bdec51a3f5ce531d1fa572228c6cb5b13451e7d8f99f2ffc59040e374",
+            "measurementResolution": [
+              3387,
+              1749
+            ]
+          },
+          "300_lum_op15": {
+            "assetSha256": "b0ab2e9629dafb834e84f33eba0d53aa12f1ba3790e197ce647482d6feb5dd87",
+            "sourceSha256": "84885fdc8c208aa79eb74c352877a989ce9ba7a88c01d1c099f801566e2fb6bd",
+            "measurementSource": "一加 15/04_原始数据/一加 15 300NITS.txt",
+            "measurementSourceSha256": "ade19b730edbd92feccbcbc8b334845c11a8c89e239e2a023c15acb30c414a2f",
+            "measurementResolution": [
+              2584,
+              1218
+            ]
+          },
+          "300_lum_p80u": {
+            "assetSha256": "a2c629b47fb7819a9a7c269f549c28c0e85050c043c131a284a11810b223d88c",
+            "sourceSha256": "6bf2e3177030da4d1db5070048331cacb1e5071ae31f050af172875b9bc22960",
+            "measurementSource": "华为 Pura 80 Ultra/04_原始数据/pura80 300 w 亮度.txt",
+            "measurementSourceSha256": "bb1c2665f73de4b53dabbe0615e9ddd88cdfd9202c328010b45aa66a05e20ec5",
+            "measurementResolution": [
+              2994,
+              1399
+            ]
+          },
+          "300_lum_x9sp": {
+            "assetSha256": "6d838272c08449335608d4e1737a8dba501f397cfafbd5035ad00bd0973fbfb3",
+            "sourceSha256": "8709f6da14a0cb2a2803cb02ba41fa257116e90bc90bec9d1d868605f4fbc010",
+            "measurementSource": "OPPO Find X9s Pro/05源文件/OPPO Find X9s Pro 300nits 亮度.txt",
+            "measurementSourceSha256": "74d24349935d45d537356684ed25d469d809ad5952fff32e2bb3ab50662933e5",
+            "measurementResolution": [
+              1412,
+              704
+            ]
+          },
+          "300_lum_x9u": {
+            "assetSha256": "20a0f04424a27055e8b0cf53936cb00118eb9bff925afda9cf366e8a950c54fc",
+            "sourceSha256": "ad200b5974291bf2b4fad7eefa7cf3491b6e87737547c0f885d084fe2561b874",
+            "measurementSource": "OPPO Find X9 Ultra/04源文件/x9u 300nits 亮度.txt",
+            "measurementSourceSha256": "1a6fa4828960727d7ca765f9c2b2ee6395f9befcfc9382d59a50c974e8cbbf43",
+            "measurementResolution": [
+              3079,
+              1517
+            ]
+          }
+        },
+        "index": {
+          "path": "data/uniformity/index.json",
+          "sha256Before": "240fe1731b941e76e9f5fadff7375be2c92a7cd55cbea59598e26692fe75b4ce",
+          "sha256After": "6a4a985b66ab07e72edcf0b0c46949c48c210cb1582f536fbf4be98cf4332854",
+          "changed": true
+        }
+      }
+    }
+  ],
+  "files": [
+    {
+      "path": "data/uniformity/index.json",
+      "sha256Before": "240fe1731b941e76e9f5fadff7375be2c92a7cd55cbea59598e26692fe75b4ce",
+      "sha256After": "6a4a985b66ab07e72edcf0b0c46949c48c210cb1582f536fbf4be98cf4332854"
+    },
+    {
+      "path": "data/uniformity/maps/10_lum_ip17pm.png",
+      "sha256Before": null,
+      "sha256After": "842a94c1ea2519d514677ba2db0b96676ba66d475c186849fd795721defa70f1"
+    },
+    {
+      "path": "data/uniformity/maps/10_lum_m70a.png",
+      "sha256Before": null,
+      "sha256After": "9b31e13807f26394ecbb244310a272d3fcd8402c5feb0fbad03f9e57f1451c17"
+    },
+    {
+      "path": "data/uniformity/maps/10_lum_m80rs.png",
+      "sha256Before": null,
+      "sha256After": "687528748e82324b230ca69c428dba98d72a3e59502faf7ef19d0d4b90760585"
+    },
+    {
+      "path": "data/uniformity/maps/10_lum_m90pm.png",
+      "sha256Before": null,
+      "sha256After": "185182ef44c0ae360d1d8000050bd64b79e18dcd42016110c2709238113a67c7"
+    },
+    {
+      "path": "data/uniformity/maps/10_lum_mi15u.png",
+      "sha256Before": null,
+      "sha256After": "3c34a0d90bb1492f94a8f1b7882e4df6bd653b166e96a91dce5cb9c25fa02860"
+    },
+    {
+      "path": "data/uniformity/maps/10_lum_mv5.png",
+      "sha256Before": null,
+      "sha256After": "72e0f09491f1938bffe10665fd315103acca34ac0e4501083023598f3b074166"
+    },
+    {
+      "path": "data/uniformity/maps/10_lum_op15.png",
+      "sha256Before": null,
+      "sha256After": "23f510a9a3e20d98d732adfe7980250d8dedfcf075c9c6572e3a14774f1e8601"
+    },
+    {
+      "path": "data/uniformity/maps/10_lum_p80u.png",
+      "sha256Before": null,
+      "sha256After": "088f4773a20d5b7e77a0fc0b66cdee27e62f91e30bf5b1613291884b747024a9"
+    },
+    {
+      "path": "data/uniformity/maps/10_lum_x9sp.png",
+      "sha256Before": null,
+      "sha256After": "ac457569448707e1bf1bcd990c2b5e5018da57544628d83426029568c495e3fa"
+    },
+    {
+      "path": "data/uniformity/maps/100_cct_ip17pm.png",
+      "sha256Before": null,
+      "sha256After": "7585fe19f325aa5bdaf5dac36d16870aacc535972d0104c7306d2684119bd370"
+    },
+    {
+      "path": "data/uniformity/maps/100_cct_m70a.png",
+      "sha256Before": null,
+      "sha256After": "c12a49e5a788f8fcc07a3895a658c60d6cf41954646b855a9683f96957a00b5a"
+    },
+    {
+      "path": "data/uniformity/maps/100_cct_m80rs.png",
+      "sha256Before": null,
+      "sha256After": "7578da8c3595753b22040f76c368d48b030a40931ea747c3a91ca46f53ab1039"
+    },
+    {
+      "path": "data/uniformity/maps/100_cct_m90pm.png",
+      "sha256Before": null,
+      "sha256After": "b5d467579a60083c36297d43390f172cbf38743f03a7179bece78a9f103a0f48"
+    },
+    {
+      "path": "data/uniformity/maps/100_cct_mi15u.png",
+      "sha256Before": null,
+      "sha256After": "0010823e4a4676040fd01fe69ddb510fcd6ac94d2dc21876c51b162dbc87685b"
+    },
+    {
+      "path": "data/uniformity/maps/100_cct_mv5.png",
+      "sha256Before": null,
+      "sha256After": "db0d8c9cbf279f41824baa436220a57be16a12504ad376f40342aa3372f55935"
+    },
+    {
+      "path": "data/uniformity/maps/100_cct_op15.png",
+      "sha256Before": null,
+      "sha256After": "23c1a2fae792dfa2364ee0637c281195580dd1f6a4c2bb6546184fb9cef2f1cb"
+    },
+    {
+      "path": "data/uniformity/maps/100_cct_x9u.png",
+      "sha256Before": null,
+      "sha256After": "4049310985699c715002d56867e642f1544bc8f312fb267be1fb1796914fa57e"
+    },
+    {
+      "path": "data/uniformity/maps/100_lum_ip17pm.png",
+      "sha256Before": null,
+      "sha256After": "2c0f65e1f330e76e02b01d08d50b0b97fdc76c5b1629aae140da0256197bdc70"
+    },
+    {
+      "path": "data/uniformity/maps/100_lum_m70a.png",
+      "sha256Before": null,
+      "sha256After": "0a8c5a7507a7347f0d836c894c1bc3f185d0604f98b3ebdb3b4a424b2f825af0"
+    },
+    {
+      "path": "data/uniformity/maps/100_lum_m80rs.png",
+      "sha256Before": null,
+      "sha256After": "5dcdbb9a8aa3c34c731c123c7ba19b8d6fd9d88f2b2850a975af507826f9f244"
+    },
+    {
+      "path": "data/uniformity/maps/100_lum_m90pm.png",
+      "sha256Before": null,
+      "sha256After": "269f013870de655e351a58a34d24d541c2eebf6d0f2e248d7233f60312c13a35"
+    },
+    {
+      "path": "data/uniformity/maps/100_lum_mi15u.png",
+      "sha256Before": null,
+      "sha256After": "89ff5ae2fd0503bdaaf77cd4f2226b01fa7b2c067c8d41f11559f8410b0a1d04"
+    },
+    {
+      "path": "data/uniformity/maps/100_lum_mv5.png",
+      "sha256Before": null,
+      "sha256After": "66873dc4f938fa73370e40725952850f04013c2f78636f260f8cfb1ebc77bfa5"
+    },
+    {
+      "path": "data/uniformity/maps/100_lum_op15.png",
+      "sha256Before": null,
+      "sha256After": "ac7b56ce82c310f66549e4fe71776447c40f54f553867323a7c534631eb5615e"
+    },
+    {
+      "path": "data/uniformity/maps/100_lum_p80u.png",
+      "sha256Before": null,
+      "sha256After": "350b3fe20d25b63ccae4eeb0fe9d09d56f431efed37f0c6f5e5ad371795f91e6"
+    },
+    {
+      "path": "data/uniformity/maps/100_lum_x9.png",
+      "sha256Before": null,
+      "sha256After": "0aac14c3d8d61d5e3b799cbb11023317de60e321ae1c56bdd930572d223ec106"
+    },
+    {
+      "path": "data/uniformity/maps/100_lum_x9sp.png",
+      "sha256Before": null,
+      "sha256After": "650b1844d7c7af18fcb8e98955599b4b5aee247402b0fe4d29ca00271fdbbe59"
+    },
+    {
+      "path": "data/uniformity/maps/100_lum_x9u.png",
+      "sha256Before": null,
+      "sha256After": "36855ce9483a94571ebbd6276e15a4b75e4a8ffae6c935339aaa7f36df31a34f"
+    },
+    {
+      "path": "data/uniformity/maps/300_cct_ip17pm.png",
+      "sha256Before": null,
+      "sha256After": "e945b1a810997a01ae3ddc534a974b8f4dc1636313614d87c1ad926ffb2fcb12"
+    },
+    {
+      "path": "data/uniformity/maps/300_cct_m70a.png",
+      "sha256Before": null,
+      "sha256After": "6e436e6adb8a766d6fde517d804b9deaea9d4f17ef30e525780cef0eeccba21f"
+    },
+    {
+      "path": "data/uniformity/maps/300_cct_m80rs.png",
+      "sha256Before": null,
+      "sha256After": "93a9fcace96eff14308f67d5c8c5e4c210d374af3816651c48ca8e08b80d52c6"
+    },
+    {
+      "path": "data/uniformity/maps/300_cct_m90pm.png",
+      "sha256Before": null,
+      "sha256After": "bbc145f9157ee9db42655294e6d525ce7231e19045d0e1fdc54a353bf40c8535"
+    },
+    {
+      "path": "data/uniformity/maps/300_cct_mi15u.png",
+      "sha256Before": null,
+      "sha256After": "7813fe3f36988164ff08a5cec5c4b23013f53b59f85dcbf8cebf9035602dcf56"
+    },
+    {
+      "path": "data/uniformity/maps/300_cct_mv5.png",
+      "sha256Before": null,
+      "sha256After": "6eec101c6e569debf56b8294808640dd0665615b6e9342ab2bf32ffc3b13f0f7"
+    },
+    {
+      "path": "data/uniformity/maps/300_cct_op15.png",
+      "sha256Before": null,
+      "sha256After": "5c3eec4efd968cf8ffe01b6fd9bbb67ccc36fe14f59e03cfc8b7436d2b1d6e01"
+    },
+    {
+      "path": "data/uniformity/maps/300_cct_p80u.png",
+      "sha256Before": null,
+      "sha256After": "15d98d81f379398313879304c32674bdf5c1ca49eb06fddede2085342e3ab9aa"
+    },
+    {
+      "path": "data/uniformity/maps/300_cct_x9sp.png",
+      "sha256Before": null,
+      "sha256After": "b8e1ad54bc03c12b40fb8fff8b6db10ae11c20419077f4764af0948c5bcecd60"
+    },
+    {
+      "path": "data/uniformity/maps/300_cct_x9u.png",
+      "sha256Before": null,
+      "sha256After": "4fe79c78194840156e56cae53ec1aea82a37549f6df901908bbab6c9713882c7"
+    },
+    {
+      "path": "data/uniformity/maps/300_lum_ip17pm.png",
+      "sha256Before": null,
+      "sha256After": "b502ba88f3852646a930e8c1da51e6da479f30068ed4658effbf2c6ac2212d40"
+    },
+    {
+      "path": "data/uniformity/maps/300_lum_m70a.png",
+      "sha256Before": null,
+      "sha256After": "d5c5e7b00766230db80ffdb7625b76745a6d1c6ece2fef8cc3b4b696f57e1326"
+    },
+    {
+      "path": "data/uniformity/maps/300_lum_m80rs.png",
+      "sha256Before": null,
+      "sha256After": "a6b08c9b7551366e52ab8ce051e54864f69f660b92d6df32c430d6833c375c66"
+    },
+    {
+      "path": "data/uniformity/maps/300_lum_m90pm.png",
+      "sha256Before": null,
+      "sha256After": "a2201f166696c11411caeab406adac05830a5494924438e343d09703372bff1c"
+    },
+    {
+      "path": "data/uniformity/maps/300_lum_mi15u.png",
+      "sha256Before": null,
+      "sha256After": "26001bce155ac9ede8ac3558fc3e4f6488fa37b492d8115918039100064b1441"
+    },
+    {
+      "path": "data/uniformity/maps/300_lum_mv5.png",
+      "sha256Before": null,
+      "sha256After": "c05c6c5e2b4bb5177bffb8ee9c3ceec25f296d784dfc684242989d2ebf853804"
+    },
+    {
+      "path": "data/uniformity/maps/300_lum_op15.png",
+      "sha256Before": null,
+      "sha256After": "b0ab2e9629dafb834e84f33eba0d53aa12f1ba3790e197ce647482d6feb5dd87"
+    },
+    {
+      "path": "data/uniformity/maps/300_lum_p80u.png",
+      "sha256Before": null,
+      "sha256After": "a2c629b47fb7819a9a7c269f549c28c0e85050c043c131a284a11810b223d88c"
+    },
+    {
+      "path": "data/uniformity/maps/300_lum_x9sp.png",
+      "sha256Before": null,
+      "sha256After": "6d838272c08449335608d4e1737a8dba501f397cfafbd5035ad00bd0973fbfb3"
+    },
+    {
+      "path": "data/uniformity/maps/300_lum_x9u.png",
+      "sha256Before": null,
+      "sha256After": "20a0f04424a27055e8b0cf53936cb00118eb9bff925afda9cf366e8a950c54fc"
+    }
+  ],
+  "counts": {
+    "before": {
+      "devices": 26,
+      "svmRecords": 21,
+      "angleProfiles": 8,
+      "angleProfilesMeasured": 7,
+      "uniformityConditions": 35,
+      "uniformityMaps": 15,
+      "reflectanceSamples": 32
+    },
+    "after": {
+      "devices": 26,
+      "svmRecords": 21,
+      "angleProfiles": 8,
+      "angleProfilesMeasured": 7,
+      "uniformityConditions": 39,
+      "uniformityMaps": 63,
+      "reflectanceSamples": 32
+    },
+    "delta": {
+      "devices": 0,
+      "svmRecords": 0,
+      "angleProfiles": 0,
+      "angleProfilesMeasured": 0,
+      "uniformityConditions": 4,
+      "uniformityMaps": 48,
+      "reflectanceSamples": 0
+    }
+  },
+  "requiresStandaloneRebuild": false
+}

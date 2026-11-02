@@ -1,24 +1,25 @@
 {
   "schemaVersion": 1,
-  "dataVersion": "2026.11.02.3",
+  "dataVersion": "2026.11.02.4",
   "date": "2026-11-02",
-  "batch": "2026-11-02-unif-fullprec",
+  "batch": "2026-11-02-unif-maps",
   "batches": [
     "2026-11-02-unif-9phones",
-    "2026-11-02-unif-fullprec"
+    "2026-11-02-unif-fullprec",
+    "2026-11-02-unif-maps"
   ],
   "counts": {
     "devices": 26,
     "svmRecords": 21,
     "angleProfiles": 8,
     "angleProfilesMeasured": 7,
-    "uniformityConditions": 35,
-    "uniformityMaps": 15,
+    "uniformityConditions": 39,
+    "uniformityMaps": 63,
     "reflectanceSamples": 32,
     "devicesWith": {
       "svm": 8,
       "angle": 5,
-      "uniformity": 12,
+      "uniformity": 14,
       "reflectance": 24
     }
   }

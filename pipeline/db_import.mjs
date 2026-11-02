@@ -99,6 +99,8 @@ function importerArgs(input, i, ctx) {
         '--source-copy', path.join(s, BATCH_DIR, ctx.batch.id, 'sources', `${i + 1}-${path.posix.basename(input.path)}`)];
     case 'uniformity-metrics':
       return ['--root', s, '--metrics', ctx.files[i].abs, '--options', opts, '--batch', ctx.batch.id, '--source-name', input.path];
+    case 'uniformity-maps':
+      return ['--root', s, '--package', ctx.files[i].abs, '--options', opts, '--batch', ctx.batch.id, '--source-name', input.path];
     case 'uniformity-white':
       return ['--root', s, '--options', opts, '--batch', ctx.batch.id];
     case 'reflectance-xml':

@@ -137,7 +137,7 @@ export function buildCatalog(root = REPO_ROOT) {
         label: c.label,
         pattern: c.pattern,
         referenceNits: c.referenceNits,
-        display: 'main',
+        display: phone.display ?? 'main',
         state: 'default',
         stateBasis: 'convention',
         unit: null,

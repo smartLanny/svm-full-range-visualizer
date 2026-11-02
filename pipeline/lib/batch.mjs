@@ -22,6 +22,7 @@ export const SHA_RE = /^[0-9a-f]{64}$/;
 export const INPUT_TYPES = {
   'svm-feishu-csv': { file: true, importer: 'pipeline/import/svm_feishu_csv.py', zh: '频闪（飞书表 CSV 导出）' },
   'uniformity-metrics': { file: true, importer: 'pipeline/import/uniformity_metrics.py', zh: '均匀度指标（视频项目 uniformity_metrics.json）' },
+  'uniformity-maps': { file: true, importer: 'pipeline/import/uniformity_maps.py', zh: '均匀度热力图（make_maps.py 打包的 zip）' },
   'uniformity-white': { file: false, importer: 'pipeline/import/uniformity_metrics.py', zh: '均匀度实测白场（手工读数）' },
   'reflectance-xml': { file: true, importer: 'pipeline/import/reflectance_xml.py', zh: '反射率（ThreeNH 仪器 XML）' },
 };

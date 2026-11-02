@@ -5,7 +5,7 @@
   "inputs": {
     "public/datasets/manifest.json": "28ead38e1e9036de5b4e813000947961bd8d9c7ae931b502c808540b04cf94b4",
     "data/angle/summary.json": "f5f8514c14e23f3f15bf3c317851220d3c3825714fd8baca072bb95e6d760431",
-    "data/uniformity/index.json": "240fe1731b941e76e9f5fadff7375be2c92a7cd55cbea59598e26692fe75b4ce",
+    "data/uniformity/index.json": "6a4a985b66ab07e72edcf0b0c46949c48c210cb1582f536fbf4be98cf4332854",
     "data/reflectance/index.json": "395a40def7c94286de548e88195acdc297e8df5d6ec907a3d5133e989f85a6fc",
     "data/catalog-overrides.json": "3f299d42f29ae01aed850eecb63a58de646bec9aeb13c2ebc872f9b65a87eda9"
   },
@@ -159,13 +159,13 @@
     "svmRecords": 21,
     "angleProfiles": 8,
     "angleProfilesMeasured": 7,
-    "uniformityConditions": 35,
-    "uniformityMaps": 15,
+    "uniformityConditions": 39,
+    "uniformityMaps": 63,
     "reflectanceSamples": 32,
     "devicesWith": {
       "svm": 8,
       "angle": 5,
-      "uniformity": 12,
+      "uniformity": 14,
       "reflectance": 24
     }
   },
@@ -625,8 +625,7 @@
           "status": "complete"
         },
         "uniformity": {
-          "status": "not-measured",
-          "note": "atlas 记为未测量（notRecorded）。"
+          "status": "complete"
         },
         "reflectance": {
           "status": "complete"
@@ -656,7 +655,80 @@
           "unit": null
         }
       ],
-      "uniformity": [],
+      "uniformity": [
+        {
+          "condition": "300",
+          "label": "300 nits 白场",
+          "pattern": "全白场",
+          "referenceNits": 300,
+          "display": "main",
+          "state": "default",
+          "stateBasis": "convention",
+          "unit": null,
+          "maps": [
+            {
+              "kind": "luminance",
+              "asset": "maps/300_lum_m90pm.png",
+              "sourceKey": "300_lum_m90pm"
+            },
+            {
+              "kind": "colorTemperature",
+              "asset": "maps/300_cct_m90pm.png",
+              "sourceKey": "300_cct_m90pm"
+            }
+          ],
+          "metrics": [
+            "luminance",
+            "colorTemperature"
+          ]
+        },
+        {
+          "condition": "100",
+          "label": "100 nits G20",
+          "pattern": "G20",
+          "referenceNits": 100,
+          "display": "main",
+          "state": "default",
+          "stateBasis": "convention",
+          "unit": null,
+          "maps": [
+            {
+              "kind": "luminance",
+              "asset": "maps/100_lum_m90pm.png",
+              "sourceKey": "100_lum_m90pm"
+            },
+            {
+              "kind": "colorTemperature",
+              "asset": "maps/100_cct_m90pm.png",
+              "sourceKey": "100_cct_m90pm"
+            }
+          ],
+          "metrics": [
+            "luminance",
+            "colorTemperature"
+          ]
+        },
+        {
+          "condition": "10",
+          "label": "10 nits G20",
+          "pattern": "G20",
+          "referenceNits": 10,
+          "display": "main",
+          "state": "default",
+          "stateBasis": "convention",
+          "unit": null,
+          "maps": [
+            {
+              "kind": "luminance",
+              "asset": "maps/10_lum_m90pm.png",
+              "sourceKey": "10_lum_m90pm"
+            }
+          ],
+          "metrics": [
+            "luminance"
+          ]
+        }
+      ],
       "reflectance": [
         {
           "condition": "as-measured",
@@ -702,8 +774,7 @@
           "status": "complete"
         },
         "uniformity": {
-          "status": "metrics-only",
-          "sourceId": "ip17pm"
+          "status": "complete"
         },
         "reflectance": {
           "status": "complete"
@@ -752,7 +823,18 @@
           "state": "default",
           "stateBasis": "convention",
           "unit": null,
-          "maps": [],
+          "maps": [
+            {
+              "kind": "luminance",
+              "asset": "maps/300_lum_ip17pm.png",
+              "sourceKey": "300_lum_ip17pm"
+            },
+            {
+              "kind": "colorTemperature",
+              "asset": "maps/300_cct_ip17pm.png",
+              "sourceKey": "300_cct_ip17pm"
+            }
+          ],
           "metrics": [
             "luminance",
             "colorTemperature"
@@ -767,7 +849,18 @@
           "state": "default",
           "stateBasis": "convention",
           "unit": null,
-          "maps": [],
+          "maps": [
+            {
+              "kind": "luminance",
+              "asset": "maps/100_lum_ip17pm.png",
+              "sourceKey": "100_lum_ip17pm"
+            },
+            {
+              "kind": "colorTemperature",
+              "asset": "maps/100_cct_ip17pm.png",
+              "sourceKey": "100_cct_ip17pm"
+            }
+          ],
           "metrics": [
             "luminance",
             "colorTemperature"
@@ -782,7 +875,13 @@
           "state": "default",
           "stateBasis": "convention",
           "unit": null,
-          "maps": [],
+          "maps": [
+            {
+              "kind": "luminance",
+              "asset": "maps/10_lum_ip17pm.png",
+              "sourceKey": "10_lum_ip17pm"
+            }
+          ],
           "metrics": [
             "luminance"
           ]
@@ -978,8 +1077,7 @@
           "status": "not-measured"
         },
         "uniformity": {
-          "status": "metrics-only",
-          "sourceId": "m80rs"
+          "status": "complete"
         },
         "reflectance": {
           "status": "complete"
@@ -1038,7 +1136,18 @@
           "state": "default",
           "stateBasis": "convention",
           "unit": null,
-          "maps": [],
+          "maps": [
+            {
+              "kind": "luminance",
+              "asset": "maps/300_lum_m80rs.png",
+              "sourceKey": "300_lum_m80rs"
+            },
+            {
+              "kind": "colorTemperature",
+              "asset": "maps/300_cct_m80rs.png",
+              "sourceKey": "300_cct_m80rs"
+            }
+          ],
           "metrics": [
             "luminance",
             "colorTemperature"
@@ -1053,7 +1162,18 @@
           "state": "default",
           "stateBasis": "convention",
           "unit": null,
-          "maps": [],
+          "maps": [
+            {
+              "kind": "luminance",
+              "asset": "maps/100_lum_m80rs.png",
+              "sourceKey": "100_lum_m80rs"
+            },
+            {
+              "kind": "colorTemperature",
+              "asset": "maps/100_cct_m80rs.png",
+              "sourceKey": "100_cct_m80rs"
+            }
+          ],
           "metrics": [
             "luminance",
             "colorTemperature"
@@ -1068,7 +1188,13 @@
           "state": "default",
           "stateBasis": "convention",
           "unit": null,
-          "maps": [],
+          "maps": [
+            {
+              "kind": "luminance",
+              "asset": "maps/10_lum_m80rs.png",
+              "sourceKey": "10_lum_m80rs"
+            }
+          ],
           "metrics": [
             "luminance"
           ]
@@ -1112,8 +1238,7 @@
           "status": "not-measured"
         },
         "uniformity": {
-          "status": "metrics-only",
-          "sourceId": "m70a"
+          "status": "complete"
         },
         "reflectance": {
           "status": "complete"
@@ -1172,7 +1297,18 @@
           "state": "default",
           "stateBasis": "convention",
           "unit": null,
-          "maps": [],
+          "maps": [
+            {
+              "kind": "luminance",
+              "asset": "maps/300_lum_m70a.png",
+              "sourceKey": "300_lum_m70a"
+            },
+            {
+              "kind": "colorTemperature",
+              "asset": "maps/300_cct_m70a.png",
+              "sourceKey": "300_cct_m70a"
+            }
+          ],
           "metrics": [
             "luminance",
             "colorTemperature"
@@ -1187,7 +1323,18 @@
           "state": "default",
           "stateBasis": "convention",
           "unit": null,
-          "maps": [],
+          "maps": [
+            {
+              "kind": "luminance",
+              "asset": "maps/100_lum_m70a.png",
+              "sourceKey": "100_lum_m70a"
+            },
+            {
+              "kind": "colorTemperature",
+              "asset": "maps/100_cct_m70a.png",
+              "sourceKey": "100_cct_m70a"
+            }
+          ],
           "metrics": [
             "luminance",
             "colorTemperature"
@@ -1202,7 +1349,13 @@
           "state": "default",
           "stateBasis": "convention",
           "unit": null,
-          "maps": [],
+          "maps": [
+            {
+              "kind": "luminance",
+              "asset": "maps/10_lum_m70a.png",
+              "sourceKey": "10_lum_m70a"
+            }
+          ],
           "metrics": [
             "luminance"
           ]
@@ -1244,8 +1397,7 @@
           "status": "not-measured"
         },
         "uniformity": {
-          "status": "metrics-only",
-          "sourceId": "mv5"
+          "status": "complete"
         },
         "reflectance": {
           "status": "complete"
@@ -1263,7 +1415,18 @@
           "state": "default",
           "stateBasis": "convention",
           "unit": null,
-          "maps": [],
+          "maps": [
+            {
+              "kind": "luminance",
+              "asset": "maps/300_lum_mv5.png",
+              "sourceKey": "300_lum_mv5"
+            },
+            {
+              "kind": "colorTemperature",
+              "asset": "maps/300_cct_mv5.png",
+              "sourceKey": "300_cct_mv5"
+            }
+          ],
           "metrics": [
             "luminance",
             "colorTemperature"
@@ -1278,7 +1441,18 @@
           "state": "default",
           "stateBasis": "convention",
           "unit": null,
-          "maps": [],
+          "maps": [
+            {
+              "kind": "luminance",
+              "asset": "maps/100_lum_mv5.png",
+              "sourceKey": "100_lum_mv5"
+            },
+            {
+              "kind": "colorTemperature",
+              "asset": "maps/100_cct_mv5.png",
+              "sourceKey": "100_cct_mv5"
+            }
+          ],
           "metrics": [
             "luminance",
             "colorTemperature"
@@ -1293,7 +1467,13 @@
           "state": "default",
           "stateBasis": "convention",
           "unit": null,
-          "maps": [],
+          "maps": [
+            {
+              "kind": "luminance",
+              "asset": "maps/10_lum_mv5.png",
+              "sourceKey": "10_lum_mv5"
+            }
+          ],
           "metrics": [
             "luminance"
           ]
@@ -1390,8 +1570,7 @@
           "status": "not-measured"
         },
         "uniformity": {
-          "status": "metrics-only",
-          "sourceId": "op15"
+          "status": "complete"
         },
         "reflectance": {
           "status": "complete"
@@ -1409,7 +1588,18 @@
           "state": "default",
           "stateBasis": "convention",
           "unit": null,
-          "maps": [],
+          "maps": [
+            {
+              "kind": "luminance",
+              "asset": "maps/300_lum_op15.png",
+              "sourceKey": "300_lum_op15"
+            },
+            {
+              "kind": "colorTemperature",
+              "asset": "maps/300_cct_op15.png",
+              "sourceKey": "300_cct_op15"
+            }
+          ],
           "metrics": [
             "luminance",
             "colorTemperature"
@@ -1424,7 +1614,18 @@
           "state": "default",
           "stateBasis": "convention",
           "unit": null,
-          "maps": [],
+          "maps": [
+            {
+              "kind": "luminance",
+              "asset": "maps/100_lum_op15.png",
+              "sourceKey": "100_lum_op15"
+            },
+            {
+              "kind": "colorTemperature",
+              "asset": "maps/100_cct_op15.png",
+              "sourceKey": "100_cct_op15"
+            }
+          ],
           "metrics": [
             "luminance",
             "colorTemperature"
@@ -1439,7 +1640,13 @@
           "state": "default",
           "stateBasis": "convention",
           "unit": null,
-          "maps": [],
+          "maps": [
+            {
+              "kind": "luminance",
+              "asset": "maps/10_lum_op15.png",
+              "sourceKey": "10_lum_op15"
+            }
+          ],
           "metrics": [
             "luminance"
           ]
@@ -1573,7 +1780,7 @@
           "status": "not-measured"
         },
         "uniformity": {
-          "status": "not-measured"
+          "status": "complete"
         },
         "reflectance": {
           "status": "complete"
@@ -1581,7 +1788,28 @@
       },
       "svm": [],
       "angle": [],
-      "uniformity": [],
+      "uniformity": [
+        {
+          "condition": "100",
+          "label": "100 nits G20",
+          "pattern": "G20",
+          "referenceNits": 100,
+          "display": "main",
+          "state": "default",
+          "stateBasis": "convention",
+          "unit": null,
+          "maps": [
+            {
+              "kind": "luminance",
+              "asset": "maps/100_lum_x9.png",
+              "sourceKey": "100_lum_x9"
+            }
+          ],
+          "metrics": [
+            "luminance"
+          ]
+        }
+      ],
       "reflectance": [
         {
           "condition": "as-measured",
@@ -1617,8 +1845,7 @@
           "status": "not-measured"
         },
         "uniformity": {
-          "status": "metrics-only",
-          "sourceId": "x9u"
+          "status": "complete"
         },
         "reflectance": {
           "status": "complete"
@@ -1636,7 +1863,18 @@
           "state": "default",
           "stateBasis": "convention",
           "unit": null,
-          "maps": [],
+          "maps": [
+            {
+              "kind": "luminance",
+              "asset": "maps/300_lum_x9u.png",
+              "sourceKey": "300_lum_x9u"
+            },
+            {
+              "kind": "colorTemperature",
+              "asset": "maps/300_cct_x9u.png",
+              "sourceKey": "300_cct_x9u"
+            }
+          ],
           "metrics": [
             "luminance",
             "colorTemperature"
@@ -1651,7 +1889,18 @@
           "state": "default",
           "stateBasis": "convention",
           "unit": null,
-          "maps": [],
+          "maps": [
+            {
+              "kind": "luminance",
+              "asset": "maps/100_lum_x9u.png",
+              "sourceKey": "100_lum_x9u"
+            },
+            {
+              "kind": "colorTemperature",
+              "asset": "maps/100_cct_x9u.png",
+              "sourceKey": "100_cct_x9u"
+            }
+          ],
           "metrics": [
             "luminance",
             "colorTemperature"
@@ -1693,8 +1942,7 @@
           "status": "not-measured"
         },
         "uniformity": {
-          "status": "metrics-only",
-          "sourceId": "x9sp"
+          "status": "complete"
         },
         "reflectance": {
           "status": "complete"
@@ -1712,7 +1960,18 @@
           "state": "default",
           "stateBasis": "convention",
           "unit": null,
-          "maps": [],
+          "maps": [
+            {
+              "kind": "luminance",
+              "asset": "maps/300_lum_x9sp.png",
+              "sourceKey": "300_lum_x9sp"
+            },
+            {
+              "kind": "colorTemperature",
+              "asset": "maps/300_cct_x9sp.png",
+              "sourceKey": "300_cct_x9sp"
+            }
+          ],
           "metrics": [
             "luminance",
             "colorTemperature"
@@ -1727,7 +1986,13 @@
           "state": "default",
           "stateBasis": "convention",
           "unit": null,
-          "maps": [],
+          "maps": [
+            {
+              "kind": "luminance",
+              "asset": "maps/100_lum_x9sp.png",
+              "sourceKey": "100_lum_x9sp"
+            }
+          ],
           "metrics": [
             "luminance"
           ]
@@ -1741,7 +2006,13 @@
           "state": "default",
           "stateBasis": "convention",
           "unit": null,
-          "maps": [],
+          "maps": [
+            {
+              "kind": "luminance",
+              "asset": "maps/10_lum_x9sp.png",
+              "sourceKey": "10_lum_x9sp"
+            }
+          ],
           "metrics": [
             "luminance"
           ]
@@ -1838,8 +2109,7 @@
           "status": "not-measured"
         },
         "uniformity": {
-          "status": "metrics-only",
-          "sourceId": "mi15u"
+          "status": "complete"
         },
         "reflectance": {
           "status": "complete"
@@ -1857,7 +2127,18 @@
           "state": "default",
           "stateBasis": "convention",
           "unit": null,
-          "maps": [],
+          "maps": [
+            {
+              "kind": "luminance",
+              "asset": "maps/300_lum_mi15u.png",
+              "sourceKey": "300_lum_mi15u"
+            },
+            {
+              "kind": "colorTemperature",
+              "asset": "maps/300_cct_mi15u.png",
+              "sourceKey": "300_cct_mi15u"
+            }
+          ],
           "metrics": [
             "luminance",
             "colorTemperature"
@@ -1872,7 +2153,18 @@
           "state": "default",
           "stateBasis": "convention",
           "unit": null,
-          "maps": [],
+          "maps": [
+            {
+              "kind": "luminance",
+              "asset": "maps/100_lum_mi15u.png",
+              "sourceKey": "100_lum_mi15u"
+            },
+            {
+              "kind": "colorTemperature",
+              "asset": "maps/100_cct_mi15u.png",
+              "sourceKey": "100_cct_mi15u"
+            }
+          ],
           "metrics": [
             "luminance",
             "colorTemperature"
@@ -1887,7 +2179,13 @@
           "state": "default",
           "stateBasis": "convention",
           "unit": null,
-          "maps": [],
+          "maps": [
+            {
+              "kind": "luminance",
+              "asset": "maps/10_lum_mi15u.png",
+              "sourceKey": "10_lum_mi15u"
+            }
+          ],
           "metrics": [
             "luminance"
           ]
@@ -2107,8 +2405,7 @@
           "status": "not-measured"
         },
         "uniformity": {
-          "status": "metrics-only",
-          "sourceId": "p80u"
+          "status": "complete"
         },
         "reflectance": {
           "status": "not-measured"
@@ -2126,7 +2423,18 @@
           "state": "default",
           "stateBasis": "convention",
           "unit": null,
-          "maps": [],
+          "maps": [
+            {
+              "kind": "luminance",
+              "asset": "maps/300_lum_p80u.png",
+              "sourceKey": "300_lum_p80u"
+            },
+            {
+              "kind": "colorTemperature",
+              "asset": "maps/300_cct_p80u.png",
+              "sourceKey": "300_cct_p80u"
+            }
+          ],
           "metrics": [
             "luminance",
             "colorTemperature"
@@ -2141,7 +2449,13 @@
           "state": "default",
           "stateBasis": "convention",
           "unit": null,
-          "maps": [],
+          "maps": [
+            {
+              "kind": "luminance",
+              "asset": "maps/100_lum_p80u.png",
+              "sourceKey": "100_lum_p80u"
+            }
+          ],
           "metrics": [
             "luminance"
           ]
@@ -2155,7 +2469,13 @@
           "state": "default",
           "stateBasis": "convention",
           "unit": null,
-          "maps": [],
+          "maps": [
+            {
+              "kind": "luminance",
+              "asset": "maps/10_lum_p80u.png",
+              "sourceKey": "10_lum_p80u"
+            }
+          ],
           "metrics": [
             "luminance"
           ]
