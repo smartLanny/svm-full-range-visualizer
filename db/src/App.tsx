@@ -38,7 +38,7 @@ export function App() {
 
   useEffect(() => {
     if (catalog.status !== 'ready') return;
-    const name = (id: string) => catalog.data.devices.find((d) => d.id === id)?.name.zh ?? id;
+    const name = (id: string) => catalog.data.devices.find((d) => d.id === id)?.name.zh ?? '未找到机型';
     document.title =
       route.page === 'device'
         ? `${name(route.id)} · 屏幕数据库`

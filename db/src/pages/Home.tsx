@@ -4,6 +4,10 @@ import type { Catalog, DataType, Device } from '../../catalog/types';
 import { deviceHref, formatRoute } from '../lib/route';
 import { filterDevices, matchReason } from '../lib/search';
 import { DataVersion } from '../components/Shell';
+import { loadUniformity, uniformityAsset, useAsync } from '../lib/data';
+import { uniformityViews } from '../lib/uniformity';
+import { fmtFixed, fmtSig } from '../lib/format';
+import { useMedia } from '../lib/useWidth';
 import { Glow, hasStatusData, Missing, Pills, STATUS_SHORT, STATUS_TEXT, TYPE_META, TYPE_ORDER, TypeIcon } from '../components/ui';
 import { cn } from '../../../src/ui/cn';
 
@@ -73,10 +77,57 @@ function DeviceCard({ device, brand, q }: { device: Device; brand: string; q: st
   );
 }
 
+/**
+ * Desktop hero visual: the real 300 nits white-field heatmaps of up to three devices, each with its
+ * area uniformity and typical luminance on it (same rule as the uniformity section: the colours are
+ * relative to the device's own typical luminance). Not rendered (nor downloaded) below 1280 px.
+ */
+function HeroSpotlight({ catalog }: { catalog: Catalog }) {
+  const uni = useAsync(loadUniformity, 'uniformity');
+  if (uni.status !== 'ready') return null;
+  const picks = catalog.devices
+    .map((d) => ({ d, v: uniformityViews(d, uni.data).find((x) => x.cond.id === '300') }))
+    .filter((x) => x.v?.cond.maps.luminance && x.v.cond.metrics.luminance)
+    .slice(0, 3);
+  if (!picks.length) return null;
+  const H = 260;
+  return (
+    <div className="absolute right-0 top-1/2 hidden -translate-y-1/2 xl:block" aria-label="均匀度热力图示例">
+      <div className="flex items-end gap-5">
+        {picks.map(({ d, v }, i) => {
+          const map = v!.cond.maps.luminance!;
+          const lum = v!.cond.metrics.luminance!;
+          const [w, h] = map.displayResolution ?? [670, 1440];
+          return (
+            <a key={d.id} href={deviceHref(d.id, 'uniformity')} className={cn('group flex flex-col items-center', i === 1 && '-translate-y-6')}>
+              <div className="relative transition-transform duration-300 group-hover:-translate-y-1" style={{ height: H, width: Math.round((H * w) / h) }}>
+                <img
+                  src={uniformityAsset(map.asset)}
+                  alt={`${d.name.zh} 300 nits 白场亮度热力图`}
+                  className="h-full w-full select-none object-contain drop-shadow-[0_24px_40px_rgba(0,0,0,0.6)]"
+                  draggable={false}
+                />
+                <div className="absolute inset-x-[8%] bottom-[6%] rounded-xl bg-black/60 px-2 py-1.5 text-center ring-1 ring-inset ring-white/15 backdrop-blur-md">
+                  <div className="text-[9px] text-white/70">面均匀性</div>
+                  <div className="text-[16px] font-semibold leading-5 text-white">{fmtFixed(lum.areaUniformityPct, 1)} %</div>
+                  <div className="text-[9px] tabular-nums text-white/70">典型 {fmtSig(lum.typical)} nits</div>
+                </div>
+              </div>
+              <div className="mt-3 max-w-[140px] truncate text-xs text-ink-2 group-hover:text-ink-1">{d.name.zh}</div>
+            </a>
+          );
+        })}
+      </div>
+      <div className="mt-4 text-center text-[11px] text-ink-4">均匀度实测 · 300 nits 白场 · 颜色相对各机典型亮度</div>
+    </div>
+  );
+}
+
 export function Home({ catalog, q: q0, has: has0 }: { catalog: Catalog; q: string; has: DataType | null }) {
   const [q, setQ] = useState(q0);
   const [has, setHas] = useState<DataType | null>(has0);
   const list = useMemo(() => filterDevices(catalog, q, has), [catalog, q, has]);
+  const wide = useMedia('(min-width: 1280px)');
   const c = catalog.counts;
 
   const update = (nq: string, nh: DataType | null) => {
@@ -103,6 +154,7 @@ export function Home({ catalog, q: q0, has: has0 }: { catalog: Catalog; q: strin
           <Stat value={c.angleProfilesMeasured} label="组可视角实测" />
         </div>
         <DataVersion className="mt-6 inline-block text-xs text-ink-3" />
+        {wide && <HeroSpotlight catalog={catalog} />}
       </section>
 
       <div className="sticky top-14 z-30 py-3">

@@ -75,6 +75,7 @@ SVM 是与测量条件相关的指标。比较不同记录时，应同时记录�
 - [`TECH_DOCS.md`](./TECH_DOCS.md)：实现说明（模块结构、数据流、导出、离线版构建、测试、如何添加数据）
 - [`DATASETS.md`](./DATASETS.md)：内置记录的覆盖范围、数据格式和已知特征
 - [`data/README.md`](./data/README.md)：屏幕数据库（机型目录、可视角摘要、均匀度、反射率）的数据结构、机型 id 与状态词表、`npm run db:check`
+- [`db/README.md`](./db/README.md)：屏幕数据库网页（首页、机型页、两台对比），`npm run db:dev` / `npm run db:build`
 
 ## 技术栈
 
