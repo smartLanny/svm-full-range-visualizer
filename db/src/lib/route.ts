@@ -1,5 +1,6 @@
 /**
- * Hash routing of the database page (works from GitHub Pages sub-paths and from file://).
+ * Hash routing of the database page (works from any static sub-path, e.g. GitHub Pages; not from
+ * file://, where the browser blocks the data fetches).
  *
  *   #/                     home (device grid); optional ?q=<search>&has=<type>
  *   #/d/<id>[/<section>]   device page; section = uniformity | svm | reflectance | angle

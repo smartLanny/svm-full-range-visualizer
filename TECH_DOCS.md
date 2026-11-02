@@ -224,3 +224,24 @@ npm run db:build    # 屏幕数据库网页构建到 dist-db/（db/README.md）
 ## 8. 界面文案
 
 所有界面文字都经过 `src/i18n`（ADR 0005）：每个模块一个 `strings/<模块>.ts`，导出 `{ zh, en }`；用 `t('<模块>.<路径>', { 变量 })` 取用，`{n}` 形式插值。缺少某个键时回退到中文，再回退到键名（开发模式下警告一次）。记录名称属于数据，不翻译；内置记录的英文名来自 manifest。
+
+## 9. 屏幕数据库（`db/`、`data/`、`pipeline/`）
+
+与工作台共用一个仓库、互不依赖的第二个前端。工作台的 `src/`、`public/`、`vite.config.ts` 等离线版指纹输入一概不改；`pipeline/isolation.test.ts` 保证 `src/` 不引用数据库代码。
+
+| 部分 | 位置 | 说明 |
+| --- | --- | --- |
+| 网页 | `db/index.html`、`db/src/**`、`vite.db.config.ts`、`tailwind.db.config.js`、`tsconfig.db.json` | React 单页，hash 路由；只读地复用工作台 `src/data`、`src/stats` 的纯函数和缩略图组件，不调用 `bootstrap()`、不打开 IndexedDB。[`db/README.md`](db/README.md) |
+| 数据 | `data/`（频闪记录仍在 `public/datasets/`） | 机型目录 `devices.json`（由 `npm run db:catalog` 生成）、可视角摘要（独立项目 phone-view-angle-sim 的模型算出，`npm run db:angle`）、均匀度、反射率、`version.json`、`CHANGELOG.md`。[`data/README.md`](data/README.md) |
+| 数据管线 | `pipeline/` | `check.mjs`（db:check）、`db_import.mjs`（批次导入）、`import/*.py`（Python 标准库导入器，`python3 -I`）、`mac/collect_batch.py`、`site/files.mjs`（网页用到的数据文件白名单）。[`pipeline/README.md`](pipeline/README.md) |
+
+```bash
+npm run db:dev        # http://localhost:5341/，data/ 与 public/datasets/ 按白名单直接从仓库读取
+npm run db:build      # → dist-db/：页面 + 白名单里的数据文件 + data/site-info.json（数据版本）
+npm run db:preview    # http://localhost:5342/
+npm run db:typecheck  # 只查数据库代码；npm run typecheck 两套都查
+npm run db:check      # 数据校验：目录、各数据类型、批次与版本、来源哈希链、离线版是否过期
+npm run db:import -- <batch.json> [--dry-run]   # 批次导入（先在临时副本上导入并跑 db:check，通过后才写回仓库）
+```
+
+数据流：NAS 原始文件 →（Mac）`collect_batch.py` → `inbox/<批次>/` → `db:import` 调用对应导入器写 `data/` 或 `public/datasets/` → 重建 `data/devices.json`、写 `data/batches/<批次>/audit.json`、升 `data/version.json`、加 `data/CHANGELOG.md` → 网页在构建时把 `version.json` 放进 `site-info.json`，页脚显示数据版本。频闪记录变化时 `db:import` 会运行 `npm run build:standalone`，因为 `public/datasets` 是离线版的指纹输入。

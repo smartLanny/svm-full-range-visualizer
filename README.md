@@ -68,6 +68,31 @@ npm test                 # 单元测试（包含离线版是否过期的检查�
 
 SVM 是与测量条件相关的指标。比较不同记录时，应同时记录亮度范围、灰阶范围、刷新率、调制模式、仪器和测试条件；记录始终保存原始读数；缺失值不会被当成 0，降噪的插值只在两侧可信的相邻实测点之间进行（不外推），关闭降噪即可查看原始值。
 
+## 屏幕数据库
+
+同一个仓库里还有「野生的装机宅屏幕数据库」：一台机型一页，汇总频闪 SVM、可视角、屏幕均匀度、反射率四类实测数据，两台可以并排对比；取代旧的 phone-screen-atlas。它和工作台互不影响：改数据库不需要重建离线版。
+
+| 位置 | 内容 |
+| --- | --- |
+| `db/` | 网页（首页、机型页 `#/d/<id>`、对比 `#/c/<a>,<b>`），见 [`db/README.md`](./db/README.md) |
+| `data/` | 数据：机型目录、可视角摘要、均匀度热力图与指标、反射率光谱、数据版本与更新记录，见 [`data/README.md`](./data/README.md) |
+| `public/datasets/` | 频闪记录，和工作台共用 |
+| `pipeline/` | 校验、批次导入、Mac 端收集脚本，见 [`pipeline/README.md`](./pipeline/README.md) |
+
+```bash
+npm run db:dev       # 开发服务器 http://localhost:5341/
+npm run db:build     # 构建到 dist-db/（纯静态文件，可放在任意子路径）
+npm run db:preview   # 预览构建结果 http://localhost:5342/
+npm run db:check     # 校验全部数据
+```
+
+**导入一批新数据**（详见 [`pipeline/README.md`](./pipeline/README.md)）：
+
+1. 在 Mac 上收集 NAS 文件：`python3 -I pipeline/mac/collect_batch.py --batch <YYYY-MM-DD-短名> <相对 NAS_ROOT 的路径…>`，生成 `inbox/<批次>/files/` 和 `batch.json` 草稿；
+2. 填写 `batch.json`（每个文件属于哪台机型、导入参数）；
+3. `npm run db:import -- inbox/<批次>/batch.json --dry-run` 先看会改什么，再去掉 `--dry-run` 正式导入。导入会写 `data/batches/<批次>/`、升 `data/version.json`、在 `data/CHANGELOG.md` 加一条，频闪数据有变化时自动重建离线版；
+4. `npm test`，然后提交。
+
 ## 文档
 
 - [`CONTEXT.md`](./CONTEXT.md)：领域术语（灰阶、档位亮度、单元格、截面……）
