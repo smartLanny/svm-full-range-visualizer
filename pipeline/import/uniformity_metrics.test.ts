@@ -107,10 +107,11 @@ describe('uniformity_metrics.py', () => {
     const ip17 = fx!.readJson('data/devices.json').devices.find((d: { id: string }) => d.id === 'iphone-17-pro-max');
     expect(ip17.availability.uniformity).toEqual({ status: 'metrics-only', sourceId: 'ip17pm' });
     expect(ip17.uniformity.map((e: { condition: string; maps: unknown[] }) => [e.condition, e.maps.length])).toEqual([['300', 0], ['100', 0], ['10', 0]]);
-    // db:check: only the provenance chain objects (the index changed outside a recorded batch)
+    // db:check objects only because the index changed outside db:import (hash chain + data version)
     const errors = runCheck({ root: fx!.root }).errors;
-    expect(errors.length).toBeGreaterThan(0);
-    expect(errors.every((e: string) => e.startsWith('[来源与哈希'))).toBe(true);
+    expect(errors.some((e: string) => e.startsWith('[来源与哈希'))).toBe(true);
+    expect(errors.some((e: string) => e.startsWith('[批次与数据版本') && e.includes('数据变了却没有记录版本'))).toBe(true);
+    expect(errors.filter((e: string) => !e.startsWith('[来源与哈希') && !e.startsWith('[批次与数据版本'))).toEqual([]);
   });
 
   it('refuses to overwrite different metrics unless replace is set', () => {
@@ -136,7 +137,7 @@ describe('uniformity_metrics.py', () => {
     fx!.writeJson('data/devices.json', buildCatalog(fx!.root));
     const e = fx!.readJson('data/devices.json').devices.find((d: { id: string }) => d.id === 'xiaomi-17-ultra').uniformity.find((u: { condition: string }) => u.condition === '100');
     expect(e.whiteMeasuredNits).toBe(101.5);
-    expect(runCheck({ root: fx!.root }).errors.filter((x: string) => !x.startsWith('[来源与哈希'))).toEqual([]);
+    expect(runCheck({ root: fx!.root }).errors.filter((x: string) => !x.startsWith('[来源与哈希') && !x.startsWith('[批次与数据版本'))).toEqual([]);
   });
 
   it('refuses an implausible white (γ_eff far from 2.2 means a typo or wrong unit)', () => {

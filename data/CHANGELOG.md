@@ -1,0 +1,17 @@
+# 数据更新记录
+
+「野生的装机宅屏幕数据库」每次数据变化记一条，最新的在最上面。导入批次时由 `npm run db:import` 自动写入；当前数据版本见 [`version.json`](version.json)，批次文件和审计记录在 [`batches/`](batches/)。格式说明见 [`pipeline/README.md`](../pipeline/README.md)。
+
+<!-- db:import 在这一行下面插入新条目，不要删除这一行 -->
+
+## 2026.11.02 · 基线
+
+数据库建立时已有的数据。这些数据没有经过批次导入，来源记录在 `provenance.json` 和各自的导入脚本里：
+
+- 频闪：21 条记录，8 台机型，在 `public/datasets/`。其中最近的两次导入是：
+  - 华为 Mate 90 Pro Max 典藏版，提交 `48bf54c`（2026-10-08）；
+  - iPhone Duo 内外屏 4 条，提交 `aa542b7`（2026-10-25）。
+- 可视角：独立项目 phone-view-angle-sim `20ef8e6`（2026-10-27）的 8 个 profile 摘要，其中 7 个实测。iPhone Duo 外屏是临时替代数据，记为未测。
+- 均匀度：迁自 phone-screen-atlas `0c2846d`（2026-10-09）。3 台机型共 9 档，15 张热力图。
+- 反射率：迁自 phone-screen-atlas `0c2846d`。24 台机型，32 个样品，64 条曲线。
+- 数量：机型 25 台；频闪 8 台，可视角 5 台，均匀度 3 台，反射率 24 台。

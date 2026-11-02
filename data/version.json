@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "dataVersion": "2026.11.02",
+  "date": "2026-11-02",
+  "batch": null,
+  "batches": [],
+  "counts": {
+    "devices": 25,
+    "svmRecords": 21,
+    "angleProfiles": 8,
+    "angleProfilesMeasured": 7,
+    "uniformityConditions": 9,
+    "uniformityMaps": 15,
+    "reflectanceSamples": 32,
+    "devicesWith": {
+      "svm": 8,
+      "angle": 5,
+      "uniformity": 3,
+      "reflectance": 24
+    }
+  }
+}

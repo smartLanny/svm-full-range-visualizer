@@ -136,7 +136,8 @@ def validate_additions(additions, existing, root):
     overrides = read_json(root / OVERRIDES)
     names = {d["id"]: d["name"]["zh"] for d in overrides.get("devices", [])}
     conditions = overrides.get("reflectanceConditions", {})
-    seen_records = {(m["recordTag"], m["recordId"]) for m in existing}
+    existing_by_record = {(m["recordTag"], m["recordId"]): m for m in existing}
+    seen_records = set(existing_by_record)
     seen_conditions = {(m["phoneId"], m["conditionId"]) for m in existing}
     out = []
     for i, add in enumerate(additions):
@@ -157,13 +158,19 @@ def validate_additions(additions, existing, root):
         base = re.sub(r"-\d{8}$", "", add["conditionId"])
         if base not in conditions:
             fail(f"{where}: 条件「{add['conditionId']}」不在 catalog-overrides.json 的 reflectanceConditions 中（可用：{'、'.join(conditions)}，可加 -YYYYMMDD 后缀区分日期）")
+        normalized = {k: add[k] for k in MAPPING_KEYS if k in add}
+        already = existing_by_record.get((add["recordTag"], add["recordId"]))
+        if already is not None:
+            if already != normalized:
+                fail(f"{where}: 样品 {add['recordId']} 已在白名单里，但写法不同（已有 {json.dumps(already, ensure_ascii=False)}）")
+            continue  # approved earlier (re-running the same batch)
         if (add["recordTag"], add["recordId"]) in seen_records:
-            fail(f"{where}: 样品 {add['recordId']} 已在白名单里")
+            fail(f"{where}: 样品 {add['recordId']} 重复")
         if (add["phoneId"], add["conditionId"]) in seen_conditions:
             fail(f"{where}: {add['phoneId']} 已有条件 {add['conditionId']}；同一机型的另一个样品请用不同的条件 id（例如加日期后缀）")
         seen_records.add((add["recordTag"], add["recordId"]))
         seen_conditions.add((add["phoneId"], add["conditionId"]))
-        out.append({k: add[k] for k in MAPPING_KEYS if k in add})
+        out.append(normalized)
     return out
 
 

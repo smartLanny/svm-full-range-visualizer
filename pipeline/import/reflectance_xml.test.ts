@@ -55,7 +55,8 @@ function importXml(xml: string, options: unknown = {}) {
   writeJsonFile(fx.path('opts.json'), options);
   return runPython(SCRIPT, ['import', '--root', fx.root, '--xml', fx.path('反射率.xml'), '--options', fx.path('opts.json'), '--source-name', '反射率.xml', '--audit', fx.path('audit.json')]);
 }
-const nonProvenance = (root: string) => runCheck({ root }).errors.filter((e: string) => !e.startsWith('[来源与哈希'));
+/** db:check errors other than the two that any change made outside db:import must raise (hash chain, data version). */
+const nonProvenance = (root: string) => runCheck({ root }).errors.filter((e: string) => !e.startsWith('[来源与哈希') && !e.startsWith('[批次与数据版本'));
 
 describe('reflectance_xml.py index (XML-only generator)', () => {
   it('regenerating from raw/phone-samples.json over the current index changes nothing (byte-identical)', () => {
@@ -135,7 +136,7 @@ describe('reflectance_xml.py import (synthetic ThreeNH XML)', () => {
     const add = (o: Record<string, string>) => importXml(xml, { add: [{ recordTag: 'Standard', recordId: '900', expectedName: 'X', phoneId: 'iphone-duo', conditionId: 'inner-display', conditionLabel: '内屏', ...o }] }).stderr;
     expect(add({ phoneId: 'nokia-1' })).toMatch(/nokia-1 不在 data\/catalog-overrides\.json 中/);
     expect(add({ conditionId: 'glossy' })).toMatch(/条件「glossy」不在 catalog-overrides\.json 的 reflectanceConditions 中/);
-    expect(add({ recordId: '3', expectedName: 'iPhone 15 Pro Max' })).toMatch(/样品 3 已在白名单里/);
+    expect(add({ recordId: '3', expectedName: 'iPhone 15 Pro Max' })).toMatch(/样品 3 已在白名单里，但写法不同/);
     expect(add({ phoneId: 'xiaomi-15', conditionId: 'as-measured' })).toMatch(/xiaomi-15 已有条件 as-measured/);
     expect(add({ expectedName: 'Y' })).toMatch(/ID=900（Y）: XML 里的名称是「X」/);
   });
