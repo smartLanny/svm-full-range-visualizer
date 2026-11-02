@@ -34,3 +34,5 @@ desktop.ini
 snap-out/
 .vite-cache/
 dist-standalone/
+# Screen database page build (npm run db:build)
+dist-db/

@@ -1,5 +1,5 @@
 {
-  "//": "Type-checks the screen database code (db/, pipeline/) separately from the SVM workbench (tsconfig.json). The pipeline's .mjs scripts are plain Node ESM: allowJs lets the TypeScript tests import them, checkJs stays off.",
+  "//": "Type-checks the screen database code (db/, pipeline/, vite.db.config.ts; plus the workbench modules db/ imports read-only) separately from the SVM workbench (tsconfig.json). The pipeline's .mjs scripts are plain Node ESM: allowJs lets the TypeScript tests import them, checkJs stays off.",
   "compilerOptions": {
     "target": "ES2022",
     "module": "ESNext",
@@ -18,5 +18,5 @@
     "checkJs": false,
     "noEmit": true
   },
-  "include": ["db", "pipeline"]
+  "include": ["db", "pipeline", "vite.db.config.ts"]
 }
