@@ -2,7 +2,7 @@ import React from 'react';
 import { ArrowUpRight } from 'lucide-react';
 import type { Route } from '../lib/route';
 import { loadSiteInfo, useAsync } from '../lib/data';
-import { isoDate } from '../lib/format';
+import { dataVersionLine } from '../lib/siteInfo';
 import { VIEW_ANGLE_SIM_URL } from '../lib/angle';
 import { SVM_TOOL_URL } from './ui';
 
@@ -38,17 +38,16 @@ function ToolLink({ href, children }: { href: string; children: React.ReactNode 
   );
 }
 
-/** Data version line: data/version.json when a batch wrote one, else the last data commit. */
+/** Data version line: data/version.json (db:import) when present, else the last data commit. */
 export function DataVersion({ className }: { className?: string }) {
   const info = useAsync(loadSiteInfo, 'site-info');
   if (info.status !== 'ready') return null;
-  const v = info.data.version;
-  const date = v?.date ?? isoDate(info.data.dataCommitDate);
-  if (!v?.version && !date) return null;
+  const line = dataVersionLine(info.data);
+  if (!line) return null;
   return (
     <span className={className}>
-      {v?.version ? `数据版本 ${v.version}` : `数据更新于 ${date}`}
-      {!v?.version && info.data.dataCommit ? <span className="text-ink-4"> · {info.data.dataCommit}</span> : null}
+      {line.text}
+      {line.commit ? <span className="text-ink-4"> · {line.commit}</span> : null}
     </span>
   );
 }

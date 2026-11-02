@@ -77,6 +77,6 @@ export interface SiteInfo {
   schemaVersion: 1;
   dataCommit: string | null;
   dataCommitDate: string | null;
-  /** data/version.json when a batch wrote one. */
-  version: { version?: string; date?: string } | null;
+  /** data/version.json verbatim (written by npm run db:import, pipeline/README.md). */
+  version: { dataVersion?: string; date?: string; batch?: string | null } | null;
 }
