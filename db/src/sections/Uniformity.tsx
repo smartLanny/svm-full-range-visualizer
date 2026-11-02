@@ -102,7 +102,11 @@ function ColorBar({
   );
 }
 
-/** The heatmap with the typical luminance (and the Gamma 2.2 reference) printed on it. */
+/**
+ * The heatmap with the typical luminance (and the Gamma 2.2 reference) printed on it. A metrics-only
+ * condition (numbers imported without a heatmap) gets an empty phone outline with the same read-out:
+ * nothing is drawn that was not measured.
+ */
 function Heatmap({
   view,
   kind,
@@ -117,25 +121,35 @@ function Heatmap({
   deviceName: string;
 }) {
   const { cond } = view;
-  const map = cond.maps[kind] ?? cond.maps.luminance!;
-  const shownKind: MapKind = cond.maps[kind] ? kind : 'luminance';
+  const map = cond.maps?.[kind] ?? cond.maps?.luminance;
+  const shownKind: MapKind = cond.maps?.[kind] ? kind : 'luminance';
   const lum = cond.metrics.luminance!;
   const cct = cond.metrics.colorTemperature;
   const readout = gammaReadout(cond, lum.typical);
-  const [w, h] = map.displayResolution ?? [670, 1440];
+  const [w, h] = map?.displayResolution ?? [670, 1440];
   const typicalForBar = shownKind === 'luminance' ? lum.typical : (cct?.typical ?? 0);
   const g20 = cond.pattern === 'G20';
 
   return (
     <figure className="flex items-start gap-3 sm:gap-4">
       <div className="relative shrink-0" style={{ height, width: Math.round((height * w) / h) }}>
-        <img
-          src={uniformityAsset(map.asset)}
-          alt={`${deviceName} ${CONDITION_LABEL[cond.id as CondId] ?? cond.label} ${shownKind === 'luminance' ? '亮度' : '色温'}热力图`}
-          className="h-full w-full select-none object-contain drop-shadow-[0_24px_48px_rgba(0,0,0,0.55)]"
-          draggable={false}
-          decoding="async"
-        />
+        {map ? (
+          <img
+            src={uniformityAsset(map.asset)}
+            alt={`${deviceName} ${CONDITION_LABEL[cond.id as CondId] ?? cond.label} ${shownKind === 'luminance' ? '亮度' : '色温'}热力图`}
+            className="h-full w-full select-none object-contain drop-shadow-[0_24px_48px_rgba(0,0,0,0.55)]"
+            draggable={false}
+            decoding="async"
+          />
+        ) : (
+          <div
+            className="flex h-full w-full flex-col items-center rounded-[13%/6%] border border-dashed border-line-strong bg-surface-2/40 px-4 pt-[18%] text-center"
+            data-testid="no-heatmap"
+          >
+            <div className="text-[13px] font-medium text-ink-2">仅指标</div>
+            <div className="mt-1 text-[11px] leading-4 text-ink-3">这一档只导入了数值，没有热力图</div>
+          </div>
+        )}
         {/* Typical luminance on the visual itself: the colours only show the shape relative to it. */}
         <div
           className="absolute inset-x-[7%] bottom-[7%] rounded-2xl bg-black/60 px-2.5 py-2.5 text-center ring-1 ring-inset ring-white/15 backdrop-blur-md"
@@ -165,7 +179,9 @@ function Heatmap({
           )}
         </div>
       </div>
-      <ColorBar map={map} kind={shownKind} typical={typicalForBar} readout={shownKind === 'luminance' ? readout : null} stops={stops} height={height} />
+      {map && (
+        <ColorBar map={map} kind={shownKind} typical={typicalForBar} readout={shownKind === 'luminance' ? readout : null} stops={stops} height={height} />
+      )}
     </figure>
   );
 }
@@ -207,7 +223,7 @@ function Metrics({ view, views, kind, compact }: { view: UniformityView; views: 
   const cct = cond.metrics.colorTemperature;
   const readout = gammaReadout(cond, lum.typical);
   const white = whiteFieldContext(views);
-  const map = cond.maps[kind] ?? cond.maps.luminance;
+  const map = cond.maps?.[kind] ?? cond.maps?.luminance;
 
   return (
     <div className="flex min-w-0 flex-col">
@@ -260,9 +276,11 @@ function Metrics({ view, views, kind, compact }: { view: UniformityView; views: 
       )}
 
       <p className="mt-4 text-xs leading-5 text-ink-3">
-        {kind === 'colorTemperature' && cond.maps.colorTemperature && cct
-          ? `色温图的颜色相对本机典型色温（${fmtFixed(cct.typical, 0)} K），只表示分布形状。`
-          : `热力图颜色相对本机典型亮度（100 % = ${fmtSig(lum.typical)} nits），只表示亮度分布的形状；整体偏亮还是偏暗，看图上的典型亮度。`}
+        {!map
+          ? '这台机型的均匀度只导入了指标数值（仅指标），没有热力图，所以看不到亮度分布的形状。'
+          : kind === 'colorTemperature' && cond.maps?.colorTemperature && cct
+            ? `色温图的颜色相对本机典型色温（${fmtFixed(cct.typical, 0)} K），只表示分布形状。`
+            : `热力图颜色相对本机典型亮度（100 % = ${fmtSig(lum.typical)} nits），只表示亮度分布的形状；整体偏亮还是偏暗，看图上的典型亮度。`}
       </p>
 
       <More title="更多指标" className="mt-4">
@@ -409,7 +427,7 @@ export function UniformitySection({ devices, id }: { devices: Device[]; id?: str
   const [kind, setKind] = useState<MapKind>('luminance');
   const condNow: CondId = available.includes(cond) ? cond : (available[0] ?? '300');
   const cctAvailable =
-    index.status === 'ready' && devices.some((d) => uniformityViews(d, index.data).some((v) => v.cond.id === condNow && v.cond.maps.colorTemperature));
+    index.status === 'ready' && devices.some((d) => uniformityViews(d, index.data).some((v) => v.cond.id === condNow && v.cond.maps?.colorTemperature));
   const kindNow: MapKind = cctAvailable ? kind : 'luminance';
   const compare = devices.length > 1;
 

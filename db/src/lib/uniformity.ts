@@ -88,7 +88,8 @@ export interface UniformityView {
 
 export function uniformityViews(device: Device, index: UniformityIndex | null): UniformityView[] {
   if (!index) return [];
-  const phone = index.phones.find((p) => p.id === device.id);
+  // Heatmap devices first; metrics-only devices (numbers imported without heatmaps) otherwise.
+  const phone = index.phones.find((p) => p.id === device.id) ?? index.metricsOnly?.find((p) => p.id === device.id);
   if (!phone) return [];
   return device.uniformity.flatMap((entry) => {
     const cond = phone.conditions.find((c) => c.id === entry.condition);

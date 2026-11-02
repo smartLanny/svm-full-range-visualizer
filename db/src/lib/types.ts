@@ -41,7 +41,8 @@ export interface UniformityCondition {
   referenceNits: number;
   /** Measured white (G255) at the same setting. Not in the data yet: future batches add it. */
   whiteMeasuredNits?: number | null;
-  maps: Partial<Record<'luminance' | 'colorTemperature', UniformityMapInfo>>;
+  /** Heatmaps of this condition. Absent on metrics-only devices (index.metricsOnly, imported by db:import). */
+  maps?: Partial<Record<'luminance' | 'colorTemperature', UniformityMapInfo>>;
   metrics: { luminance?: UniformityLuminanceMetrics; colorTemperature?: UniformityCctMetrics };
 }
 
@@ -49,6 +50,8 @@ export interface UniformityIndex {
   schemaVersion: number;
   colorStops: [number, [number, number, number]][];
   phones: { id: string; name: string; conditions: UniformityCondition[] }[];
+  /** Devices with numbers but no heatmaps (pipeline/import/uniformity_metrics.py); empty conditions = pending import. */
+  metricsOnly?: { id: string; name: string; metricSourceId?: string; conditions: UniformityCondition[] }[];
 }
 
 export interface ReflectanceCurve {

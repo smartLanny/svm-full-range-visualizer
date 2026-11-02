@@ -87,7 +87,7 @@ function HeroSpotlight({ catalog }: { catalog: Catalog }) {
   if (uni.status !== 'ready') return null;
   const picks = catalog.devices
     .map((d) => ({ d, v: uniformityViews(d, uni.data).find((x) => x.cond.id === '300') }))
-    .filter((x) => x.v?.cond.maps.luminance && x.v.cond.metrics.luminance)
+    .filter((x) => x.v?.cond.maps?.luminance && x.v.cond.metrics.luminance)
     .slice(0, 3);
   if (!picks.length) return null;
   const H = 260;
@@ -95,7 +95,7 @@ function HeroSpotlight({ catalog }: { catalog: Catalog }) {
     <div className="absolute right-0 top-1/2 hidden -translate-y-1/2 xl:block" aria-label="均匀度热力图示例">
       <div className="flex items-end gap-5">
         {picks.map(({ d, v }, i) => {
-          const map = v!.cond.maps.luminance!;
+          const map = v!.cond.maps!.luminance!;
           const lum = v!.cond.metrics.luminance!;
           const [w, h] = map.displayResolution ?? [670, 1440];
           return (
