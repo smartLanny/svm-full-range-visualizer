@@ -9,7 +9,7 @@
 | 均匀度（Radiant 热力图） | `data/uniformity/` | 迁自 phone-screen-atlas `0c2846d`；之后的变化走批次导入 |
 | 反射率（SCI / SCE 光谱） | `data/reflectance/` | 迁自 phone-screen-atlas `0c2846d`；之后的变化走批次导入 |
 
-`data/devices.json`（机型目录）把它们串起来。数据库代码不放进 `src/`，`src/` 也不引用 `data/`、`db/`、`pipeline/`，所以改数据库**不会**让工作台离线版 `release/SVM-Visualizer.html` 过期（`pipeline/isolation.test.ts` 保证）。
+`data/devices.json`（机型目录）把它们串起来。网页在 `db/`，见 [`db/README.md`](../db/README.md)。数据库代码不放进 `src/`，`src/` 也不引用 `data/`、`db/`、`pipeline/`，所以改数据库**不会**让工作台离线版 `release/SVM-Visualizer.html` 过期（`pipeline/isolation.test.ts` 保证）。
 
 ## 目录结构
 

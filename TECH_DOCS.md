@@ -196,6 +196,7 @@ npm run typecheck   # tsc --noEmit（工作台 tsconfig.json + 数据库 tsconfi
 npm test            # vitest：src/**/*.test.ts，以及数据库的 pipeline/**/*.test.ts、db/**/*.test.ts
 npm run db:check    # 屏幕数据库校验（data/README.md）
 npm run db:import -- <batch.json> --dry-run   # 屏幕数据库批次导入（pipeline/README.md）
+npm run db:build    # 屏幕数据库网页构建到 dist-db/（db/README.md）
 ```
 
 数据库代码在 `db/`、`pipeline/`，数据在 `data/`，都不是离线版的构建输入；`pipeline/isolation.test.ts` 检查 `src/` 不引用它们、构建指纹也不包含它们，所以改数据库不需要重建 `release/SVM-Visualizer.html`。

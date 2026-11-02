@@ -15,7 +15,11 @@
     "db:catalog": "node pipeline/catalog/build_catalog.mjs",
     "db:angle": "node pipeline/angle/summarise.mjs",
     "db:migrate-atlas": "node pipeline/atlas/migrate.mjs",
-    "db:import": "node pipeline/db_import.mjs"
+    "db:import": "node pipeline/db_import.mjs",
+    "db:dev": "vite --config vite.db.config.ts",
+    "db:build": "vite build --config vite.db.config.ts",
+    "db:preview": "vite preview --config vite.db.config.ts",
+    "db:typecheck": "tsc --noEmit -p tsconfig.db.json"
   },
   "engines": {
     "node": "^20.19.0 || >=22.12.0"

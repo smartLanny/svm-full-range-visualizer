@@ -38,3 +38,6 @@ dist-standalone/
 # Screen database: raw files collected on the Mac for a batch (pipeline/mac/collect_batch.py) are never committed
 /inbox/
 __pycache__/
+
+# Screen database page build (npm run db:build)
+dist-db/
