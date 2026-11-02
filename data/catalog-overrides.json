@@ -1,0 +1,209 @@
+{
+  "schemaVersion": 1,
+  "note": "手工维护的机型资料：中英文名、品牌、别名、屏幕、样机与面板码，以及源数据里的机型名到目录 id 的映射。改完运行 npm run db:catalog 重新生成 data/devices.json，再运行 npm run db:check。新机型先在 devices 里加一条，再导入它的数据。",
+  "brands": {
+    "apple": { "zh": "苹果", "en": "Apple" },
+    "xiaomi": { "zh": "小米", "en": "Xiaomi" },
+    "huawei": { "zh": "华为", "en": "Huawei" },
+    "honor": { "zh": "荣耀", "en": "Honor" },
+    "oppo": { "zh": "OPPO", "en": "OPPO" },
+    "oneplus": { "zh": "一加", "en": "OnePlus" },
+    "samsung": { "zh": "三星", "en": "Samsung" },
+    "iqoo": { "zh": "iQOO", "en": "iQOO" }
+  },
+  "devices": [
+    {
+      "id": "xiaomi-18-pro-max",
+      "name": { "zh": "小米 18 Pro Max", "en": "Xiaomi 18 Pro Max" },
+      "brand": "xiaomi",
+      "aliases": ["mi18pm"]
+    },
+    {
+      "id": "iphone-18-pro-max",
+      "name": { "zh": "iPhone 18 Pro Max", "en": "iPhone 18 Pro Max" },
+      "brand": "apple",
+      "aliases": ["ip18pm", "Apple iPhone 18 Pro Max"],
+      "units": [
+        {
+          "id": "gh3",
+          "panel": "GH3",
+          "label": "GH3 面板样机",
+          "note": "可视角默认（p0）与防窥膜（p1）测的是同一台 GH3 样机（atlas README、独立可视角项目）。"
+        }
+      ]
+    },
+    {
+      "id": "iphone-duo",
+      "name": { "zh": "iPhone Duo", "en": "iPhone Duo" },
+      "brand": "apple",
+      "aliases": [],
+      "displays": ["inner", "outer"]
+    },
+    {
+      "id": "huawei-mate-90-pro-max",
+      "name": { "zh": "华为 Mate 90 Pro Max 典藏版", "en": "Huawei Mate 90 Pro Max Collector's Edition" },
+      "brand": "huawei",
+      "aliases": []
+    },
+    {
+      "id": "iphone-17-pro-max",
+      "name": { "zh": "iPhone 17 Pro Max", "en": "iPhone 17 Pro Max" },
+      "brand": "apple",
+      "aliases": ["ip17pm", "Apple iPhone 17 Pro Max"],
+      "units": [
+        {
+          "id": "gv3",
+          "panel": "GV3",
+          "label": "GV3 面板样机",
+          "note": "独立可视角项目 p5 的设备名标注 GV3。频闪、均匀度、反射率是否为同一台未记录。"
+        }
+      ]
+    },
+    {
+      "id": "xiaomi-17-ultra",
+      "name": { "zh": "小米 17 Ultra 徕卡", "en": "Xiaomi 17 Ultra Leica" },
+      "brand": "xiaomi",
+      "aliases": ["mi17u", "小米 17Ultra徕卡"]
+    },
+    {
+      "id": "huawei-mate-80-rs",
+      "name": { "zh": "华为 Mate 80 RS", "en": "Huawei Mate 80 RS" },
+      "brand": "huawei",
+      "aliases": ["m80rs"]
+    },
+    {
+      "id": "huawei-mate-70-air",
+      "name": { "zh": "华为 Mate 70 Air", "en": "Huawei Mate 70 Air" },
+      "brand": "huawei",
+      "aliases": ["m70a", "华为 Mate Air"]
+    },
+    {
+      "id": "honor-magic-v5",
+      "name": { "zh": "荣耀 Magic V5", "en": "Honor Magic V5" },
+      "brand": "honor",
+      "aliases": [],
+      "displays": ["inner", "outer"]
+    },
+    {
+      "id": "iphone-16-pro-max",
+      "name": { "zh": "iPhone 16 Pro Max", "en": "iPhone 16 Pro Max" },
+      "brand": "apple",
+      "aliases": []
+    },
+    {
+      "id": "oneplus-15",
+      "name": { "zh": "一加 15", "en": "OnePlus 15" },
+      "brand": "oneplus",
+      "aliases": []
+    },
+    {
+      "id": "oppo-find-n5",
+      "name": { "zh": "OPPO Find N5", "en": "OPPO Find N5" },
+      "brand": "oppo",
+      "aliases": [],
+      "displays": ["inner", "outer"]
+    },
+    {
+      "id": "oppo-find-x9",
+      "name": { "zh": "OPPO Find X9", "en": "OPPO Find X9" },
+      "brand": "oppo",
+      "aliases": []
+    },
+    {
+      "id": "oppo-find-x9-ultra",
+      "name": { "zh": "OPPO Find X9 Ultra", "en": "OPPO Find X9 Ultra" },
+      "brand": "oppo",
+      "aliases": []
+    },
+    {
+      "id": "oppo-find-x9s-pro",
+      "name": { "zh": "OPPO Find X9s Pro", "en": "OPPO Find X9s Pro" },
+      "brand": "oppo",
+      "aliases": []
+    },
+    {
+      "id": "samsung-s25-ultra",
+      "name": { "zh": "三星 S25 Ultra", "en": "Samsung Galaxy S25 Ultra" },
+      "brand": "samsung",
+      "aliases": []
+    },
+    {
+      "id": "xiaomi-15-ultra",
+      "name": { "zh": "小米 15 Ultra", "en": "Xiaomi 15 Ultra" },
+      "brand": "xiaomi",
+      "aliases": []
+    },
+    {
+      "id": "iphone-15-pro-max",
+      "name": { "zh": "iPhone 15 Pro Max", "en": "iPhone 15 Pro Max" },
+      "brand": "apple",
+      "aliases": []
+    },
+    {
+      "id": "xiaomi-15",
+      "name": { "zh": "小米 15", "en": "Xiaomi 15" },
+      "brand": "xiaomi",
+      "aliases": []
+    },
+    {
+      "id": "honor-magic7",
+      "name": { "zh": "荣耀 Magic7", "en": "Honor Magic7" },
+      "brand": "honor",
+      "aliases": []
+    },
+    {
+      "id": "oneplus-13-pro",
+      "name": { "zh": "一加 13 Pro", "en": "OnePlus 13 Pro" },
+      "brand": "oneplus",
+      "aliases": []
+    },
+    {
+      "id": "huawei-pura70",
+      "name": { "zh": "华为 Pura70", "en": "Huawei Pura 70" },
+      "brand": "huawei",
+      "aliases": []
+    },
+    {
+      "id": "iqoo-13",
+      "name": { "zh": "iQOO 13", "en": "iQOO 13" },
+      "brand": "iqoo",
+      "aliases": []
+    },
+    {
+      "id": "xiaomi-max3",
+      "name": { "zh": "小米 MAX3", "en": "Xiaomi Mi Max 3" },
+      "brand": "xiaomi",
+      "aliases": []
+    },
+    {
+      "id": "iphone-air",
+      "name": { "zh": "iPhone Air", "en": "iPhone Air" },
+      "brand": "apple",
+      "aliases": []
+    }
+  ],
+  "sourceNames": {
+    "svm": {
+      "iPhone Duo 内屏": { "device": "iphone-duo", "display": "inner" },
+      "iPhone Duo 外屏": { "device": "iphone-duo", "display": "outer" }
+    },
+    "angle": {
+      "iPhone 18 Pro Max GH3": { "device": "iphone-18-pro-max", "unit": "gh3" },
+      "iPhone 17 Pro Max GV3": { "device": "iphone-17-pro-max", "unit": "gv3" },
+      "iPhone Duo": { "device": "iphone-duo" }
+    }
+  },
+  "reflectanceConditions": {
+    "as-measured": { "state": "unspecified" },
+    "screen-protector": { "state": "screen-protector" },
+    "anti-reflective-film": { "state": "anti-reflective-film" },
+    "inner-display": { "state": "inner", "display": "inner" },
+    "outer-display": { "state": "outer", "display": "outer" },
+    "screen-unspecified": { "state": "unspecified", "display": null }
+  },
+  "notes": {
+    "svm": {
+      "huawei_mate90promax.json": "源表只有 100 % / 90 % / 80 % 三列，G255 档位亮度 923.08 / 714.9 / 590.98 nits，全部高于工作台默认的 500 nits 上限；默认视图里没有点，需放宽上限才能看到。"
+    }
+  }
+}

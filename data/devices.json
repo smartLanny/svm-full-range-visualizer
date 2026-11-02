@@ -1,0 +1,1917 @@
+{
+  "schemaVersion": 1,
+  "generatedBy": "pipeline/catalog/build_catalog.mjs",
+  "note": "由脚本生成，不要手改。改 data/catalog-overrides.json 或源数据后运行 npm run db:catalog，再运行 npm run db:check。",
+  "inputs": {
+    "public/datasets/manifest.json": "28ead38e1e9036de5b4e813000947961bd8d9c7ae931b502c808540b04cf94b4",
+    "data/angle/summary.json": "f5f8514c14e23f3f15bf3c317851220d3c3825714fd8baca072bb95e6d760431",
+    "data/uniformity/index.json": "fb6131580452bfd720c5c7412a75c75d25eaca266711a63b8cca1e3030cbd66d",
+    "data/reflectance/index.json": "395a40def7c94286de548e88195acdc297e8df5d6ec907a3d5133e989f85a6fc",
+    "data/catalog-overrides.json": "a68d254178a91c3ae63e089d2945b89e66165f4a3f52564e46f268cafb907565"
+  },
+  "vocabulary": {
+    "dataTypes": {
+      "svm": {
+        "zh": "频闪",
+        "en": "Flicker (SVM)"
+      },
+      "angle": {
+        "zh": "可视角",
+        "en": "Viewing angle"
+      },
+      "uniformity": {
+        "zh": "均匀度",
+        "en": "Uniformity"
+      },
+      "reflectance": {
+        "zh": "反射率",
+        "en": "Reflectance"
+      }
+    },
+    "states": {
+      "default": {
+        "zh": "默认",
+        "en": "Default",
+        "note": "普通状态：未开防窥模式、未贴防窥膜或抗反膜。"
+      },
+      "privacy": {
+        "zh": "防窥模式",
+        "en": "Privacy mode",
+        "note": "机身内置的防窥显示模式。"
+      },
+      "privacy-film": {
+        "zh": "防窥膜",
+        "en": "Privacy film"
+      },
+      "anti-reflective-film": {
+        "zh": "抗反膜",
+        "en": "Anti-reflective film"
+      },
+      "screen-protector": {
+        "zh": "贴膜",
+        "en": "Screen protector",
+        "note": "源记录只写「贴膜」，膜的种类未注明。"
+      },
+      "unspecified": {
+        "zh": "原始样品 · 状态未注明",
+        "en": "As measured · state not recorded",
+        "note": "源记录没有注明贴膜 / 防窥等状态；不并入「默认」。"
+      },
+      "inner": {
+        "zh": "内屏",
+        "en": "Inner display",
+        "note": "折叠屏源记录只按屏幕区分（未注明贴膜等状态）。"
+      },
+      "outer": {
+        "zh": "外屏",
+        "en": "Outer display",
+        "note": "折叠屏源记录只按屏幕区分（未注明贴膜等状态）。"
+      }
+    },
+    "stateBasis": {
+      "source": {
+        "zh": "源数据标注",
+        "en": "Stated by the source"
+      },
+      "convention": {
+        "zh": "源数据未标注，按常规测量状态记为默认（待确认）",
+        "en": "Not stated; recorded as the usual test state (to confirm)"
+      }
+    },
+    "displays": {
+      "main": {
+        "zh": "主屏",
+        "en": "Main display"
+      },
+      "inner": {
+        "zh": "内屏",
+        "en": "Inner display"
+      },
+      "outer": {
+        "zh": "外屏",
+        "en": "Outer display"
+      }
+    },
+    "availability": {
+      "complete": {
+        "zh": "完整",
+        "en": "Complete",
+        "note": "有可视化数据（热力图、曲线或矩阵）。"
+      },
+      "partial": {
+        "zh": "部分已测",
+        "en": "Partly measured",
+        "note": "部分屏幕或状态已测，其余未测。"
+      },
+      "metrics-only": {
+        "zh": "仅指标",
+        "en": "Metrics only",
+        "note": "只有数值指标，没有热力图或曲线。"
+      },
+      "pending-import": {
+        "zh": "已测待导入",
+        "en": "Measured, not imported",
+        "note": "源数据存在，但还没导入本库。"
+      },
+      "not-measured": {
+        "zh": "未测",
+        "en": "Not measured",
+        "note": "本库没有这项测量。"
+      }
+    }
+  },
+  "brands": {
+    "apple": {
+      "zh": "苹果",
+      "en": "Apple"
+    },
+    "xiaomi": {
+      "zh": "小米",
+      "en": "Xiaomi"
+    },
+    "huawei": {
+      "zh": "华为",
+      "en": "Huawei"
+    },
+    "honor": {
+      "zh": "荣耀",
+      "en": "Honor"
+    },
+    "oppo": {
+      "zh": "OPPO",
+      "en": "OPPO"
+    },
+    "oneplus": {
+      "zh": "一加",
+      "en": "OnePlus"
+    },
+    "samsung": {
+      "zh": "三星",
+      "en": "Samsung"
+    },
+    "iqoo": {
+      "zh": "iQOO",
+      "en": "iQOO"
+    }
+  },
+  "counts": {
+    "devices": 25,
+    "svmRecords": 21,
+    "angleProfiles": 8,
+    "angleProfilesMeasured": 7,
+    "uniformityConditions": 9,
+    "uniformityMaps": 15,
+    "reflectanceSamples": 32,
+    "devicesWith": {
+      "svm": 8,
+      "angle": 5,
+      "uniformity": 3,
+      "reflectance": 24
+    }
+  },
+  "devices": [
+    {
+      "id": "xiaomi-18-pro-max",
+      "name": {
+        "zh": "小米 18 Pro Max",
+        "en": "Xiaomi 18 Pro Max"
+      },
+      "brand": "xiaomi",
+      "aliases": [
+        "mi18pm"
+      ],
+      "displays": [
+        "main"
+      ],
+      "units": [],
+      "availability": {
+        "svm": {
+          "status": "complete"
+        },
+        "angle": {
+          "status": "complete"
+        },
+        "uniformity": {
+          "status": "complete"
+        },
+        "reflectance": {
+          "status": "complete"
+        }
+      },
+      "svm": [
+        {
+          "record": "xiaomi18promax_adaptive_pro_off.json",
+          "manifestDevice": "小米 18 Pro Max",
+          "mode": "自适应刷新 Pro 关",
+          "modeEn": "Adaptive refresh Pro off",
+          "display": "main",
+          "state": "default",
+          "stateBasis": "convention",
+          "unit": null
+        },
+        {
+          "record": "xiaomi18promax_adaptive_pro_on.json",
+          "manifestDevice": "小米 18 Pro Max",
+          "mode": "自适应刷新 Pro 开",
+          "modeEn": "Adaptive refresh Pro on",
+          "display": "main",
+          "state": "default",
+          "stateBasis": "convention",
+          "unit": null
+        }
+      ],
+      "angle": [
+        {
+          "profile": "p2",
+          "standaloneDevice": "小米 18 Pro Max",
+          "display": "main",
+          "state": "default",
+          "stateBasis": "source",
+          "measured": true,
+          "unit": null
+        },
+        {
+          "profile": "p3",
+          "standaloneDevice": "小米 18 Pro Max",
+          "display": "main",
+          "state": "privacy",
+          "stateBasis": "source",
+          "measured": true,
+          "unit": null
+        }
+      ],
+      "uniformity": [
+        {
+          "condition": "300",
+          "label": "300 nits 白场",
+          "pattern": "全白场",
+          "referenceNits": 300,
+          "display": "main",
+          "state": "default",
+          "stateBasis": "convention",
+          "unit": null,
+          "maps": [
+            {
+              "kind": "luminance",
+              "asset": "maps/300_lum_mi18pm.png",
+              "sourceKey": "300_lum_mi18pm"
+            },
+            {
+              "kind": "colorTemperature",
+              "asset": "maps/300_cct_mi18pm.png",
+              "sourceKey": "300_cct_mi18pm"
+            }
+          ],
+          "metrics": [
+            "luminance",
+            "colorTemperature"
+          ]
+        },
+        {
+          "condition": "100",
+          "label": "100 nits G20",
+          "pattern": "G20",
+          "referenceNits": 100,
+          "display": "main",
+          "state": "default",
+          "stateBasis": "convention",
+          "unit": null,
+          "maps": [
+            {
+              "kind": "luminance",
+              "asset": "maps/100_lum_mi18pm.png",
+              "sourceKey": "100_lum_mi18pm"
+            },
+            {
+              "kind": "colorTemperature",
+              "asset": "maps/100_cct_mi18pm.png",
+              "sourceKey": "100_cct_mi18pm"
+            }
+          ],
+          "metrics": [
+            "luminance",
+            "colorTemperature"
+          ]
+        },
+        {
+          "condition": "10",
+          "label": "10 nits G20",
+          "pattern": "G20",
+          "referenceNits": 10,
+          "display": "main",
+          "state": "default",
+          "stateBasis": "convention",
+          "unit": null,
+          "maps": [
+            {
+              "kind": "luminance",
+              "asset": "maps/10_lum_mi18pm.png",
+              "sourceKey": "10_lum_mi18pm"
+            }
+          ],
+          "metrics": [
+            "luminance"
+          ]
+        }
+      ],
+      "reflectance": [
+        {
+          "condition": "as-measured",
+          "label": "原始样品 · 状态未注明",
+          "display": "main",
+          "state": "unspecified",
+          "stateBasis": "source",
+          "unit": null,
+          "date": "2026-09-27",
+          "measuredAt": "2026-09-27 15:59:33Z",
+          "rawSampleId": "420",
+          "sourceName": "小米 18 Pro Max"
+        },
+        {
+          "condition": "screen-protector",
+          "label": "贴膜",
+          "display": "main",
+          "state": "screen-protector",
+          "stateBasis": "source",
+          "unit": null,
+          "date": "2026-09-27",
+          "measuredAt": "2026-09-27 15:49:19Z",
+          "rawSampleId": "419",
+          "sourceName": "小米 18 Pro Max 贴膜"
+        }
+      ]
+    },
+    {
+      "id": "iphone-18-pro-max",
+      "name": {
+        "zh": "iPhone 18 Pro Max",
+        "en": "iPhone 18 Pro Max"
+      },
+      "brand": "apple",
+      "aliases": [
+        "ip18pm",
+        "Apple iPhone 18 Pro Max"
+      ],
+      "displays": [
+        "main"
+      ],
+      "units": [
+        {
+          "id": "gh3",
+          "panel": "GH3",
+          "label": "GH3 面板样机",
+          "note": "可视角默认（p0）与防窥膜（p1）测的是同一台 GH3 样机（atlas README、独立可视角项目）。"
+        }
+      ],
+      "availability": {
+        "svm": {
+          "status": "complete"
+        },
+        "angle": {
+          "status": "complete"
+        },
+        "uniformity": {
+          "status": "complete"
+        },
+        "reflectance": {
+          "status": "complete"
+        }
+      },
+      "svm": [
+        {
+          "record": "iPhone18ProMax.json",
+          "manifestDevice": "iPhone 18 Pro Max",
+          "mode": "标准",
+          "modeEn": "Standard",
+          "display": "main",
+          "state": "default",
+          "stateBasis": "convention",
+          "unit": null
+        },
+        {
+          "record": "iPhone18ProMax_smooth.json",
+          "manifestDevice": "iPhone 18 Pro Max",
+          "mode": "平滑脉冲",
+          "modeEn": "Smooth pulse",
+          "display": "main",
+          "state": "default",
+          "stateBasis": "convention",
+          "unit": null
+        }
+      ],
+      "angle": [
+        {
+          "profile": "p0",
+          "standaloneDevice": "iPhone 18 Pro Max GH3",
+          "display": "main",
+          "state": "default",
+          "stateBasis": "source",
+          "measured": true,
+          "unit": "gh3"
+        },
+        {
+          "profile": "p1",
+          "standaloneDevice": "iPhone 18 Pro Max GH3",
+          "display": "main",
+          "state": "privacy-film",
+          "stateBasis": "source",
+          "measured": true,
+          "unit": "gh3"
+        }
+      ],
+      "uniformity": [
+        {
+          "condition": "300",
+          "label": "300 nits 白场",
+          "pattern": "全白场",
+          "referenceNits": 300,
+          "display": "main",
+          "state": "default",
+          "stateBasis": "convention",
+          "unit": null,
+          "maps": [
+            {
+              "kind": "luminance",
+              "asset": "maps/300_lum_ip18pm.png",
+              "sourceKey": "300_lum_ip18pm"
+            },
+            {
+              "kind": "colorTemperature",
+              "asset": "maps/300_cct_ip18pm.png",
+              "sourceKey": "300_cct_ip18pm"
+            }
+          ],
+          "metrics": [
+            "luminance",
+            "colorTemperature"
+          ]
+        },
+        {
+          "condition": "100",
+          "label": "100 nits G20",
+          "pattern": "G20",
+          "referenceNits": 100,
+          "display": "main",
+          "state": "default",
+          "stateBasis": "convention",
+          "unit": null,
+          "maps": [
+            {
+              "kind": "luminance",
+              "asset": "maps/100_lum_ip18pm.png",
+              "sourceKey": "100_lum_ip18pm"
+            },
+            {
+              "kind": "colorTemperature",
+              "asset": "maps/100_cct_ip18pm.png",
+              "sourceKey": "100_cct_ip18pm"
+            }
+          ],
+          "metrics": [
+            "luminance",
+            "colorTemperature"
+          ]
+        },
+        {
+          "condition": "10",
+          "label": "10 nits G20",
+          "pattern": "G20",
+          "referenceNits": 10,
+          "display": "main",
+          "state": "default",
+          "stateBasis": "convention",
+          "unit": null,
+          "maps": [
+            {
+              "kind": "luminance",
+              "asset": "maps/10_lum_ip18pm.png",
+              "sourceKey": "10_lum_ip18pm"
+            }
+          ],
+          "metrics": [
+            "luminance"
+          ]
+        }
+      ],
+      "reflectance": [
+        {
+          "condition": "as-measured",
+          "label": "原始样品 · 状态未注明",
+          "display": "main",
+          "state": "unspecified",
+          "stateBasis": "source",
+          "unit": null,
+          "panel": "GH3",
+          "date": "2026-09-18",
+          "measuredAt": "2026-09-18 09:33:01Z",
+          "rawSampleId": "414",
+          "sourceName": "Apple iPhone 18 Pro Max"
+        }
+      ]
+    },
+    {
+      "id": "iphone-duo",
+      "name": {
+        "zh": "iPhone Duo",
+        "en": "iPhone Duo"
+      },
+      "brand": "apple",
+      "aliases": [],
+      "displays": [
+        "inner",
+        "outer"
+      ],
+      "units": [],
+      "availability": {
+        "svm": {
+          "status": "complete"
+        },
+        "angle": {
+          "status": "partial",
+          "note": "外屏未测：独立项目中的这组数据是临时替代：复制自 p0（iPhone 18 Pro Max GH3），不是本机实测，数据库记为未测、不给数值。"
+        },
+        "uniformity": {
+          "status": "not-measured"
+        },
+        "reflectance": {
+          "status": "not-measured"
+        }
+      },
+      "svm": [
+        {
+          "record": "iPhoneDuo_inner_120hz.json",
+          "manifestDevice": "iPhone Duo 内屏",
+          "mode": "普通 120Hz",
+          "modeEn": "Standard 120Hz",
+          "display": "inner",
+          "state": "inner",
+          "stateBasis": "source",
+          "unit": null
+        },
+        {
+          "record": "iPhoneDuo_inner_smooth_120hz.json",
+          "manifestDevice": "iPhone Duo 内屏",
+          "mode": "脉冲平滑 120Hz",
+          "modeEn": "Smooth pulse 120Hz",
+          "display": "inner",
+          "state": "inner",
+          "stateBasis": "source",
+          "unit": null
+        },
+        {
+          "record": "iPhoneDuo_outer_120hz.json",
+          "manifestDevice": "iPhone Duo 外屏",
+          "mode": "普通 120Hz",
+          "modeEn": "Standard 120Hz",
+          "display": "outer",
+          "state": "outer",
+          "stateBasis": "source",
+          "unit": null
+        },
+        {
+          "record": "iPhoneDuo_outer_smooth_120hz.json",
+          "manifestDevice": "iPhone Duo 外屏",
+          "mode": "脉冲平滑 120Hz",
+          "modeEn": "Smooth pulse 120Hz",
+          "display": "outer",
+          "state": "outer",
+          "stateBasis": "source",
+          "unit": null
+        }
+      ],
+      "angle": [
+        {
+          "profile": "duo-inner",
+          "standaloneDevice": "iPhone Duo",
+          "display": "inner",
+          "state": "inner",
+          "stateBasis": "source",
+          "measured": true,
+          "unit": null
+        },
+        {
+          "profile": "duo-outer",
+          "standaloneDevice": "iPhone Duo",
+          "display": "outer",
+          "state": "outer",
+          "stateBasis": "source",
+          "measured": false,
+          "unit": null,
+          "status": "not-measured",
+          "substituteOf": "p0",
+          "note": "独立项目中的这组数据是临时替代：复制自 p0（iPhone 18 Pro Max GH3），不是本机实测，数据库记为未测、不给数值。"
+        }
+      ],
+      "uniformity": [],
+      "reflectance": []
+    },
+    {
+      "id": "huawei-mate-90-pro-max",
+      "name": {
+        "zh": "华为 Mate 90 Pro Max 典藏版",
+        "en": "Huawei Mate 90 Pro Max Collector's Edition"
+      },
+      "brand": "huawei",
+      "aliases": [],
+      "displays": [
+        "main"
+      ],
+      "units": [],
+      "availability": {
+        "svm": {
+          "status": "complete"
+        },
+        "angle": {
+          "status": "complete"
+        },
+        "uniformity": {
+          "status": "not-measured",
+          "note": "atlas 记为未测量（notRecorded）。"
+        },
+        "reflectance": {
+          "status": "complete"
+        }
+      },
+      "svm": [
+        {
+          "record": "huawei_mate90promax.json",
+          "manifestDevice": "华为 Mate 90 Pro Max 典藏版",
+          "mode": "默认",
+          "modeEn": "Default",
+          "display": "main",
+          "state": "default",
+          "stateBasis": "convention",
+          "unit": null,
+          "note": "源表只有 100 % / 90 % / 80 % 三列，G255 档位亮度 923.08 / 714.9 / 590.98 nits，全部高于工作台默认的 500 nits 上限；默认视图里没有点，需放宽上限才能看到。"
+        }
+      ],
+      "angle": [
+        {
+          "profile": "p4",
+          "standaloneDevice": "华为 Mate 90 Pro Max 典藏版",
+          "display": "main",
+          "state": "default",
+          "stateBasis": "source",
+          "measured": true,
+          "unit": null
+        }
+      ],
+      "uniformity": [],
+      "reflectance": [
+        {
+          "condition": "as-measured",
+          "label": "原始样品 · 状态未注明",
+          "display": "main",
+          "state": "unspecified",
+          "stateBasis": "source",
+          "unit": null,
+          "date": "2026-10-05",
+          "measuredAt": "2026-10-05 11:03:31Z",
+          "rawSampleId": "421",
+          "sourceName": "华为 Mate 90 Pro Max 典藏版"
+        }
+      ]
+    },
+    {
+      "id": "iphone-17-pro-max",
+      "name": {
+        "zh": "iPhone 17 Pro Max",
+        "en": "iPhone 17 Pro Max"
+      },
+      "brand": "apple",
+      "aliases": [
+        "ip17pm",
+        "Apple iPhone 17 Pro Max"
+      ],
+      "displays": [
+        "main"
+      ],
+      "units": [
+        {
+          "id": "gv3",
+          "panel": "GV3",
+          "label": "GV3 面板样机",
+          "note": "独立可视角项目 p5 的设备名标注 GV3。频闪、均匀度、反射率是否为同一台未记录。"
+        }
+      ],
+      "availability": {
+        "svm": {
+          "status": "complete"
+        },
+        "angle": {
+          "status": "complete"
+        },
+        "uniformity": {
+          "status": "pending-import",
+          "sourceId": "ip17pm",
+          "note": "atlas 标为「仅指标」（视频项目中的 id：ip17pm），但指标数值没有导出，本库暂无数据。"
+        },
+        "reflectance": {
+          "status": "complete"
+        }
+      },
+      "svm": [
+        {
+          "record": "iPhone17ProMax.json",
+          "manifestDevice": "iPhone 17 Pro Max",
+          "mode": "标准",
+          "modeEn": "Standard",
+          "display": "main",
+          "state": "default",
+          "stateBasis": "convention",
+          "unit": null
+        },
+        {
+          "record": "iPhone17ProMax_smooth.json",
+          "manifestDevice": "iPhone 17 Pro Max",
+          "mode": "平滑脉冲",
+          "modeEn": "Smooth pulse",
+          "display": "main",
+          "state": "default",
+          "stateBasis": "convention",
+          "unit": null
+        }
+      ],
+      "angle": [
+        {
+          "profile": "p5",
+          "standaloneDevice": "iPhone 17 Pro Max GV3",
+          "display": "main",
+          "state": "default",
+          "stateBasis": "source",
+          "measured": true,
+          "unit": "gv3"
+        }
+      ],
+      "uniformity": [],
+      "reflectance": [
+        {
+          "condition": "as-measured",
+          "label": "原始样品 · 状态未注明",
+          "display": "main",
+          "state": "unspecified",
+          "stateBasis": "source",
+          "unit": null,
+          "date": "2025-09-19",
+          "measuredAt": "2025-09-19 10:12:22Z",
+          "rawSampleId": "185",
+          "sourceName": "iPhone 17 Pro Max"
+        },
+        {
+          "condition": "anti-reflective-film",
+          "label": "抗反膜",
+          "display": "main",
+          "state": "anti-reflective-film",
+          "stateBasis": "source",
+          "unit": null,
+          "date": "2026-09-24",
+          "measuredAt": "2026-09-24 11:42:47Z",
+          "rawSampleId": "417",
+          "sourceName": "Apple iPhone 17 Pro Max 抗反膜"
+        }
+      ]
+    },
+    {
+      "id": "xiaomi-17-ultra",
+      "name": {
+        "zh": "小米 17 Ultra 徕卡",
+        "en": "Xiaomi 17 Ultra Leica"
+      },
+      "brand": "xiaomi",
+      "aliases": [
+        "mi17u",
+        "小米 17Ultra徕卡"
+      ],
+      "displays": [
+        "main"
+      ],
+      "units": [],
+      "availability": {
+        "svm": {
+          "status": "complete"
+        },
+        "angle": {
+          "status": "not-measured"
+        },
+        "uniformity": {
+          "status": "complete"
+        },
+        "reflectance": {
+          "status": "complete"
+        }
+      },
+      "svm": [
+        {
+          "record": "xiaomi17ultra_leica_dc_120hz.json",
+          "manifestDevice": "小米 17 Ultra 徕卡",
+          "mode": "DC 120Hz",
+          "modeEn": "DC 120Hz",
+          "display": "main",
+          "state": "default",
+          "stateBasis": "convention",
+          "unit": null
+        },
+        {
+          "record": "xiaomi17ultra_leica_ltpo_120hz.json",
+          "manifestDevice": "小米 17 Ultra 徕卡",
+          "mode": "自适应刷新率 Pro 120Hz",
+          "modeEn": "Adaptive refresh Pro 120Hz",
+          "display": "main",
+          "state": "default",
+          "stateBasis": "convention",
+          "unit": null
+        }
+      ],
+      "angle": [],
+      "uniformity": [
+        {
+          "condition": "300",
+          "label": "300 nits 白场",
+          "pattern": "全白场",
+          "referenceNits": 300,
+          "display": "main",
+          "state": "default",
+          "stateBasis": "convention",
+          "unit": null,
+          "maps": [
+            {
+              "kind": "luminance",
+              "asset": "maps/300_lum_mi17u.png",
+              "sourceKey": "300_lum_mi17u"
+            },
+            {
+              "kind": "colorTemperature",
+              "asset": "maps/300_cct_mi17u.png",
+              "sourceKey": "300_cct_mi17u"
+            }
+          ],
+          "metrics": [
+            "luminance",
+            "colorTemperature"
+          ]
+        },
+        {
+          "condition": "100",
+          "label": "100 nits G20",
+          "pattern": "G20",
+          "referenceNits": 100,
+          "display": "main",
+          "state": "default",
+          "stateBasis": "convention",
+          "unit": null,
+          "maps": [
+            {
+              "kind": "luminance",
+              "asset": "maps/100_lum_mi17u.png",
+              "sourceKey": "100_lum_mi17u"
+            },
+            {
+              "kind": "colorTemperature",
+              "asset": "maps/100_cct_mi17u.png",
+              "sourceKey": "100_cct_mi17u"
+            }
+          ],
+          "metrics": [
+            "luminance",
+            "colorTemperature"
+          ]
+        },
+        {
+          "condition": "10",
+          "label": "10 nits G20",
+          "pattern": "G20",
+          "referenceNits": 10,
+          "display": "main",
+          "state": "default",
+          "stateBasis": "convention",
+          "unit": null,
+          "maps": [
+            {
+              "kind": "luminance",
+              "asset": "maps/10_lum_mi17u.png",
+              "sourceKey": "10_lum_mi17u"
+            }
+          ],
+          "metrics": [
+            "luminance"
+          ]
+        }
+      ],
+      "reflectance": [
+        {
+          "condition": "as-measured",
+          "label": "原始样品 · 状态未注明",
+          "display": "main",
+          "state": "unspecified",
+          "stateBasis": "source",
+          "unit": null,
+          "date": "2025-12-28",
+          "measuredAt": "2025-12-28 03:00:44Z",
+          "rawSampleId": "251",
+          "sourceName": "小米 17Ultra徕卡"
+        }
+      ]
+    },
+    {
+      "id": "huawei-mate-80-rs",
+      "name": {
+        "zh": "华为 Mate 80 RS",
+        "en": "Huawei Mate 80 RS"
+      },
+      "brand": "huawei",
+      "aliases": [
+        "m80rs"
+      ],
+      "displays": [
+        "main"
+      ],
+      "units": [],
+      "availability": {
+        "svm": {
+          "status": "complete"
+        },
+        "angle": {
+          "status": "not-measured"
+        },
+        "uniformity": {
+          "status": "pending-import",
+          "sourceId": "m80rs",
+          "note": "atlas 标为「仅指标」（视频项目中的 id：m80rs），但指标数值没有导出，本库暂无数据。"
+        },
+        "reflectance": {
+          "status": "complete"
+        }
+      },
+      "svm": [
+        {
+          "record": "huawei_mate80rs.json",
+          "manifestDevice": "华为 Mate 80 RS",
+          "mode": "标准",
+          "modeEn": "Standard",
+          "display": "main",
+          "state": "default",
+          "stateBasis": "convention",
+          "unit": null
+        },
+        {
+          "record": "huawei_mate80rs_60hz.json",
+          "manifestDevice": "华为 Mate 80 RS",
+          "mode": "60Hz",
+          "modeEn": "60Hz",
+          "display": "main",
+          "state": "default",
+          "stateBasis": "convention",
+          "unit": null
+        },
+        {
+          "record": "huawei_mate80rs_low_frequency.json",
+          "manifestDevice": "华为 Mate 80 RS",
+          "mode": "低频闪",
+          "modeEn": "Low-flicker",
+          "display": "main",
+          "state": "default",
+          "stateBasis": "convention",
+          "unit": null
+        },
+        {
+          "record": "huawei_mate80rs_low_frequency_60hz.json",
+          "manifestDevice": "华为 Mate 80 RS",
+          "mode": "低频闪 60Hz",
+          "modeEn": "Low-flicker 60Hz",
+          "display": "main",
+          "state": "default",
+          "stateBasis": "convention",
+          "unit": null
+        }
+      ],
+      "angle": [],
+      "uniformity": [],
+      "reflectance": [
+        {
+          "condition": "as-measured",
+          "label": "原始样品 · 状态未注明",
+          "display": "main",
+          "state": "unspecified",
+          "stateBasis": "source",
+          "unit": null,
+          "date": "2025-12-01",
+          "measuredAt": "2025-12-01 13:12:18Z",
+          "rawSampleId": "245",
+          "sourceName": "华为 Mate 80 RS"
+        }
+      ]
+    },
+    {
+      "id": "huawei-mate-70-air",
+      "name": {
+        "zh": "华为 Mate 70 Air",
+        "en": "Huawei Mate 70 Air"
+      },
+      "brand": "huawei",
+      "aliases": [
+        "m70a",
+        "华为 Mate Air"
+      ],
+      "displays": [
+        "main"
+      ],
+      "units": [],
+      "availability": {
+        "svm": {
+          "status": "complete"
+        },
+        "angle": {
+          "status": "not-measured"
+        },
+        "uniformity": {
+          "status": "pending-import",
+          "sourceId": "m70a",
+          "note": "atlas 标为「仅指标」（视频项目中的 id：m70a），但指标数值没有导出，本库暂无数据。"
+        },
+        "reflectance": {
+          "status": "complete"
+        }
+      },
+      "svm": [
+        {
+          "record": "huawei_mate70air.json",
+          "manifestDevice": "华为 Mate 70 Air",
+          "mode": "标准",
+          "modeEn": "Standard",
+          "display": "main",
+          "state": "default",
+          "stateBasis": "convention",
+          "unit": null
+        },
+        {
+          "record": "huawei_mate70air_60hz.json",
+          "manifestDevice": "华为 Mate 70 Air",
+          "mode": "60Hz",
+          "modeEn": "60Hz",
+          "display": "main",
+          "state": "default",
+          "stateBasis": "convention",
+          "unit": null
+        },
+        {
+          "record": "huawei_mate70air_low_frequency.json",
+          "manifestDevice": "华为 Mate 70 Air",
+          "mode": "低频闪",
+          "modeEn": "Low-flicker",
+          "display": "main",
+          "state": "default",
+          "stateBasis": "convention",
+          "unit": null
+        },
+        {
+          "record": "huawei_mate70air_low_frequency_60hz.json",
+          "manifestDevice": "华为 Mate 70 Air",
+          "mode": "低频闪 60Hz",
+          "modeEn": "Low-flicker 60Hz",
+          "display": "main",
+          "state": "default",
+          "stateBasis": "convention",
+          "unit": null
+        }
+      ],
+      "angle": [],
+      "uniformity": [],
+      "reflectance": [
+        {
+          "condition": "as-measured",
+          "label": "原始样品 · 状态未注明",
+          "display": "main",
+          "state": "unspecified",
+          "stateBasis": "source",
+          "unit": null,
+          "date": "2025-11-24",
+          "measuredAt": "2025-11-24 04:48:05Z",
+          "rawSampleId": "239",
+          "sourceName": "华为 Mate Air"
+        }
+      ]
+    },
+    {
+      "id": "honor-magic-v5",
+      "name": {
+        "zh": "荣耀 Magic V5",
+        "en": "Honor Magic V5"
+      },
+      "brand": "honor",
+      "aliases": [],
+      "displays": [
+        "inner",
+        "outer"
+      ],
+      "units": [],
+      "availability": {
+        "svm": {
+          "status": "not-measured"
+        },
+        "angle": {
+          "status": "not-measured"
+        },
+        "uniformity": {
+          "status": "not-measured"
+        },
+        "reflectance": {
+          "status": "complete"
+        }
+      },
+      "svm": [],
+      "angle": [],
+      "uniformity": [],
+      "reflectance": [
+        {
+          "condition": "inner-display",
+          "label": "内屏",
+          "display": "inner",
+          "state": "inner",
+          "stateBasis": "source",
+          "unit": null,
+          "date": "2026-02-28",
+          "measuredAt": "2026-02-28 04:40:37Z",
+          "rawSampleId": "271",
+          "sourceName": "荣耀 Magic V5 内屏"
+        },
+        {
+          "condition": "outer-display",
+          "label": "外屏",
+          "display": "outer",
+          "state": "outer",
+          "stateBasis": "source",
+          "unit": null,
+          "date": "2026-02-28",
+          "measuredAt": "2026-02-28 04:38:50Z",
+          "rawSampleId": "270",
+          "sourceName": "荣耀 Magic V5 外屏"
+        }
+      ]
+    },
+    {
+      "id": "iphone-16-pro-max",
+      "name": {
+        "zh": "iPhone 16 Pro Max",
+        "en": "iPhone 16 Pro Max"
+      },
+      "brand": "apple",
+      "aliases": [],
+      "displays": [
+        "main"
+      ],
+      "units": [],
+      "availability": {
+        "svm": {
+          "status": "not-measured"
+        },
+        "angle": {
+          "status": "not-measured"
+        },
+        "uniformity": {
+          "status": "not-measured"
+        },
+        "reflectance": {
+          "status": "complete"
+        }
+      },
+      "svm": [],
+      "angle": [],
+      "uniformity": [],
+      "reflectance": [
+        {
+          "condition": "as-measured",
+          "label": "原始样品 · 状态未注明",
+          "display": "main",
+          "state": "unspecified",
+          "stateBasis": "source",
+          "unit": null,
+          "date": "2024-11-15",
+          "measuredAt": "2024-11-15 07:48:54Z",
+          "rawSampleId": "24",
+          "sourceName": "iPhone 16 Pro Max"
+        }
+      ]
+    },
+    {
+      "id": "oneplus-15",
+      "name": {
+        "zh": "一加 15",
+        "en": "OnePlus 15"
+      },
+      "brand": "oneplus",
+      "aliases": [],
+      "displays": [
+        "main"
+      ],
+      "units": [],
+      "availability": {
+        "svm": {
+          "status": "not-measured"
+        },
+        "angle": {
+          "status": "not-measured"
+        },
+        "uniformity": {
+          "status": "not-measured"
+        },
+        "reflectance": {
+          "status": "complete"
+        }
+      },
+      "svm": [],
+      "angle": [],
+      "uniformity": [],
+      "reflectance": [
+        {
+          "condition": "as-measured",
+          "label": "原始样品 · 状态未注明",
+          "display": "main",
+          "state": "unspecified",
+          "stateBasis": "source",
+          "unit": null,
+          "date": "2025-10-06",
+          "measuredAt": "2025-10-06 16:08:34Z",
+          "rawSampleId": "194",
+          "sourceName": "一加 15"
+        }
+      ]
+    },
+    {
+      "id": "oppo-find-n5",
+      "name": {
+        "zh": "OPPO Find N5",
+        "en": "OPPO Find N5"
+      },
+      "brand": "oppo",
+      "aliases": [],
+      "displays": [
+        "inner",
+        "outer"
+      ],
+      "units": [],
+      "availability": {
+        "svm": {
+          "status": "not-measured"
+        },
+        "angle": {
+          "status": "not-measured"
+        },
+        "uniformity": {
+          "status": "not-measured"
+        },
+        "reflectance": {
+          "status": "complete"
+        }
+      },
+      "svm": [],
+      "angle": [],
+      "uniformity": [],
+      "reflectance": [
+        {
+          "condition": "inner-display",
+          "label": "新内屏 · 2026-03-01",
+          "display": "inner",
+          "state": "inner",
+          "stateBasis": "source",
+          "unit": null,
+          "date": "2026-03-01",
+          "measuredAt": "2026-03-01 14:18:43Z",
+          "rawSampleId": "282",
+          "sourceName": "OPPO Find N5 新 内屏"
+        },
+        {
+          "condition": "inner-display-20260228",
+          "label": "内屏 · 2026-02-28",
+          "display": "inner",
+          "state": "inner",
+          "stateBasis": "source",
+          "unit": null,
+          "date": "2026-02-28",
+          "measuredAt": "2026-02-28 05:17:48Z",
+          "rawSampleId": "277",
+          "sourceName": "OPPO Find N5 内屏"
+        },
+        {
+          "condition": "outer-display",
+          "label": "新外屏 · 2026-03-01",
+          "display": "outer",
+          "state": "outer",
+          "stateBasis": "source",
+          "unit": null,
+          "date": "2026-03-01",
+          "measuredAt": "2026-03-01 14:17:42Z",
+          "rawSampleId": "281",
+          "sourceName": "OPPO Find N5 新 外屏"
+        },
+        {
+          "condition": "outer-display-20260228",
+          "label": "外屏 · 2026-02-28",
+          "display": "outer",
+          "state": "outer",
+          "stateBasis": "source",
+          "unit": null,
+          "date": "2026-02-28",
+          "measuredAt": "2026-02-28 05:19:17Z",
+          "rawSampleId": "279",
+          "sourceName": "OPPO Find N5 外屏"
+        },
+        {
+          "condition": "screen-unspecified-20250808",
+          "label": "屏幕未注明 · 2025-08-08",
+          "display": null,
+          "state": "unspecified",
+          "stateBasis": "source",
+          "unit": null,
+          "date": "2025-08-08",
+          "measuredAt": "2025-08-08 09:30:52Z",
+          "rawSampleId": "139",
+          "sourceName": "OPPO Find N5"
+        }
+      ]
+    },
+    {
+      "id": "oppo-find-x9",
+      "name": {
+        "zh": "OPPO Find X9",
+        "en": "OPPO Find X9"
+      },
+      "brand": "oppo",
+      "aliases": [],
+      "displays": [
+        "main"
+      ],
+      "units": [],
+      "availability": {
+        "svm": {
+          "status": "not-measured"
+        },
+        "angle": {
+          "status": "not-measured"
+        },
+        "uniformity": {
+          "status": "not-measured"
+        },
+        "reflectance": {
+          "status": "complete"
+        }
+      },
+      "svm": [],
+      "angle": [],
+      "uniformity": [],
+      "reflectance": [
+        {
+          "condition": "as-measured",
+          "label": "原始样品 · 状态未注明",
+          "display": "main",
+          "state": "unspecified",
+          "stateBasis": "source",
+          "unit": null,
+          "date": "2025-10-23",
+          "measuredAt": "2025-10-23 18:15:42Z",
+          "rawSampleId": "217",
+          "sourceName": "OPPO Find X9"
+        }
+      ]
+    },
+    {
+      "id": "oppo-find-x9-ultra",
+      "name": {
+        "zh": "OPPO Find X9 Ultra",
+        "en": "OPPO Find X9 Ultra"
+      },
+      "brand": "oppo",
+      "aliases": [],
+      "displays": [
+        "main"
+      ],
+      "units": [],
+      "availability": {
+        "svm": {
+          "status": "not-measured"
+        },
+        "angle": {
+          "status": "not-measured"
+        },
+        "uniformity": {
+          "status": "not-measured"
+        },
+        "reflectance": {
+          "status": "complete"
+        }
+      },
+      "svm": [],
+      "angle": [],
+      "uniformity": [],
+      "reflectance": [
+        {
+          "condition": "as-measured",
+          "label": "原始样品 · 状态未注明",
+          "display": "main",
+          "state": "unspecified",
+          "stateBasis": "source",
+          "unit": null,
+          "date": "2026-04-14",
+          "measuredAt": "2026-04-14 05:35:27Z",
+          "rawSampleId": "320",
+          "sourceName": "OPPO Find X9 Ultra"
+        }
+      ]
+    },
+    {
+      "id": "oppo-find-x9s-pro",
+      "name": {
+        "zh": "OPPO Find X9s Pro",
+        "en": "OPPO Find X9s Pro"
+      },
+      "brand": "oppo",
+      "aliases": [],
+      "displays": [
+        "main"
+      ],
+      "units": [],
+      "availability": {
+        "svm": {
+          "status": "not-measured"
+        },
+        "angle": {
+          "status": "not-measured"
+        },
+        "uniformity": {
+          "status": "not-measured"
+        },
+        "reflectance": {
+          "status": "complete"
+        }
+      },
+      "svm": [],
+      "angle": [],
+      "uniformity": [],
+      "reflectance": [
+        {
+          "condition": "as-measured",
+          "label": "原始样品 · 状态未注明",
+          "display": "main",
+          "state": "unspecified",
+          "stateBasis": "source",
+          "unit": null,
+          "date": "2026-04-20",
+          "measuredAt": "2026-04-20 08:08:54Z",
+          "rawSampleId": "327",
+          "sourceName": "OPPO Find X9s Pro"
+        }
+      ]
+    },
+    {
+      "id": "samsung-s25-ultra",
+      "name": {
+        "zh": "三星 S25 Ultra",
+        "en": "Samsung Galaxy S25 Ultra"
+      },
+      "brand": "samsung",
+      "aliases": [],
+      "displays": [
+        "main"
+      ],
+      "units": [],
+      "availability": {
+        "svm": {
+          "status": "not-measured"
+        },
+        "angle": {
+          "status": "not-measured"
+        },
+        "uniformity": {
+          "status": "not-measured"
+        },
+        "reflectance": {
+          "status": "complete"
+        }
+      },
+      "svm": [],
+      "angle": [],
+      "uniformity": [],
+      "reflectance": [
+        {
+          "condition": "as-measured",
+          "label": "原始样品 · 状态未注明",
+          "display": "main",
+          "state": "unspecified",
+          "stateBasis": "source",
+          "unit": null,
+          "date": "2026-03-01",
+          "measuredAt": "2026-03-01 14:20:47Z",
+          "rawSampleId": "283",
+          "sourceName": "三星 S25 Ultra"
+        },
+        {
+          "condition": "anti-reflective-film",
+          "label": "带抗反膜",
+          "display": "main",
+          "state": "anti-reflective-film",
+          "stateBasis": "source",
+          "unit": null,
+          "date": "2026-03-01",
+          "measuredAt": "2026-03-01 14:07:04Z",
+          "rawSampleId": "280",
+          "sourceName": "三星 S25 Ultra 带抗反膜"
+        }
+      ]
+    },
+    {
+      "id": "xiaomi-15-ultra",
+      "name": {
+        "zh": "小米 15 Ultra",
+        "en": "Xiaomi 15 Ultra"
+      },
+      "brand": "xiaomi",
+      "aliases": [],
+      "displays": [
+        "main"
+      ],
+      "units": [],
+      "availability": {
+        "svm": {
+          "status": "not-measured"
+        },
+        "angle": {
+          "status": "not-measured"
+        },
+        "uniformity": {
+          "status": "not-measured"
+        },
+        "reflectance": {
+          "status": "complete"
+        }
+      },
+      "svm": [],
+      "angle": [],
+      "uniformity": [],
+      "reflectance": [
+        {
+          "condition": "as-measured",
+          "label": "原始样品 · 状态未注明",
+          "display": "main",
+          "state": "unspecified",
+          "stateBasis": "source",
+          "unit": null,
+          "date": "2025-06-26",
+          "measuredAt": "2025-06-26 17:00:10Z",
+          "rawSampleId": "115",
+          "sourceName": "小米 15 Ultra"
+        }
+      ]
+    },
+    {
+      "id": "iphone-15-pro-max",
+      "name": {
+        "zh": "iPhone 15 Pro Max",
+        "en": "iPhone 15 Pro Max"
+      },
+      "brand": "apple",
+      "aliases": [],
+      "displays": [
+        "main"
+      ],
+      "units": [],
+      "availability": {
+        "svm": {
+          "status": "not-measured"
+        },
+        "angle": {
+          "status": "not-measured"
+        },
+        "uniformity": {
+          "status": "not-measured"
+        },
+        "reflectance": {
+          "status": "complete"
+        }
+      },
+      "svm": [],
+      "angle": [],
+      "uniformity": [],
+      "reflectance": [
+        {
+          "condition": "as-measured",
+          "label": "原始样品 · 状态未注明",
+          "display": "main",
+          "state": "unspecified",
+          "stateBasis": "source",
+          "unit": null,
+          "date": "2024-08-25",
+          "measuredAt": "2024-08-25 06:56:50Z",
+          "rawSampleId": "3",
+          "sourceName": "iPhone 15 Pro Max"
+        }
+      ]
+    },
+    {
+      "id": "xiaomi-15",
+      "name": {
+        "zh": "小米 15",
+        "en": "Xiaomi 15"
+      },
+      "brand": "xiaomi",
+      "aliases": [],
+      "displays": [
+        "main"
+      ],
+      "units": [],
+      "availability": {
+        "svm": {
+          "status": "not-measured"
+        },
+        "angle": {
+          "status": "not-measured"
+        },
+        "uniformity": {
+          "status": "not-measured"
+        },
+        "reflectance": {
+          "status": "complete"
+        }
+      },
+      "svm": [],
+      "angle": [],
+      "uniformity": [],
+      "reflectance": [
+        {
+          "condition": "as-measured",
+          "label": "原始样品 · 状态未注明",
+          "display": "main",
+          "state": "unspecified",
+          "stateBasis": "source",
+          "unit": null,
+          "date": "2024-11-15",
+          "measuredAt": "2024-11-15 07:41:00Z",
+          "rawSampleId": "19",
+          "sourceName": "小米 15"
+        }
+      ]
+    },
+    {
+      "id": "honor-magic7",
+      "name": {
+        "zh": "荣耀 Magic7",
+        "en": "Honor Magic7"
+      },
+      "brand": "honor",
+      "aliases": [],
+      "displays": [
+        "main"
+      ],
+      "units": [],
+      "availability": {
+        "svm": {
+          "status": "not-measured"
+        },
+        "angle": {
+          "status": "not-measured"
+        },
+        "uniformity": {
+          "status": "not-measured"
+        },
+        "reflectance": {
+          "status": "complete"
+        }
+      },
+      "svm": [],
+      "angle": [],
+      "uniformity": [],
+      "reflectance": [
+        {
+          "condition": "as-measured",
+          "label": "原始样品 · 状态未注明",
+          "display": "main",
+          "state": "unspecified",
+          "stateBasis": "source",
+          "unit": null,
+          "date": "2024-11-15",
+          "measuredAt": "2024-11-15 07:42:01Z",
+          "rawSampleId": "20",
+          "sourceName": "荣耀 Magic7"
+        }
+      ]
+    },
+    {
+      "id": "oneplus-13-pro",
+      "name": {
+        "zh": "一加 13 Pro",
+        "en": "OnePlus 13 Pro"
+      },
+      "brand": "oneplus",
+      "aliases": [],
+      "displays": [
+        "main"
+      ],
+      "units": [],
+      "availability": {
+        "svm": {
+          "status": "not-measured"
+        },
+        "angle": {
+          "status": "not-measured"
+        },
+        "uniformity": {
+          "status": "not-measured"
+        },
+        "reflectance": {
+          "status": "complete"
+        }
+      },
+      "svm": [],
+      "angle": [],
+      "uniformity": [],
+      "reflectance": [
+        {
+          "condition": "as-measured",
+          "label": "原始样品 · 状态未注明",
+          "display": "main",
+          "state": "unspecified",
+          "stateBasis": "source",
+          "unit": null,
+          "date": "2024-11-15",
+          "measuredAt": "2024-11-15 07:43:08Z",
+          "rawSampleId": "21",
+          "sourceName": "一加 13 Pro"
+        }
+      ]
+    },
+    {
+      "id": "huawei-pura70",
+      "name": {
+        "zh": "华为 Pura70",
+        "en": "Huawei Pura 70"
+      },
+      "brand": "huawei",
+      "aliases": [],
+      "displays": [
+        "main"
+      ],
+      "units": [],
+      "availability": {
+        "svm": {
+          "status": "not-measured"
+        },
+        "angle": {
+          "status": "not-measured"
+        },
+        "uniformity": {
+          "status": "not-measured"
+        },
+        "reflectance": {
+          "status": "complete"
+        }
+      },
+      "svm": [],
+      "angle": [],
+      "uniformity": [],
+      "reflectance": [
+        {
+          "condition": "as-measured",
+          "label": "原始样品 · 状态未注明",
+          "display": "main",
+          "state": "unspecified",
+          "stateBasis": "source",
+          "unit": null,
+          "date": "2024-11-15",
+          "measuredAt": "2024-11-15 07:45:51Z",
+          "rawSampleId": "22",
+          "sourceName": "华为 Pura70"
+        }
+      ]
+    },
+    {
+      "id": "iqoo-13",
+      "name": {
+        "zh": "iQOO 13",
+        "en": "iQOO 13"
+      },
+      "brand": "iqoo",
+      "aliases": [],
+      "displays": [
+        "main"
+      ],
+      "units": [],
+      "availability": {
+        "svm": {
+          "status": "not-measured"
+        },
+        "angle": {
+          "status": "not-measured"
+        },
+        "uniformity": {
+          "status": "not-measured"
+        },
+        "reflectance": {
+          "status": "complete"
+        }
+      },
+      "svm": [],
+      "angle": [],
+      "uniformity": [],
+      "reflectance": [
+        {
+          "condition": "as-measured",
+          "label": "原始样品 · 状态未注明",
+          "display": "main",
+          "state": "unspecified",
+          "stateBasis": "source",
+          "unit": null,
+          "date": "2024-11-15",
+          "measuredAt": "2024-11-15 07:47:04Z",
+          "rawSampleId": "23",
+          "sourceName": "iQOO 13"
+        }
+      ]
+    },
+    {
+      "id": "xiaomi-max3",
+      "name": {
+        "zh": "小米 MAX3",
+        "en": "Xiaomi Mi Max 3"
+      },
+      "brand": "xiaomi",
+      "aliases": [],
+      "displays": [
+        "main"
+      ],
+      "units": [],
+      "availability": {
+        "svm": {
+          "status": "not-measured"
+        },
+        "angle": {
+          "status": "not-measured"
+        },
+        "uniformity": {
+          "status": "not-measured"
+        },
+        "reflectance": {
+          "status": "complete"
+        }
+      },
+      "svm": [],
+      "angle": [],
+      "uniformity": [],
+      "reflectance": [
+        {
+          "condition": "as-measured",
+          "label": "原始样品 · 状态未注明",
+          "display": "main",
+          "state": "unspecified",
+          "stateBasis": "source",
+          "unit": null,
+          "date": "2025-06-09",
+          "measuredAt": "2025-06-09 15:08:20Z",
+          "rawSampleId": "101",
+          "sourceName": "小米 MAX3"
+        }
+      ]
+    },
+    {
+      "id": "iphone-air",
+      "name": {
+        "zh": "iPhone Air",
+        "en": "iPhone Air"
+      },
+      "brand": "apple",
+      "aliases": [],
+      "displays": [
+        "main"
+      ],
+      "units": [],
+      "availability": {
+        "svm": {
+          "status": "not-measured"
+        },
+        "angle": {
+          "status": "not-measured"
+        },
+        "uniformity": {
+          "status": "not-measured"
+        },
+        "reflectance": {
+          "status": "complete"
+        }
+      },
+      "svm": [],
+      "angle": [],
+      "uniformity": [],
+      "reflectance": [
+        {
+          "condition": "anti-reflective-film",
+          "label": "菲林 AR 膜",
+          "display": "main",
+          "state": "anti-reflective-film",
+          "stateBasis": "source",
+          "unit": null,
+          "date": "2026-02-24",
+          "measuredAt": "2026-02-24 12:51:06Z",
+          "rawSampleId": "265",
+          "sourceName": "iPhone Air 菲林AR膜"
+        }
+      ]
+    }
+  ]
+}
