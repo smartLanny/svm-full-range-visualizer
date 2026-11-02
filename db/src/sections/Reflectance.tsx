@@ -1,4 +1,5 @@
 import React, { useMemo, useRef, useState } from 'react';
+import { useWidth } from '../lib/useWidth';
 import type { Device } from '../../catalog/types';
 import { loadReflectance, useAsync } from '../lib/data';
 import { fmtFixed, isoDate } from '../lib/format';
@@ -29,8 +30,10 @@ function Chart({
   onHover: (nm: number | null) => void;
   label: string;
 }) {
-  const W = 640;
-  const H = 300;
+  // Drawn at the container's own width so axis text stays 11 px on phones and desktops alike.
+  const [wrapRef, measured] = useWidth<HTMLDivElement>();
+  const W = measured || 640;
+  const H = Math.round(Math.min(320, Math.max(220, W * 0.46)));
   const m = { l: 40, r: 14, t: 14, b: 30 };
   const iw = W - m.l - m.r;
   const ih = H - m.t - m.b;
@@ -42,7 +45,7 @@ function Chart({
   const nms = sci.map(([nm]) => nm);
   const step = yMax > 6 ? 2 : 1;
   const yTicks = Array.from({ length: Math.floor(yMax / step) + 1 }, (_, i) => i * step);
-  const xTicks = [400, 450, 500, 550, 600, 650, 700];
+  const xTicks = W < 420 ? [400, 500, 600, 700] : [400, 450, 500, 550, 600, 650, 700];
   const svgRef = useRef<SVGSVGElement>(null);
 
   const move = (e: React.PointerEvent<SVGSVGElement>) => {
@@ -57,7 +60,7 @@ function Chart({
   const tipLeft = hoverNm !== null ? x(hoverNm) / W : 0;
 
   return (
-    <div className="relative">
+    <div className="relative" ref={wrapRef}>
       <svg
         ref={svgRef}
         viewBox={`0 0 ${W} ${H}`}
@@ -189,18 +192,33 @@ function DevicePanel({
     <div className="min-w-0">
       {header}
       {views.length > 1 ? (
-        <Pills className="mb-5" size="sm" label="样品状态" value={String(i)} onChange={(x) => setSel(Number(x))} options={views.map((w, k) => ({ value: String(k), label: w.entry.label }))} />
+        <Pills
+          className="mb-5"
+          size="sm"
+          label="样品状态"
+          value={String(i)}
+          onChange={(x) => setSel(Number(x))}
+          options={views.map((w, k) => ({ value: String(k), label: w.entry.label }))}
+        />
       ) : (
         <div className="mb-5 text-[13px] text-ink-2">{v.entry.label}</div>
       )}
       <div className={cn('grid gap-6', slot === null && 'lg:grid-cols-[minmax(0,1fr)_260px] lg:gap-10')}>
         <div className="min-w-0">
-          <Chart view={v} ghosts={ghosts} yMax={yMax} color={color} hoverNm={hoverNm} onHover={onHover} label={`${device.name.zh} ${v.entry.label} 反射率光谱`} />
+          <Chart
+            view={v}
+            ghosts={ghosts}
+            yMax={yMax}
+            color={color}
+            hoverNm={hoverNm}
+            onHover={onHover}
+            label={`${device.name.zh} ${v.entry.label} 反射率光谱`}
+          />
           <div className="mt-3">
             <Legend color={color} ghosts={ghosts.length > 0} />
           </div>
         </div>
-        <div className={cn('min-w-0', slot !== null && 'grid grid-cols-2 gap-4')}>
+        <div className={cn('grid min-w-0 grid-cols-2 gap-4', slot === null && 'lg:block')}>
           <div>
             <div className="text-[13px] text-ink-2">SCI 平均</div>
             <div className="mt-1.5 text-[44px] font-semibold leading-none tracking-tight text-ink-1">
@@ -209,14 +227,14 @@ function DevicePanel({
             </div>
             <div className="mt-1.5 text-[11px] text-ink-4">400–700 nm 31 个测点的平均</div>
           </div>
-          <div className={cn(slot === null && 'mt-6')}>
+          <div className={cn(slot === null && 'lg:mt-6')}>
             <div className="text-[13px] text-ink-2">SCE 平均</div>
             <div className="mt-1.5 text-[28px] font-semibold leading-none tracking-tight text-ink-1">
               {sceMean === null ? '—' : fmtFixed(sceMean, 2)}
               <span className="ml-1 text-base font-medium text-ink-3">%</span>
             </div>
           </div>
-          <div className={cn('text-[11px] leading-5 text-ink-4', slot === null ? 'mt-6' : 'col-span-2')}>
+          <div className={cn('col-span-2 text-[11px] leading-5 text-ink-4', slot === null && 'lg:mt-6')}>
             测量日期 {isoDate(v.entry.measuredAt) ?? '—'}
             {inst?.Instrument ? ` · ${inst.Instrument}` : ''}
             {inst?.OpticalStruct ? ` · ${inst.OpticalStruct}` : ''}

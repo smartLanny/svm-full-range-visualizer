@@ -4,7 +4,7 @@ import type { Catalog, DataType, Device } from '../../catalog/types';
 import { compareHref, type Section } from '../lib/route';
 import { findDevice } from '../lib/data';
 import { Overview } from '../components/Overview';
-import { hasStatusData, Missing, STATUS_TEXT, TYPE_META, TYPE_ORDER } from '../components/ui';
+import { Glow, hasStatusData, Missing, STATUS_TEXT, TYPE_META, TYPE_ORDER } from '../components/ui';
 import { UniformitySection } from '../sections/Uniformity';
 import { FlickerSection } from '../sections/Flicker';
 import { ReflectanceSection } from '../sections/Reflectance';
@@ -80,7 +80,18 @@ export function DevicePage({ catalog, id, section }: { catalog: Catalog; id: str
     };
   }, [section]);
 
-  if (!device) return <Missing className="mt-24" text="目录里没有这台机型" detail={<a className="text-accent-hover hover:underline" href="#/">回到全部机型</a>} />;
+  if (!device)
+    return (
+      <Missing
+        className="mt-24"
+        text="目录里没有这台机型"
+        detail={
+          <a className="text-accent-hover hover:underline" href="#/">
+            回到全部机型
+          </a>
+        }
+      />
+    );
 
   const brand = catalog.brands[device.brand];
   const panels = device.units.filter((u) => u.panel);
@@ -89,7 +100,8 @@ export function DevicePage({ catalog, id, section }: { catalog: Catalog; id: str
 
   return (
     <div>
-      <section className="db-glow relative -mx-4 px-4 pb-8 pt-6 sm:-mx-6 sm:px-6 sm:pb-10 sm:pt-8 lg:-mx-8 lg:px-8">
+      <section className="relative pb-8 pt-6 sm:pb-10 sm:pt-8">
+        <Glow />
         <a href="#/" className="inline-flex items-center gap-1.5 text-[13px] text-ink-3 transition-colors hover:text-ink-1">
           <ArrowLeft size={14} aria-hidden />
           全部机型
@@ -104,16 +116,20 @@ export function DevicePage({ catalog, id, section }: { catalog: Catalog; id: str
             {device.name.en !== device.name.zh && <div className="mt-2 text-[15px] text-ink-3">{device.name.en}</div>}
             <div className="mt-4 flex flex-wrap items-center gap-2">
               {panels.map((u) => (
-                <span key={u.id} className="rounded-full bg-surface-3 px-3 py-1 text-xs font-medium text-ink-1 ring-1 ring-inset ring-line-strong" title={u.note}>
+                <span
+                  key={u.id}
+                  className="rounded-full bg-surface-3 px-3 py-1 text-xs font-medium text-ink-1 ring-1 ring-inset ring-line-strong"
+                  title={u.note}
+                >
                   面板 {u.panel}
                 </span>
               ))}
               {device.displays.length > 1 && (
-                <span className="rounded-full px-3 py-1 text-xs text-ink-2 ring-1 ring-inset ring-line">{device.displays.map((d) => catalog.vocabulary.displays[d]?.zh ?? d).join(' + ')}</span>
+                <span className="rounded-full px-3 py-1 text-xs text-ink-2 ring-1 ring-inset ring-line">
+                  {device.displays.map((d) => catalog.vocabulary.displays[d]?.zh ?? d).join(' + ')}
+                </span>
               )}
-              <span className="text-xs text-ink-4">
-                {present.length} / 4 类数据已收录
-              </span>
+              <span className="text-xs text-ink-4">{present.length} / 4 类数据已收录</span>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -136,9 +152,7 @@ export function DevicePage({ catalog, id, section }: { catalog: Catalog; id: str
         </div>
       </section>
 
-      <div className="mt-2 flex flex-col gap-6 sm:gap-8">
-        {present.map((t) => renderSection(t, [device], catalog, sectionId(t)))}
-      </div>
+      <div className="mt-2 flex flex-col gap-6 sm:gap-8">{present.map((t) => renderSection(t, [device], catalog, sectionId(t)))}</div>
 
       {absent.length > 0 && (
         <div className="mt-8 rounded-[22px] px-5 py-4 ring-1 ring-inset ring-line/80">
@@ -147,7 +161,11 @@ export function DevicePage({ catalog, id, section }: { catalog: Catalog; id: str
             {absent.map((t) => (
               <li key={t} id={sectionId(t)} className="scroll-mt-20">
                 <span className="text-ink-2">{TYPE_META[t].label}</span> · {STATUS_TEXT[device.availability[t].status]}
-                {device.availability[t].note ? `：${device.availability[t].note}` : device.availability[t].status === 'pending-import' ? '：源数据已测量，数值还没导入本库。' : ''}
+                {device.availability[t].note
+                  ? `：${device.availability[t].note}`
+                  : device.availability[t].status === 'pending-import'
+                    ? '：源数据已测量，数值还没导入本库。'
+                    : ''}
               </li>
             ))}
           </ul>

@@ -17,6 +17,7 @@ import {
 } from '../lib/uniformity';
 import { KV, Loading, Missing, More, SectionCard, SlotKey, STATUS_TEXT, Toggle, Pills } from '../components/ui';
 import { cn } from '../../../src/ui/cn';
+import { useMedia } from '../lib/useWidth';
 
 type MapKind = 'luminance' | 'colorTemperature';
 type CondId = (typeof CONDITION_ORDER)[number];
@@ -63,7 +64,7 @@ function ColorBar({
     lum ? (
       <>
         <span className="text-ink-2">{fmtFixed(v, 0)} %</span>
-        <span className="block text-ink-4">{fmtSig((typical * v) / 100, 3)}</span>
+        <span className="block text-ink-4">{fmtSig((typical * v) / 100, 3)} nits</span>
       </>
     ) : (
       <>
@@ -122,7 +123,7 @@ function Heatmap({
   const cct = cond.metrics.colorTemperature;
   const readout = gammaReadout(cond, lum.typical);
   const [w, h] = map.displayResolution ?? [670, 1440];
-  const typicalForBar = shownKind === 'luminance' ? lum.typical : cct?.typical ?? 0;
+  const typicalForBar = shownKind === 'luminance' ? lum.typical : (cct?.typical ?? 0);
   const g20 = cond.pattern === 'G20';
 
   return (
@@ -137,7 +138,7 @@ function Heatmap({
         />
         {/* Typical luminance on the visual itself: the colours only show the shape relative to it. */}
         <div
-          className="absolute inset-x-[7%] bottom-[7%] rounded-2xl bg-black/55 px-2.5 py-2.5 text-center ring-1 ring-inset ring-white/15 backdrop-blur-md"
+          className="absolute inset-x-[7%] bottom-[7%] rounded-2xl bg-black/60 px-2.5 py-2.5 text-center ring-1 ring-inset ring-white/15 backdrop-blur-md"
           data-testid="typical-overlay"
         >
           <div className="text-[10px] font-medium tracking-wide text-white/70">典型亮度</div>
@@ -153,7 +154,9 @@ function Heatmap({
               <div className="whitespace-nowrap font-semibold text-white">{liftText(readout.lift)}</div>
             </div>
           ) : !g20 ? (
-            <div className="mt-1 whitespace-nowrap text-[10px] leading-[14px] text-white/75">设定 {cond.referenceNits} nits · 实测 {fmtFixed((lum.typical / cond.referenceNits) * 100, 1)} %</div>
+            <div className="mt-1 whitespace-nowrap text-[10px] leading-[14px] text-white/75">
+              设定 {cond.referenceNits} nits · 实测 {fmtFixed((lum.typical / cond.referenceNits) * 100, 1)} %
+            </div>
           ) : null}
           {shownKind === 'colorTemperature' && cct && (
             <div className="mt-1.5 whitespace-nowrap border-t border-white/15 pt-1.5 text-[10px] leading-[14px] text-white/75">
@@ -177,7 +180,9 @@ function LiftGauge({ readout }: { readout: GammaReadout }) {
   return (
     <div className="mt-4" aria-label={`实测为参考的 ${fmtFixed(pct, 1)} %`}>
       <div className="relative h-2 rounded-full bg-surface-3">
-        {err > 0 && <div className="absolute inset-y-0 rounded-full bg-white/[0.09]" style={{ left: pos(100 - err), right: `calc(100% - ${pos(100 + err)})` }} />}
+        {err > 0 && (
+          <div className="absolute inset-y-0 rounded-full bg-white/[0.09]" style={{ left: pos(100 - err), right: `calc(100% - ${pos(100 + err)})` }} />
+        )}
         <div className="absolute -top-1 h-4 w-px bg-ink-3" style={{ left: pos(100) }} />
         <div
           className="absolute top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-ink-1 ring-[3px] ring-surface-1"
@@ -187,7 +192,7 @@ function LiftGauge({ readout }: { readout: GammaReadout }) {
       </div>
       <div className="relative mt-2 h-3 text-[10px] tabular-nums text-ink-4">
         {[70, 85, 100, 115, 130].map((v) => (
-          <span key={v} className={cn('absolute -translate-x-1/2', v === 100 && 'text-ink-2')} style={{ left: pos(v) }}>
+          <span key={v} className={cn('absolute', v === lo ? '' : '-translate-x-1/2', v === 100 && 'text-ink-2')} style={{ left: pos(v) }}>
             {v === 100 ? '参考' : `${v}%`}
           </span>
         ))}
@@ -207,7 +212,10 @@ function Metrics({ view, views, kind, compact }: { view: UniformityView; views: 
   return (
     <div className="flex min-w-0 flex-col">
       <div className="text-[13px] text-ink-2">面均匀性</div>
-      <div className={cn('font-semibold leading-none tracking-tight text-ink-1', compact ? 'mt-2 text-[52px]' : 'mt-2 text-[64px] sm:text-[76px]')} data-testid="area-uniformity">
+      <div
+        className={cn('font-semibold leading-none tracking-tight text-ink-1', compact ? 'mt-2 text-[52px]' : 'mt-2 text-[64px] sm:text-[76px]')}
+        data-testid="area-uniformity"
+      >
         {fmtFixed(lum.areaUniformityPct, 1)}
         <span className={cn('ml-1 font-medium text-ink-3', compact ? 'text-2xl' : 'text-3xl')}>%</span>
       </div>
@@ -223,7 +231,8 @@ function Metrics({ view, views, kind, compact }: { view: UniformityView; views: 
           </div>
           <div className="mt-1.5 text-xs leading-5 text-ink-3">
             实测典型 <span className="tabular-nums text-ink-2">{fmtSig(lum.typical)} nits</span>，参考{' '}
-            <span className="tabular-nums text-ink-2">{fmtSig(readout.ref)} nits</span> = {fmtSig(readout.white, 3)} nits × (20/255)<sup>2.2</sup>
+            <span className="tabular-nums text-ink-2">{fmtSig(readout.ref)} nits</span> = {readout.basis === 'nominal' ? readout.white : fmtSig(readout.white)}{' '}
+            nits × (20/255)<sup>2.2</sup>
           </div>
           <LiftGauge readout={readout} />
           {readout.flag ? (
@@ -273,11 +282,56 @@ function Metrics({ view, views, kind, compact }: { view: UniformityView; views: 
             ...(map?.measurementResolution ? ([['测量分辨率', map.measurementResolution.join(' × ')]] as [string, string][]) : []),
           ]}
         />
-        {map?.measurementSource && (
-          <div className="mt-3 break-all text-[11px] leading-4 text-ink-4">源文件：{map.measurementSource}</div>
+        {map?.measurementSource && <div className="mt-3 break-all text-[11px] leading-4 text-ink-4">源文件：{map.measurementSource}</div>}
+        {view.entry.stateBasis === 'convention' && (
+          <div className="mt-2 text-[11px] leading-4 text-ink-4">测量状态：源数据未标注，按常规记为默认（待确认）。</div>
         )}
-        {view.entry.stateBasis === 'convention' && <div className="mt-2 text-[11px] leading-4 text-ink-4">测量状态：源数据未标注，按常规记为默认（待确认）。</div>}
       </More>
+    </div>
+  );
+}
+
+/** All conditions of the device at a glance (desktop): area uniformity, typical, lift. Click = select. */
+function ConditionList({ views, current, onPick }: { views: UniformityView[]; current: CondId; onPick: (c: CondId) => void }) {
+  return (
+    <div className="min-w-0">
+      <div className="text-[13px] text-ink-2">三档面均匀性</div>
+      <div className="mt-3 flex flex-col gap-2">
+        {CONDITION_ORDER.map((c) => {
+          const v = views.find((x) => x.cond.id === c);
+          const lum = v?.cond.metrics.luminance;
+          const r = v && lum ? gammaReadout(v.cond, lum.typical) : null;
+          const on = c === current;
+          return (
+            <button
+              key={c}
+              type="button"
+              disabled={!lum}
+              onClick={() => onPick(c)}
+              className={cn(
+                'rounded-2xl px-4 py-3 text-left ring-1 ring-inset transition-colors',
+                on ? 'bg-surface-3 ring-line-strong' : 'ring-line hover:bg-surface-2',
+                !lum && 'cursor-default opacity-50 hover:bg-transparent',
+              )}
+            >
+              <div className="flex items-baseline justify-between gap-2">
+                <span className={cn('text-xs', on ? 'text-ink-1' : 'text-ink-3')}>{CONDITION_LABEL[c]}</span>
+                <span className="text-[17px] font-semibold tabular-nums text-ink-1">{lum ? `${fmtFixed(lum.areaUniformityPct, 1)} %` : '未测'}</span>
+              </div>
+              {lum && (
+                <div className="mt-1 text-[11px] tabular-nums text-ink-3">
+                  典型 {fmtSig(lum.typical)} nits{r ? ` · 参考 ${fmtSignedPct(r.lift)}` : ''}
+                </div>
+              )}
+              {lum && (
+                <div className="mt-2 h-1 overflow-hidden rounded-full bg-surface-4">
+                  <div className="h-full rounded-full bg-ink-2" style={{ width: `${lum.areaUniformityPct}%` }} />
+                </div>
+              )}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -289,6 +343,7 @@ function DevicePanel({
   kind,
   compact,
   slot,
+  onPick,
 }: {
   device: Device;
   index: UniformityIndex;
@@ -296,7 +351,9 @@ function DevicePanel({
   kind: MapKind;
   compact: boolean;
   slot: 0 | 1 | null;
+  onPick: (c: CondId) => void;
 }) {
+  const wide = useMedia('(min-width: 768px)');
   const views = uniformityViews(device, index);
   const view = views.find((v) => v.cond.id === cond);
   const a = device.availability.uniformity;
@@ -305,7 +362,10 @@ function DevicePanel({
     return (
       <div className="min-w-0">
         {header}
-        <Missing text={`均匀度${STATUS_TEXT[a.status]}`} detail={a.note ?? (a.status === 'pending-import' ? '源数据已测量，数值还没导入本库。' : '本库没有这台机型的均匀度测量。')} />
+        <Missing
+          text={`均匀度${STATUS_TEXT[a.status]}`}
+          detail={a.note ?? (a.status === 'pending-import' ? '源数据已测量，数值还没导入本库。' : '本库没有这台机型的均匀度测量。')}
+        />
       </div>
     );
   if (!view || !view.cond.metrics.luminance)
@@ -315,15 +375,25 @@ function DevicePanel({
         <Missing text={`${CONDITION_LABEL[cond]} 未测`} />
       </div>
     );
-  const height = compact ? 400 : 480;
+  const height = compact ? (wide ? 400 : 380) : wide ? 480 : 420;
   return (
     <div className="min-w-0">
       {header}
-      <div className={cn('grid gap-8', compact ? '2xl:grid-cols-[auto_minmax(0,1fr)]' : 'md:grid-cols-[auto_minmax(0,1fr)] md:gap-10 lg:gap-14')}>
+      <div
+        className={cn(
+          'grid gap-8',
+          compact ? '2xl:grid-cols-[auto_minmax(0,1fr)]' : 'md:grid-cols-[auto_minmax(0,1fr)] md:gap-10 lg:gap-14 xl:grid-cols-[auto_minmax(0,1fr)_236px]',
+        )}
+      >
         <div className="flex justify-center md:justify-start">
           <Heatmap view={view} kind={kind} stops={index.colorStops} height={height} deviceName={device.name.zh} />
         </div>
         <Metrics view={view} views={views} kind={kind} compact={compact} />
+        {!compact && (
+          <div className="hidden xl:block">
+            <ConditionList views={views} current={cond} onPick={onPick} />
+          </div>
+        )}
       </div>
     </div>
   );
@@ -368,7 +438,16 @@ export function UniformitySection({ devices, id }: { devices: Device[]; id?: str
       ) : (
         <div className={cn(compare && 'grid gap-10 lg:grid-cols-2 lg:gap-8')}>
           {devices.map((d, i) => (
-            <DevicePanel key={d.id} device={d} index={index.data} cond={condNow} kind={kindNow} compact={compare} slot={compare ? (i as 0 | 1) : null} />
+            <DevicePanel
+              key={d.id}
+              device={d}
+              index={index.data}
+              cond={condNow}
+              kind={kindNow}
+              compact={compare}
+              slot={compare ? (i as 0 | 1) : null}
+              onPick={setCond}
+            />
           ))}
         </div>
       )}

@@ -47,7 +47,14 @@ export function parseRoute(hash: string): Route {
     return { page: 'device', id: parts[1], section };
   }
   if (parts[0] === 'c' && parts.length === 2) {
-    const ids = [...new Set(parts[1].split(',').map((s) => s.trim()).filter(Boolean))];
+    const ids = [
+      ...new Set(
+        parts[1]
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean),
+      ),
+    ];
     if (ids.length >= 1 && ids.length <= 2 && ids.every((id) => ID.test(id))) return { page: 'compare', ids };
   }
   return { page: 'notFound', path: pathPart };

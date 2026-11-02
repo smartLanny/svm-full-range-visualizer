@@ -54,7 +54,18 @@ export function App() {
   else if (route.page === 'home') body = <Home catalog={catalog.data} q={route.q} has={route.has} />;
   else if (route.page === 'device') body = <DevicePage key={route.id} catalog={catalog.data} id={route.id} section={route.section} />;
   else if (route.page === 'compare') body = <ComparePage catalog={catalog.data} ids={route.ids} />;
-  else body = <Missing className="mt-24" text="没有这个页面" detail={<a className="text-accent-hover hover:underline" href="#/">回到全部机型</a>} />;
+  else
+    body = (
+      <Missing
+        className="mt-24"
+        text="没有这个页面"
+        detail={
+          <a className="text-accent-hover hover:underline" href="#/">
+            回到全部机型
+          </a>
+        }
+      />
+    );
 
   return <Shell route={route}>{body}</Shell>;
 }

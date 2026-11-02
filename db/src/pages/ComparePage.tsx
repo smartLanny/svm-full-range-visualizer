@@ -3,7 +3,7 @@ import { ArrowLeft, ArrowLeftRight } from 'lucide-react';
 import type { Catalog, Device } from '../../catalog/types';
 import { compareHref, deviceHref } from '../lib/route';
 import { findDevice } from '../lib/data';
-import { hasStatusData, Missing, STATUS_TEXT, TYPE_META, TYPE_ORDER, TypeIcon } from '../components/ui';
+import { Glow, hasStatusData, Missing, STATUS_TEXT, TYPE_META, TYPE_ORDER, TypeIcon } from '../components/ui';
 import { DevicePicker, renderSection } from './DevicePage';
 import { cn } from '../../../src/ui/cn';
 
@@ -13,17 +13,19 @@ function SlotHeader({ catalog, device, other, slot }: { catalog: Catalog; device
     window.location.hash = compareHref(ids.filter((x): x is string => !!x));
   };
   return (
-    <div className={cn('min-w-0 rounded-[22px] bg-surface-1 p-4 ring-1 ring-inset ring-line sm:p-5', 'relative overflow-hidden')}>
+    <div className="relative min-w-0 overflow-hidden rounded-[22px] bg-surface-1 p-3.5 ring-1 ring-inset ring-line sm:p-5">
       <div className={cn('absolute inset-x-0 top-0 h-1', slot === 0 ? 'bg-slot-a' : 'bg-slot-b')} aria-hidden />
       <div className="flex items-center justify-between gap-3">
         <span className="text-xs font-medium text-ink-3">{slot === 0 ? '机型 A' : '机型 B'}</span>
         {device && (
-          <a href={deviceHref(device.id)} className="text-xs text-ink-3 hover:text-ink-1">
+          <a href={deviceHref(device.id)} className="hidden text-xs text-ink-3 hover:text-ink-1 sm:inline">
             机型页 →
           </a>
         )}
       </div>
-      <div className="mt-2 truncate text-[24px] font-semibold tracking-tight text-ink-1 sm:text-[28px]">{device ? device.name.zh : '选择机型'}</div>
+      <div className="mt-1.5 line-clamp-2 min-h-[44px] text-[17px] font-semibold leading-[22px] tracking-tight text-ink-1 sm:mt-2 sm:min-h-0 sm:truncate sm:text-[28px] sm:leading-9">
+        {device ? device.name.zh : '选择机型'}
+      </div>
       <DevicePicker
         catalog={catalog}
         exclude={[device?.id ?? '', other ?? ''].filter(Boolean)}
@@ -34,13 +36,16 @@ function SlotHeader({ catalog, device, other, slot }: { catalog: Catalog; device
         className="mt-3 w-full max-w-[260px]"
       />
       {device && (
-        <div className="mt-4 flex flex-wrap gap-1.5">
+        <div className="mt-4 hidden flex-wrap gap-1.5 sm:flex">
           {TYPE_ORDER.map((t) => {
             const on = hasStatusData(device.availability[t].status);
             return (
               <span
                 key={t}
-                className={cn('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px]', on ? 'bg-surface-3 text-ink-1' : 'text-ink-4 ring-1 ring-inset ring-line')}
+                className={cn(
+                  'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px]',
+                  on ? 'bg-surface-3 text-ink-1' : 'text-ink-4 ring-1 ring-inset ring-line',
+                )}
               >
                 <TypeIcon type={t} size={12} className={on ? 'text-accent-hover' : ''} />
                 {TYPE_META[t].label}
@@ -64,7 +69,8 @@ export function ComparePage({ catalog, ids }: { catalog: Catalog; ids: string[] 
 
   return (
     <div>
-      <section className="db-glow relative -mx-4 px-4 pb-8 pt-6 sm:-mx-6 sm:px-6 sm:pb-10 sm:pt-8 lg:-mx-8 lg:px-8">
+      <section className="relative pb-8 pt-6 sm:pb-10 sm:pt-8">
+        <Glow />
         <a href={a ? deviceHref(a.id) : '#/'} className="inline-flex items-center gap-1.5 text-[13px] text-ink-3 transition-colors hover:text-ink-1">
           <ArrowLeft size={14} aria-hidden />
           {a ? a.name.zh : '全部机型'}
@@ -83,7 +89,7 @@ export function ComparePage({ catalog, ids }: { catalog: Catalog; ids: string[] 
         </div>
         <p className="mt-2 text-[13px] text-ink-3">同一套指标左右并排；测试条件与状态两边共用。窄屏上下排列。</p>
         {unknown.length > 0 && <div className="mt-3 text-xs text-amber-300">目录里没有：{unknown.join('、')}</div>}
-        <div className="mt-6 grid gap-3 sm:grid-cols-2 sm:gap-4">
+        <div className="mt-6 grid grid-cols-2 gap-3 sm:gap-4">
           <SlotHeader catalog={catalog} device={a} other={b?.id} slot={0} />
           <SlotHeader catalog={catalog} device={b} other={a?.id} slot={1} />
         </div>

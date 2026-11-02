@@ -5,7 +5,11 @@
  */
 import type { Catalog, DataType, Device } from '../../catalog/types';
 
-export const norm = (s: string) => s.toLowerCase().normalize('NFKC').replace(/[\s·._\-–—()（）/]+/g, '');
+export const norm = (s: string) =>
+  s
+    .toLowerCase()
+    .normalize('NFKC')
+    .replace(/[\s·._\-–—()（）/]+/g, '');
 
 export function searchKeys(d: Device, brands: Catalog['brands']): string[] {
   const b = brands[d.brand];
@@ -35,7 +39,8 @@ export function matches(d: Device, brands: Catalog['brands'], q: string): boolea
   return words.every((w) => joined.includes(w));
 }
 
-export const hasData = (d: Device, t: DataType) => d.availability[t].status === 'complete' || d.availability[t].status === 'partial' || d.availability[t].status === 'metrics-only';
+export const hasData = (d: Device, t: DataType) =>
+  d.availability[t].status === 'complete' || d.availability[t].status === 'partial' || d.availability[t].status === 'metrics-only';
 
 export function filterDevices(c: Catalog, q: string, has: DataType | null): Device[] {
   return c.devices.filter((d) => matches(d, c.brands, q) && (!has || hasData(d, has)));

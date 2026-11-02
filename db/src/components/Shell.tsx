@@ -66,14 +66,15 @@ export function Shell({ route, children }: { route: Route; children: React.React
             </span>
           </a>
           {route.page !== 'home' && (
-            <a href="#/" className="ml-2 hidden h-8 items-center rounded-full px-3 text-[13px] text-ink-2 transition-colors hover:bg-surface-3 hover:text-ink-1 sm:inline-flex">
+            <a
+              href="#/"
+              className="ml-2 hidden h-8 items-center rounded-full px-3 text-[13px] text-ink-2 transition-colors hover:bg-surface-3 hover:text-ink-1 sm:inline-flex"
+            >
               全部机型
             </a>
           )}
           <nav className="ml-auto flex items-center gap-0.5" aria-label="相关工具">
-            <ToolLink href={SVM_TOOL_URL}>
-              频闪工具
-            </ToolLink>
+            <ToolLink href={SVM_TOOL_URL}>频闪工具</ToolLink>
             <span className="hidden sm:inline">
               <ToolLink href={VIEW_ANGLE_SIM_URL}>可视角仿真</ToolLink>
             </span>

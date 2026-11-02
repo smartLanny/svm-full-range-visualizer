@@ -38,11 +38,13 @@ const records = new Map<string, Promise<SvmRecord>>();
 export function loadSvmRecord(file: string): Promise<SvmRecord> {
   let p = records.get(file);
   if (!p) {
-    p = Promise.all([fetchJson<ManifestEntry[]>('./datasets/manifest.json'), fetchJson<unknown>(`./datasets/${encodeURIComponent(file)}`)]).then(([manifest, json]) => {
-      const entry = manifest.find((m) => m.file === file);
-      if (!entry) throw new Error(`${file}: not in manifest.json`);
-      return recordFromJson(entry, json);
-    });
+    p = Promise.all([fetchJson<ManifestEntry[]>('./datasets/manifest.json'), fetchJson<unknown>(`./datasets/${encodeURIComponent(file)}`)]).then(
+      ([manifest, json]) => {
+        const entry = manifest.find((m) => m.file === file);
+        if (!entry) throw new Error(`${file}: not in manifest.json`);
+        return recordFromJson(entry, json);
+      },
+    );
     p.catch(() => records.delete(file));
     records.set(file, p);
   }
@@ -69,6 +71,6 @@ export function useAsync<T>(load: () => Promise<T>, key: string): Async<T> {
   return state;
 }
 
-export const readyOr = <T,>(a: Async<T>, fallback: T): T => (a.status === 'ready' ? a.data : fallback);
+export const readyOr = <T>(a: Async<T>, fallback: T): T => (a.status === 'ready' ? a.data : fallback);
 
 export const findDevice = (c: Catalog, id: string): Device | undefined => c.devices.find((d) => d.id === id);

@@ -4,7 +4,7 @@ import type { Catalog, DataType, Device } from '../../catalog/types';
 import { deviceHref, formatRoute } from '../lib/route';
 import { filterDevices, matchReason } from '../lib/search';
 import { DataVersion } from '../components/Shell';
-import { hasStatusData, Missing, Pills, STATUS_SHORT, STATUS_TEXT, TYPE_META, TYPE_ORDER, TypeIcon } from '../components/ui';
+import { Glow, hasStatusData, Missing, Pills, STATUS_SHORT, STATUS_TEXT, TYPE_META, TYPE_ORDER, TypeIcon } from '../components/ui';
 import { cn } from '../../../src/ui/cn';
 
 function Stat({ value, label }: { value: number; label: string }) {
@@ -22,7 +22,10 @@ function StatusTile({ device, type }: { device: Device; type: DataType }) {
   const short = STATUS_SHORT[a.status];
   return (
     <div
-      className={cn('flex min-w-0 flex-col items-center gap-1 rounded-xl px-1 py-2 text-center', on ? 'bg-surface-3/70' : 'bg-transparent ring-1 ring-inset ring-line/80')}
+      className={cn(
+        'flex min-w-0 flex-col items-center gap-1 rounded-xl px-1 py-2 text-center',
+        on ? 'bg-surface-3/70' : 'bg-transparent ring-1 ring-inset ring-line/80',
+      )}
       title={`${TYPE_META[type].label}：${STATUS_TEXT[a.status]}${a.note ? `\n${a.note}` : ''}`}
     >
       <TypeIcon type={type} size={15} className={on ? 'text-accent-hover' : 'text-ink-4'} />
@@ -50,16 +53,18 @@ function DeviceCard({ device, brand, q }: { device: Device; brand: string; q: st
         </span>
       </div>
       <div className="mt-1.5 line-clamp-2 text-[17px] font-semibold leading-6 tracking-tight text-ink-1">{device.name.zh}</div>
-      <div className="mt-1.5 flex min-h-[20px] flex-wrap items-center gap-1.5">
-        {panels.map((p) => (
-          <span key={p} className="rounded-md bg-surface-3 px-1.5 py-0.5 text-[11px] font-medium leading-4 text-ink-2 ring-1 ring-inset ring-line-strong">
-            面板 {p}
-          </span>
-        ))}
-        {foldable && <span className="rounded-md px-1.5 py-0.5 text-[11px] leading-4 text-ink-3 ring-1 ring-inset ring-line">内屏 + 外屏</span>}
-        {reason && !panels.some((p) => reason.endsWith(p)) && <span className="text-[11px] text-ink-3">匹配：{reason}</span>}
-      </div>
-      <div className="mt-4 grid grid-cols-4 gap-1.5">
+      {(panels.length > 0 || foldable || reason) && (
+        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+          {panels.map((p) => (
+            <span key={p} className="rounded-md bg-surface-3 px-1.5 py-0.5 text-[11px] font-medium leading-4 text-ink-2 ring-1 ring-inset ring-line-strong">
+              面板 {p}
+            </span>
+          ))}
+          {foldable && <span className="rounded-md px-1.5 py-0.5 text-[11px] leading-4 text-ink-3 ring-1 ring-inset ring-line">内屏 + 外屏</span>}
+          {reason && !panels.some((p) => reason.endsWith(p)) && <span className="text-[11px] text-ink-3">匹配：{reason}</span>}
+        </div>
+      )}
+      <div className="mt-auto grid grid-cols-4 gap-1.5 pt-4">
         {TYPE_ORDER.map((t) => (
           <StatusTile key={t} device={device} type={t} />
         ))}
@@ -83,7 +88,8 @@ export function Home({ catalog, q: q0, has: has0 }: { catalog: Catalog; q: strin
 
   return (
     <div>
-      <section className="db-glow relative -mx-4 overflow-hidden px-4 pb-10 pt-12 sm:-mx-6 sm:px-6 sm:pb-14 sm:pt-20 lg:-mx-8 lg:px-8">
+      <section className="relative pb-10 pt-12 sm:pb-14 sm:pt-20">
+        <Glow />
         <div className="text-[13px] font-medium tracking-wide text-accent-hover">野生的装机宅 · 手机屏幕实测</div>
         <h1 className="db-title-gradient mt-3 text-[44px] font-semibold leading-[1.05] tracking-tight sm:text-[68px] lg:text-[80px]">屏幕数据库</h1>
         <p className="mt-4 max-w-2xl text-[15px] leading-7 text-ink-2 sm:text-[17px] sm:leading-8">
@@ -99,7 +105,8 @@ export function Home({ catalog, q: q0, has: has0 }: { catalog: Catalog; q: strin
         <DataVersion className="mt-6 inline-block text-xs text-ink-3" />
       </section>
 
-      <div className="sticky top-14 z-30 -mx-4 border-b border-line/50 bg-canvas/80 px-4 py-3 backdrop-blur-xl sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
+      <div className="sticky top-14 z-30 py-3">
+        <div className="absolute inset-y-0 left-1/2 -z-10 w-screen -translate-x-1/2 border-b border-line/50 bg-canvas/80 backdrop-blur-xl" aria-hidden />
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
           <label className="relative block w-full lg:max-w-sm">
             <Search size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-3" aria-hidden />
@@ -112,7 +119,12 @@ export function Home({ catalog, q: q0, has: has0 }: { catalog: Catalog; q: strin
               className="h-10 w-full rounded-full bg-surface-2 pl-10 pr-10 text-[14px] text-ink-1 ring-1 ring-inset ring-line placeholder:text-ink-4 focus:outline-none focus:ring-2 focus:ring-accent-ring [&::-webkit-search-cancel-button]:hidden"
             />
             {q && (
-              <button type="button" onClick={() => update('', has)} className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-1.5 text-ink-3 hover:bg-surface-4 hover:text-ink-1" aria-label="清除搜索">
+              <button
+                type="button"
+                onClick={() => update('', has)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-1.5 text-ink-3 hover:bg-surface-4 hover:text-ink-1"
+                aria-label="清除搜索"
+              >
                 <X size={14} />
               </button>
             )}

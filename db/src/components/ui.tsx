@@ -228,7 +228,12 @@ export function KV({ rows }: { rows: [React.ReactNode, React.ReactNode][] }) {
 /** Explicit empty state: the status word, never a blank area. */
 export function Missing({ text, detail, className }: { text: string; detail?: React.ReactNode; className?: string }) {
   return (
-    <div className={cn('flex min-h-[120px] flex-col items-center justify-center rounded-2xl border border-dashed border-line-strong px-4 py-8 text-center', className)}>
+    <div
+      className={cn(
+        'flex min-h-[120px] flex-col items-center justify-center rounded-2xl border border-dashed border-line-strong px-4 py-8 text-center',
+        className,
+      )}
+    >
       <div className="text-[15px] font-medium text-ink-2">{text}</div>
       {detail && <div className="mt-1.5 max-w-md text-xs leading-5 text-ink-3">{detail}</div>}
     </div>
@@ -252,3 +257,8 @@ export function SlotKey({ slot, name, className }: { slot: 0 | 1; name: string; 
 }
 
 export const SLOT_COLOR = ['#4c8dff', '#e0703a'] as const;
+
+/** Full-bleed soft glow behind a page hero (the hero itself stays in the content column). */
+export function Glow() {
+  return <div className="db-glow pointer-events-none absolute inset-y-0 left-1/2 -z-10 w-screen -translate-x-1/2" aria-hidden />;
+}

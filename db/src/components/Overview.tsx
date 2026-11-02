@@ -35,7 +35,9 @@ function Tile({ device, type, figure }: { device: Device; type: DataType; figure
       {!on ? (
         <>
           <div className="mt-3 text-[24px] font-semibold leading-none tracking-tight text-ink-4 sm:text-[28px]">{STATUS_TEXT[a.status]}</div>
-          <div className="mt-2 line-clamp-2 text-[11px] leading-4 text-ink-4">{a.status === 'pending-import' ? '源数据已测量，数值还没导入' : '本库暂无这项测量'}</div>
+          <div className="mt-2 line-clamp-2 text-[11px] leading-4 text-ink-4">
+            {a.status === 'pending-import' ? '源数据已测量，数值还没导入' : '本库暂无这项测量'}
+          </div>
         </>
       ) : figure === 'loading' ? (
         <div className="mt-3 h-[52px] animate-pulse rounded-lg bg-surface-2" />
@@ -43,7 +45,9 @@ function Tile({ device, type, figure }: { device: Device; type: DataType; figure
         <div className="mt-3 text-[24px] font-semibold leading-none text-ink-3">—</div>
       ) : (
         <>
-          <div className="mt-3 flex items-baseline gap-1.5 whitespace-nowrap text-[26px] font-semibold leading-none tracking-tight text-ink-1 sm:text-[30px]">{figure.value}</div>
+          <div className="mt-3 flex items-baseline gap-1.5 whitespace-nowrap text-[26px] font-semibold leading-none tracking-tight text-ink-1 sm:text-[30px]">
+            {figure.value}
+          </div>
           <div className="mt-2 line-clamp-2 text-[11px] leading-4 text-ink-3">{figure.caption}</div>
         </>
       )}
@@ -66,7 +70,17 @@ export function Overview({ device }: { device: Device }) {
       const views = uniformityViews(device, uni.data);
       const v = views.find((x) => x.cond.id === '300') ?? views[0];
       const lum = v?.cond.metrics.luminance;
-      return lum ? { value: <>{fmtFixed(lum.areaUniformityPct, 1)}{unit('%')}</>, caption: `面均匀性 · ${v.cond.label}` } : null;
+      return lum
+        ? {
+            value: (
+              <>
+                {fmtFixed(lum.areaUniformityPct, 1)}
+                {unit('%')}
+              </>
+            ),
+            caption: `面均匀性 · ${v.cond.label}`,
+          }
+        : null;
     })(),
     svm: (() => {
       if (svm.status !== 'ready') return svm.status === 'loading' ? 'loading' : null;
@@ -74,7 +88,11 @@ export function Overview({ device }: { device: Device }) {
       if (!v) return null;
       const c = v.stats.scenario.composite;
       const mode = svmChipLabel(v.entry, device.displays.length > 1);
-      if (c === null) return { value: <span className="text-ink-3">—</span>, caption: v.cap.widened ? `${mode} · 超出 ≤500 nits 范围，无场景参考` : `${mode} · 场景参考数据不足` };
+      if (c === null)
+        return {
+          value: <span className="text-ink-3">—</span>,
+          caption: v.cap.widened ? `${mode} · 超出 ≤500 nits 范围，无场景参考` : `${mode} · 场景参考数据不足`,
+        };
       return {
         value: (
           <>
@@ -89,7 +107,17 @@ export function Overview({ device }: { device: Device }) {
       if (refl.status !== 'ready') return 'loading';
       const v = reflectanceViews(device, refl.data)[0];
       const m = meanOf(v?.cond.curves.total?.samples);
-      return m === null ? null : { value: <>{fmtFixed(m, 2)}{unit('%')}</>, caption: `SCI 平均 · ${v.entry.label}` };
+      return m === null
+        ? null
+        : {
+            value: (
+              <>
+                {fmtFixed(m, 2)}
+                {unit('%')}
+              </>
+            ),
+            caption: `SCI 平均 · ${v.entry.label}`,
+          };
     })(),
     angle: (() => {
       if (ang.status !== 'ready') return 'loading';
@@ -99,7 +127,15 @@ export function Overview({ device }: { device: Device }) {
       const r = rangeOver(p, (d) => atTheta(p, d, '45').luminancePct);
       if (!r) return null;
       const txt = Math.round(r[0]) === Math.round(r[1]) ? fmtFixed(r[0], 0) : `${fmtFixed(r[0], 0)}–${fmtFixed(r[1], 0)}`;
-      return { value: <>{txt}{unit('%')}</>, caption: `45° 亮度 · ${v.entry.state === 'default' ? '默认' : v.entry.display === 'inner' ? '内屏' : v.entry.state}` };
+      return {
+        value: (
+          <>
+            {txt}
+            {unit('%')}
+          </>
+        ),
+        caption: `45° 亮度 · ${v.entry.state === 'default' ? '默认' : v.entry.display === 'inner' ? '内屏' : v.entry.state}`,
+      };
     })(),
   };
 

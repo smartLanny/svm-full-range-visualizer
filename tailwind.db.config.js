@@ -10,13 +10,7 @@
 export default {
   content: {
     relative: true,
-    files: [
-      './db/index.html',
-      './db/src/**/*.{ts,tsx}',
-      './src/stats/Thumbnail.tsx',
-      './src/stats/parts.tsx',
-      './src/ui/**/*.{ts,tsx}',
-    ],
+    files: ['./db/index.html', './db/src/**/*.{ts,tsx}', './src/stats/Thumbnail.tsx', './src/stats/parts.tsx', './src/ui/**/*.{ts,tsx}'],
   },
   theme: {
     extend: {
