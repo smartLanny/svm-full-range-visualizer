@@ -1,0 +1,904 @@
+{
+  "schemaVersion": 1,
+  "generatedBy": "pipeline/angle/summarise.mjs",
+  "standalone": {
+    "repository": "https://github.com/smartLanny/phone-view-angle-sim",
+    "commit": "20ef8e680e4eaba6acb20c31dd92463eca169f45",
+    "commitDate": "2026-10-27T10:31:51-05:00",
+    "files": {
+      "web/model.js": "d2bbd4a9b687211b356bbf272fa826577751000212470fe0f1d17bdd83badedf",
+      "web/data.js": "f666b32494aa0c9577c968a2f86cd600f1f8fc46fbeb89f621616d6a261355c2",
+      "web/duo-data.js": "5c2bdf67e073d72c39f12c3425e43278ca4264d1f6627be35686457fc981e52d",
+      "web/devices.js": "f7fa884d6425f107a962e160fb4f67714a6802aa27c46571e20f566508ca5087",
+      "web/app.js": "032695122adfc1e536537b255ee498337dea9b251ef99b57983602416891a3ad"
+    },
+    "modelCall": "AngleModel.createModel({ angles: DATA.angles, sets: byId(id).sets }, { fill: 'vmirror' })",
+    "devicesAtCommit": [
+      "小米 18 Pro Max",
+      "iPhone 18 Pro Max GH3",
+      "华为 Mate 90 Pro Max 典藏版",
+      "iPhone 17 Pro Max GV3",
+      "iPhone Duo"
+    ]
+  },
+  "method": {
+    "thetaDeg": [
+      30,
+      45,
+      60
+    ],
+    "directions": {
+      "horizontal": {
+        "right": 0,
+        "left": 180
+      },
+      "vertical": {
+        "up": 90,
+        "down": 270
+      }
+    },
+    "convention": "ψ 为屏幕面内方位角（model.js 约定：手机坐标系、从屏幕正面看，0° 右、90° 上、180° 左、270° 下）。水平 = 右 / 左，垂直 = 上 / 下；这四个方向正好是 φ = 0° 与 φ = 90° 两组实测线。",
+    "luminancePct": "model.evalAt(θ, ψ).yRatio × 100：白场亮度相对本 profile 法线方向（0°）的百分比。θ 不在 2° 网格上时（如 45°）由模型自己的单调三次 Hermite 插值得到。",
+    "duv": "model.evalAt(θ, ψ).duv：白场 Δu′v′，相对法线方向参考白点。",
+    "jncd": "model.evalAt(θ, ψ).jncd = Δu′v′ / 0.004（model.js 的 JNCD 定义）。",
+    "halfLuminanceDeg": "沿该方位从 0° 起，yRatio 首次 ≤ 0.5 的 θ：按 0.1° 扫描 evalAt，再二分到 0.01°。在 θmax 内没有降到一半时为 null，并给出 halfLuminanceBeyondDeg = θmax。",
+    "relativeOnly": "只给相对值：各文件测量时 0° 白场的绝对亮度条件不同，不能直接比较绝对亮度。",
+    "devIndexAtCommit": "独立项目 #dev=<i> 参数在该提交下对应的序号（按 web/devices.js 的机型顺序排列，新增机型会让序号移动），仅作兜底链接用。"
+  },
+  "profiles": [
+    {
+      "id": "p0",
+      "device": "iPhone 18 Pro Max GH3",
+      "devIndexAtCommit": 1,
+      "surface": null,
+      "privacy": false,
+      "privacyKind": null,
+      "measured": true,
+      "sourceFiles": [
+        "iPhone 18 Pro Max GH3/可视角 0°.ang2",
+        "iPhone 18 Pro Max GH3/可视角 30°.ang2",
+        "iPhone 18 Pro Max GH3/可视角 60°.ang2",
+        "iPhone 18 Pro Max GH3/可视角 90°.ang2",
+        "iPhone 18 Pro Max GH3/可视角 120°.ang2",
+        "iPhone 18 Pro Max GH3/可视角 150°.ang2"
+      ],
+      "azimuthsDeg": [
+        0,
+        30,
+        60,
+        90,
+        120,
+        150
+      ],
+      "standaloneSourceNote": null,
+      "standaloneMeasurement": null,
+      "thetaMaxDeg": 70,
+      "metrics": {
+        "horizontal": {
+          "right": {
+            "psiDeg": 0,
+            "atTheta": {
+              "30": {
+                "luminancePct": 73.21,
+                "duv": 0.01132,
+                "jncd": 2.83
+              },
+              "45": {
+                "luminancePct": 40.23,
+                "duv": 0.01176,
+                "jncd": 2.94
+              },
+              "60": {
+                "luminancePct": 20.6,
+                "duv": 0.01358,
+                "jncd": 3.4
+              }
+            },
+            "halfLuminanceDeg": 40.02
+          },
+          "left": {
+            "psiDeg": 180,
+            "atTheta": {
+              "30": {
+                "luminancePct": 77.61,
+                "duv": 0.01203,
+                "jncd": 3.01
+              },
+              "45": {
+                "luminancePct": 43.95,
+                "duv": 0.01531,
+                "jncd": 3.83
+              },
+              "60": {
+                "luminancePct": 22,
+                "duv": 0.02373,
+                "jncd": 5.93
+              }
+            },
+            "halfLuminanceDeg": 42.01
+          }
+        },
+        "vertical": {
+          "up": {
+            "psiDeg": 90,
+            "atTheta": {
+              "30": {
+                "luminancePct": 75.69,
+                "duv": 0.0119,
+                "jncd": 2.97
+              },
+              "45": {
+                "luminancePct": 41.96,
+                "duv": 0.01409,
+                "jncd": 3.52
+              },
+              "60": {
+                "luminancePct": 21.37,
+                "duv": 0.01436,
+                "jncd": 3.59
+              }
+            },
+            "halfLuminanceDeg": 40.96
+          },
+          "down": {
+            "psiDeg": 270,
+            "atTheta": {
+              "30": {
+                "luminancePct": 75.94,
+                "duv": 0.01037,
+                "jncd": 2.59
+              },
+              "45": {
+                "luminancePct": 42.42,
+                "duv": 0.0105,
+                "jncd": 2.63
+              },
+              "60": {
+                "luminancePct": 21.78,
+                "duv": 0.01119,
+                "jncd": 2.8
+              }
+            },
+            "halfLuminanceDeg": 41.16
+          }
+        }
+      }
+    },
+    {
+      "id": "p1",
+      "device": "iPhone 18 Pro Max GH3",
+      "devIndexAtCommit": 1,
+      "surface": null,
+      "privacy": true,
+      "privacyKind": "film",
+      "measured": true,
+      "sourceFiles": [
+        "iPhone 18 Pro Max GH3 防窥膜/可视角 0° 防窥膜.ang2",
+        "iPhone 18 Pro Max GH3 防窥膜/可视角 30° 防窥膜.ang2",
+        "iPhone 18 Pro Max GH3 防窥膜/可视角 60° 防窥膜.ang2",
+        "iPhone 18 Pro Max GH3 防窥膜/可视角 90° 防窥膜.ang2",
+        "iPhone 18 Pro Max GH3 防窥膜/可视角 120° 防窥膜.ang2",
+        "iPhone 18 Pro Max GH3 防窥膜/可视角 150° 防窥膜.ang2"
+      ],
+      "azimuthsDeg": [
+        0,
+        30,
+        60,
+        90,
+        120,
+        150
+      ],
+      "standaloneSourceNote": null,
+      "standaloneMeasurement": null,
+      "thetaMaxDeg": 70,
+      "metrics": {
+        "horizontal": {
+          "right": {
+            "psiDeg": 0,
+            "atTheta": {
+              "30": {
+                "luminancePct": 21.94,
+                "duv": 0.01201,
+                "jncd": 3
+              },
+              "45": {
+                "luminancePct": 0.89,
+                "duv": 0.00387,
+                "jncd": 0.97
+              },
+              "60": {
+                "luminancePct": 0.31,
+                "duv": 0.00998,
+                "jncd": 2.49
+              }
+            },
+            "halfLuminanceDeg": 20.37
+          },
+          "left": {
+            "psiDeg": 180,
+            "atTheta": {
+              "30": {
+                "luminancePct": 26.72,
+                "duv": 0.00517,
+                "jncd": 1.29
+              },
+              "45": {
+                "luminancePct": 1.37,
+                "duv": 0.01848,
+                "jncd": 4.62
+              },
+              "60": {
+                "luminancePct": 0.31,
+                "duv": 0.00977,
+                "jncd": 2.44
+              }
+            },
+            "halfLuminanceDeg": 22.09
+          }
+        },
+        "vertical": {
+          "up": {
+            "psiDeg": 90,
+            "atTheta": {
+              "30": {
+                "luminancePct": 72.58,
+                "duv": 0.01193,
+                "jncd": 2.98
+              },
+              "45": {
+                "luminancePct": 39.06,
+                "duv": 0.01318,
+                "jncd": 3.29
+              },
+              "60": {
+                "luminancePct": 19.25,
+                "duv": 0.01247,
+                "jncd": 3.12
+              }
+            },
+            "halfLuminanceDeg": 39.24
+          },
+          "down": {
+            "psiDeg": 270,
+            "atTheta": {
+              "30": {
+                "luminancePct": 73.84,
+                "duv": 0.01008,
+                "jncd": 2.52
+              },
+              "45": {
+                "luminancePct": 39.39,
+                "duv": 0.01259,
+                "jncd": 3.15
+              },
+              "60": {
+                "luminancePct": 18.94,
+                "duv": 0.01242,
+                "jncd": 3.11
+              }
+            },
+            "halfLuminanceDeg": 39.94
+          }
+        }
+      }
+    },
+    {
+      "id": "p2",
+      "device": "小米 18 Pro Max",
+      "devIndexAtCommit": 0,
+      "surface": null,
+      "privacy": false,
+      "privacyKind": null,
+      "measured": true,
+      "sourceFiles": [
+        "小米 18 Pro Max/可视角度 0°.ang2",
+        "小米 18 Pro Max/可视角度 30°.ang2",
+        "小米 18 Pro Max/可视角度 60°.ang2",
+        "小米 18 Pro Max/可视角度 90°.ang2",
+        "小米 18 Pro Max/可视角度 120°.ang2",
+        "小米 18 Pro Max/可视角度 150°.ang2"
+      ],
+      "azimuthsDeg": [
+        0,
+        30,
+        60,
+        90,
+        120,
+        150
+      ],
+      "standaloneSourceNote": null,
+      "standaloneMeasurement": null,
+      "thetaMaxDeg": 70,
+      "metrics": {
+        "horizontal": {
+          "right": {
+            "psiDeg": 0,
+            "atTheta": {
+              "30": {
+                "luminancePct": 44.04,
+                "duv": 0.0145,
+                "jncd": 3.63
+              },
+              "45": {
+                "luminancePct": 14.84,
+                "duv": 0.02569,
+                "jncd": 6.42
+              },
+              "60": {
+                "luminancePct": 4.95,
+                "duv": 0.026,
+                "jncd": 6.5
+              }
+            },
+            "halfLuminanceDeg": 27.59
+          },
+          "left": {
+            "psiDeg": 180,
+            "atTheta": {
+              "30": {
+                "luminancePct": 49.01,
+                "duv": 0.01762,
+                "jncd": 4.4
+              },
+              "45": {
+                "luminancePct": 17.11,
+                "duv": 0.03232,
+                "jncd": 8.08
+              },
+              "60": {
+                "luminancePct": 5.73,
+                "duv": 0.03068,
+                "jncd": 7.67
+              }
+            },
+            "halfLuminanceDeg": 29.59
+          }
+        },
+        "vertical": {
+          "up": {
+            "psiDeg": 90,
+            "atTheta": {
+              "30": {
+                "luminancePct": 68.37,
+                "duv": 0.00986,
+                "jncd": 2.46
+              },
+              "45": {
+                "luminancePct": 38.15,
+                "duv": 0.02259,
+                "jncd": 5.65
+              },
+              "60": {
+                "luminancePct": 16.84,
+                "duv": 0.02657,
+                "jncd": 6.64
+              }
+            },
+            "halfLuminanceDeg": 39.12
+          },
+          "down": {
+            "psiDeg": 270,
+            "atTheta": {
+              "30": {
+                "luminancePct": 66.17,
+                "duv": 0.01439,
+                "jncd": 3.6
+              },
+              "45": {
+                "luminancePct": 36.49,
+                "duv": 0.0272,
+                "jncd": 6.8
+              },
+              "60": {
+                "luminancePct": 16.95,
+                "duv": 0.03048,
+                "jncd": 7.62
+              }
+            },
+            "halfLuminanceDeg": 37.89
+          }
+        }
+      }
+    },
+    {
+      "id": "p3",
+      "device": "小米 18 Pro Max",
+      "devIndexAtCommit": 0,
+      "surface": null,
+      "privacy": true,
+      "privacyKind": "mode",
+      "measured": true,
+      "sourceFiles": [
+        "小米 18 Pro Max 防窥/可视角度 0° 防窥.ang2",
+        "小米 18 Pro Max 防窥/可视角度 30° 防窥.ang2",
+        "小米 18 Pro Max 防窥/可视角度 60° 防窥.ang2",
+        "小米 18 Pro Max 防窥/可视角度 90° 防窥.ang2",
+        "小米 18 Pro Max 防窥/可视角度 120° 防窥.ang2",
+        "小米 18 Pro Max 防窥/可视角度 150° 防窥.ang2"
+      ],
+      "azimuthsDeg": [
+        0,
+        30,
+        60,
+        90,
+        120,
+        150
+      ],
+      "standaloneSourceNote": null,
+      "standaloneMeasurement": null,
+      "thetaMaxDeg": 70,
+      "metrics": {
+        "horizontal": {
+          "right": {
+            "psiDeg": 0,
+            "atTheta": {
+              "30": {
+                "luminancePct": 26.13,
+                "duv": 0.01461,
+                "jncd": 3.65
+              },
+              "45": {
+                "luminancePct": 3.66,
+                "duv": 0.0101,
+                "jncd": 2.52
+              },
+              "60": {
+                "luminancePct": 1.5,
+                "duv": 0.02155,
+                "jncd": 5.39
+              }
+            },
+            "halfLuminanceDeg": 20.87
+          },
+          "left": {
+            "psiDeg": 180,
+            "atTheta": {
+              "30": {
+                "luminancePct": 34.64,
+                "duv": 0.01853,
+                "jncd": 4.63
+              },
+              "45": {
+                "luminancePct": 5.98,
+                "duv": 0.03178,
+                "jncd": 7.94
+              },
+              "60": {
+                "luminancePct": 1.55,
+                "duv": 0.00702,
+                "jncd": 1.76
+              }
+            },
+            "halfLuminanceDeg": 24.22
+          }
+        },
+        "vertical": {
+          "up": {
+            "psiDeg": 90,
+            "atTheta": {
+              "30": {
+                "luminancePct": 68.58,
+                "duv": 0.01002,
+                "jncd": 2.5
+              },
+              "45": {
+                "luminancePct": 38.31,
+                "duv": 0.0223,
+                "jncd": 5.58
+              },
+              "60": {
+                "luminancePct": 17.03,
+                "duv": 0.02641,
+                "jncd": 6.6
+              }
+            },
+            "halfLuminanceDeg": 39.13
+          },
+          "down": {
+            "psiDeg": 270,
+            "atTheta": {
+              "30": {
+                "luminancePct": 66.14,
+                "duv": 0.01404,
+                "jncd": 3.51
+              },
+              "45": {
+                "luminancePct": 36.64,
+                "duv": 0.02702,
+                "jncd": 6.76
+              },
+              "60": {
+                "luminancePct": 16.97,
+                "duv": 0.03024,
+                "jncd": 7.56
+              }
+            },
+            "halfLuminanceDeg": 37.98
+          }
+        }
+      }
+    },
+    {
+      "id": "p4",
+      "device": "华为 Mate 90 Pro Max 典藏版",
+      "devIndexAtCommit": 2,
+      "surface": null,
+      "privacy": false,
+      "privacyKind": null,
+      "measured": true,
+      "sourceFiles": [
+        "华为 Mate 90 Pro Max 典藏版/华为 Mate 90 Pro Max 典藏版 0°.ang2",
+        "华为 Mate 90 Pro Max 典藏版/华为 Mate 90 Pro Max 典藏版 30°.ang2",
+        "华为 Mate 90 Pro Max 典藏版/华为 Mate 90 Pro Max 典藏版 60°.ang2",
+        "华为 Mate 90 Pro Max 典藏版/华为 Mate 90 Pro Max 典藏版 90°.ang2",
+        "华为 Mate 90 Pro Max 典藏版/华为 Mate 90 Pro Max 典藏版 120°.ang2",
+        "华为 Mate 90 Pro Max 典藏版/华为 Mate 90 Pro Max 典藏版 150°.ang2"
+      ],
+      "azimuthsDeg": [
+        0,
+        30,
+        60,
+        90,
+        120,
+        150
+      ],
+      "standaloneSourceNote": null,
+      "standaloneMeasurement": null,
+      "thetaMaxDeg": 70,
+      "metrics": {
+        "horizontal": {
+          "right": {
+            "psiDeg": 0,
+            "atTheta": {
+              "30": {
+                "luminancePct": 66.41,
+                "duv": 0.00267,
+                "jncd": 0.67
+              },
+              "45": {
+                "luminancePct": 38.44,
+                "duv": 0.00702,
+                "jncd": 1.76
+              },
+              "60": {
+                "luminancePct": 23.08,
+                "duv": 0.01123,
+                "jncd": 2.81
+              }
+            },
+            "halfLuminanceDeg": 37.94
+          },
+          "left": {
+            "psiDeg": 180,
+            "atTheta": {
+              "30": {
+                "luminancePct": 72.03,
+                "duv": 0.00318,
+                "jncd": 0.8
+              },
+              "45": {
+                "luminancePct": 42.93,
+                "duv": 0.00869,
+                "jncd": 2.17
+              },
+              "60": {
+                "luminancePct": 24.34,
+                "duv": 0.00914,
+                "jncd": 2.28
+              }
+            },
+            "halfLuminanceDeg": 41.07
+          }
+        },
+        "vertical": {
+          "up": {
+            "psiDeg": 90,
+            "atTheta": {
+              "30": {
+                "luminancePct": 67,
+                "duv": 0.00351,
+                "jncd": 0.88
+              },
+              "45": {
+                "luminancePct": 38.32,
+                "duv": 0.00445,
+                "jncd": 1.11
+              },
+              "60": {
+                "luminancePct": 22.77,
+                "duv": 0.00883,
+                "jncd": 2.21
+              }
+            },
+            "halfLuminanceDeg": 38.09
+          },
+          "down": {
+            "psiDeg": 270,
+            "atTheta": {
+              "30": {
+                "luminancePct": 70.47,
+                "duv": 0.00357,
+                "jncd": 0.89
+              },
+              "45": {
+                "luminancePct": 40.61,
+                "duv": 0.00846,
+                "jncd": 2.11
+              },
+              "60": {
+                "luminancePct": 22.79,
+                "duv": 0.00933,
+                "jncd": 2.33
+              }
+            },
+            "halfLuminanceDeg": 39.8
+          }
+        }
+      }
+    },
+    {
+      "id": "p5",
+      "device": "iPhone 17 Pro Max GV3",
+      "devIndexAtCommit": 3,
+      "surface": null,
+      "privacy": false,
+      "privacyKind": null,
+      "measured": true,
+      "sourceFiles": [
+        "iPhone 17 Pro Max GV3/iPhone 17 ProMax.json"
+      ],
+      "azimuthsDeg": [
+        0,
+        30,
+        60,
+        90,
+        120,
+        150
+      ],
+      "standaloneSourceNote": null,
+      "standaloneMeasurement": null,
+      "thetaMaxDeg": 70,
+      "metrics": {
+        "horizontal": {
+          "right": {
+            "psiDeg": 0,
+            "atTheta": {
+              "30": {
+                "luminancePct": 83.62,
+                "duv": 0.00756,
+                "jncd": 1.89
+              },
+              "45": {
+                "luminancePct": 42.53,
+                "duv": 0.01238,
+                "jncd": 3.09
+              },
+              "60": {
+                "luminancePct": 20.22,
+                "duv": 0.01005,
+                "jncd": 2.51
+              }
+            },
+            "halfLuminanceDeg": 42.01
+          },
+          "left": {
+            "psiDeg": 180,
+            "atTheta": {
+              "30": {
+                "luminancePct": 80.96,
+                "duv": 0.00849,
+                "jncd": 2.12
+              },
+              "45": {
+                "luminancePct": 39.96,
+                "duv": 0.00953,
+                "jncd": 2.38
+              },
+              "60": {
+                "luminancePct": 18.61,
+                "duv": 0.00941,
+                "jncd": 2.35
+              }
+            },
+            "halfLuminanceDeg": 40.88
+          }
+        },
+        "vertical": {
+          "up": {
+            "psiDeg": 90,
+            "atTheta": {
+              "30": {
+                "luminancePct": 74.74,
+                "duv": 0.00803,
+                "jncd": 2.01
+              },
+              "45": {
+                "luminancePct": 37.55,
+                "duv": 0.00861,
+                "jncd": 2.15
+              },
+              "60": {
+                "luminancePct": 19.37,
+                "duv": 0.00548,
+                "jncd": 1.37
+              }
+            },
+            "halfLuminanceDeg": 39.17
+          },
+          "down": {
+            "psiDeg": 270,
+            "atTheta": {
+              "30": {
+                "luminancePct": 69.09,
+                "duv": 0.00873,
+                "jncd": 2.18
+              },
+              "45": {
+                "luminancePct": 32.32,
+                "duv": 0.00786,
+                "jncd": 1.96
+              },
+              "60": {
+                "luminancePct": 16.67,
+                "duv": 0.00339,
+                "jncd": 0.85
+              }
+            },
+            "halfLuminanceDeg": 36.58
+          }
+        }
+      }
+    },
+    {
+      "id": "duo-inner",
+      "device": "iPhone Duo",
+      "devIndexAtCommit": 4,
+      "surface": "inner",
+      "privacy": false,
+      "privacyKind": null,
+      "measured": true,
+      "sourceFiles": [
+        "iPhone Duo 内屏/iPhone Duo 内屏低精度.json"
+      ],
+      "azimuthsDeg": [
+        0,
+        30,
+        60,
+        90,
+        120,
+        150
+      ],
+      "standaloneSourceNote": "内屏低精度实测",
+      "standaloneMeasurement": {
+        "file": "iPhone Duo 内屏/iPhone Duo 内屏低精度.json",
+        "azimuthRotation": 0
+      },
+      "thetaMaxDeg": 70,
+      "metrics": {
+        "horizontal": {
+          "right": {
+            "psiDeg": 0,
+            "atTheta": {
+              "30": {
+                "luminancePct": 89.75,
+                "duv": 0.00735,
+                "jncd": 1.84
+              },
+              "45": {
+                "luminancePct": 63.35,
+                "duv": 0.00909,
+                "jncd": 2.27
+              },
+              "60": {
+                "luminancePct": 34.65,
+                "duv": 0.01345,
+                "jncd": 3.36
+              }
+            },
+            "halfLuminanceDeg": 51.57
+          },
+          "left": {
+            "psiDeg": 180,
+            "atTheta": {
+              "30": {
+                "luminancePct": 90.18,
+                "duv": 0.00752,
+                "jncd": 1.88
+              },
+              "45": {
+                "luminancePct": 61.17,
+                "duv": 0.00933,
+                "jncd": 2.33
+              },
+              "60": {
+                "luminancePct": 31.51,
+                "duv": 0.01396,
+                "jncd": 3.49
+              }
+            },
+            "halfLuminanceDeg": 50.22
+          }
+        },
+        "vertical": {
+          "up": {
+            "psiDeg": 90,
+            "atTheta": {
+              "30": {
+                "luminancePct": 86.56,
+                "duv": 0.00774,
+                "jncd": 1.94
+              },
+              "45": {
+                "luminancePct": 55.84,
+                "duv": 0.01006,
+                "jncd": 2.51
+              },
+              "60": {
+                "luminancePct": 29.81,
+                "duv": 0.01495,
+                "jncd": 3.74
+              }
+            },
+            "halfLuminanceDeg": 47.95
+          },
+          "down": {
+            "psiDeg": 270,
+            "atTheta": {
+              "30": {
+                "luminancePct": 84.64,
+                "duv": 0.00772,
+                "jncd": 1.93
+              },
+              "45": {
+                "luminancePct": 56.41,
+                "duv": 0.00972,
+                "jncd": 2.43
+              },
+              "60": {
+                "luminancePct": 31.89,
+                "duv": 0.01396,
+                "jncd": 3.49
+              }
+            },
+            "halfLuminanceDeg": 48.53
+          }
+        }
+      }
+    },
+    {
+      "id": "duo-outer",
+      "device": "iPhone Duo",
+      "devIndexAtCommit": 4,
+      "surface": "outer",
+      "privacy": false,
+      "privacyKind": null,
+      "measured": false,
+      "sourceFiles": [
+        "iPhone 18 Pro Max GH3/可视角 0°.ang2",
+        "iPhone 18 Pro Max GH3/可视角 30°.ang2",
+        "iPhone 18 Pro Max GH3/可视角 60°.ang2",
+        "iPhone 18 Pro Max GH3/可视角 90°.ang2",
+        "iPhone 18 Pro Max GH3/可视角 120°.ang2",
+        "iPhone 18 Pro Max GH3/可视角 150°.ang2"
+      ],
+      "azimuthsDeg": [
+        0,
+        30,
+        60,
+        90,
+        120,
+        150
+      ],
+      "standaloneSourceNote": "外屏临时替代 · iPhone 18 Pro Max GH3",
+      "standaloneMeasurement": {
+        "temporary": true,
+        "profile": "p0",
+        "device": "iPhone 18 Pro Max GH3"
+      },
+      "substituteOf": "p0",
+      "setsIdenticalToSubstitute": true,
+      "note": "独立项目中的这组数据是临时替代：复制自 p0（iPhone 18 Pro Max GH3），不是本机实测，数据库记为未测、不给数值。",
+      "metrics": null
+    }
+  ]
+}
