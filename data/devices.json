@@ -5,7 +5,7 @@
   "inputs": {
     "public/datasets/manifest.json": "28ead38e1e9036de5b4e813000947961bd8d9c7ae931b502c808540b04cf94b4",
     "data/angle/summary.json": "f5f8514c14e23f3f15bf3c317851220d3c3825714fd8baca072bb95e6d760431",
-    "data/uniformity/index.json": "74392bdf402caad825f7c4e93bac4772ba3e50a76ff62451d8858da99598f17d",
+    "data/uniformity/index.json": "240fe1731b941e76e9f5fadff7375be2c92a7cd55cbea59598e26692fe75b4ce",
     "data/reflectance/index.json": "395a40def7c94286de548e88195acdc297e8df5d6ec907a3d5133e989f85a6fc",
     "data/catalog-overrides.json": "3f299d42f29ae01aed850eecb63a58de646bec9aeb13c2ebc872f9b65a87eda9"
   },
@@ -1694,7 +1694,7 @@
         },
         "uniformity": {
           "status": "metrics-only",
-          "sourceId": "x9s"
+          "sourceId": "x9sp"
         },
         "reflectance": {
           "status": "complete"

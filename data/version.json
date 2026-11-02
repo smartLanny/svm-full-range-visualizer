@@ -1,10 +1,11 @@
 {
   "schemaVersion": 1,
-  "dataVersion": "2026.11.02.2",
+  "dataVersion": "2026.11.02.3",
   "date": "2026-11-02",
-  "batch": "2026-11-02-unif-9phones",
+  "batch": "2026-11-02-unif-fullprec",
   "batches": [
-    "2026-11-02-unif-9phones"
+    "2026-11-02-unif-9phones",
+    "2026-11-02-unif-fullprec"
   ],
   "counts": {
     "devices": 26,

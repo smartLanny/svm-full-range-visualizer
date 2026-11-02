@@ -773,17 +773,17 @@
           "referenceNits": 300,
           "metrics": {
             "luminance": {
-              "typical": 304.5,
+              "typical": 304.510687,
               "unit": "nit",
-              "ninePointUniformityPct": 94.1,
-              "areaUniformityPct": 90.5,
+              "ninePointUniformityPct": 94.0861,
+              "areaUniformityPct": 90.4962,
               "deviation10PctArea": 0.0
             },
             "colorTemperature": {
-              "typical": 6557.0,
+              "typical": 6557.47,
               "unit": "K",
-              "ninePointSpreadK": 163.0,
-              "areaSpreadK": 309.0
+              "ninePointSpreadK": 163.054,
+              "areaSpreadK": 309.485
             }
           }
         },
@@ -794,17 +794,17 @@
           "referenceNits": 100,
           "metrics": {
             "luminance": {
-              "typical": 0.383,
+              "typical": 0.38281,
               "unit": "nit",
-              "ninePointUniformityPct": 92.6,
-              "areaUniformityPct": 87.8,
-              "deviation10PctArea": 0.09
+              "ninePointUniformityPct": 92.5525,
+              "areaUniformityPct": 87.8238,
+              "deviation10PctArea": 0.0922
             },
             "colorTemperature": {
-              "typical": 6490.0,
+              "typical": 6489.581,
               "unit": "K",
-              "ninePointSpreadK": 278.0,
-              "areaSpreadK": 506.0
+              "ninePointSpreadK": 278.192,
+              "areaSpreadK": 506.351
             }
           }
         },
@@ -815,20 +815,20 @@
           "referenceNits": 10,
           "metrics": {
             "luminance": {
-              "typical": 0.0312,
+              "typical": 0.031188,
               "unit": "nit",
-              "ninePointUniformityPct": 87.6,
-              "areaUniformityPct": 80.1,
-              "deviation10PctArea": 1.02
+              "ninePointUniformityPct": 87.5797,
+              "areaUniformityPct": 80.1055,
+              "deviation10PctArea": 1.0197
             }
           }
         }
       ],
       "metricsSource": {
-        "file": "uniformity_metrics_from_png.json",
-        "sha256": "88f9b20a81f31c94d8f9b0fa598ac249ad13044fa4b8dfb14673e47368e081f6",
-        "bytes": 5223,
-        "batch": "2026-11-02-unif-9phones"
+        "file": "uniformity_metrics.json",
+        "sha256": "02ac45cf0e225099dada59a3b61a2f02de1b1890804e5396c2086a6cdf2834ba",
+        "bytes": 20913,
+        "batch": "2026-11-02-unif-fullprec"
       }
     },
     {
@@ -843,17 +843,17 @@
           "referenceNits": 300,
           "metrics": {
             "luminance": {
-              "typical": 334.4,
+              "typical": 334.379185,
               "unit": "nit",
-              "ninePointUniformityPct": 94.7,
-              "areaUniformityPct": 91.6,
+              "ninePointUniformityPct": 94.727,
+              "areaUniformityPct": 91.567,
               "deviation10PctArea": 0.0
             },
             "colorTemperature": {
-              "typical": 6151.0,
+              "typical": 6150.516,
               "unit": "K",
-              "ninePointSpreadK": 202.0,
-              "areaSpreadK": 386.0
+              "ninePointSpreadK": 202.457,
+              "areaSpreadK": 386.497
             }
           }
         },
@@ -864,17 +864,17 @@
           "referenceNits": 100,
           "metrics": {
             "luminance": {
-              "typical": 0.379,
+              "typical": 0.379053,
               "unit": "nit",
-              "ninePointUniformityPct": 86.0,
-              "areaUniformityPct": 74.5,
-              "deviation10PctArea": 8.75
+              "ninePointUniformityPct": 86.0228,
+              "areaUniformityPct": 74.5125,
+              "deviation10PctArea": 8.7495
             },
             "colorTemperature": {
-              "typical": 6252.0,
+              "typical": 6252.082,
               "unit": "K",
-              "ninePointSpreadK": 1099.0,
-              "areaSpreadK": 1642.0
+              "ninePointSpreadK": 1098.967,
+              "areaSpreadK": 1642.491
             }
           }
         },
@@ -885,20 +885,20 @@
           "referenceNits": 10,
           "metrics": {
             "luminance": {
-              "typical": 0.0699,
+              "typical": 0.069898,
               "unit": "nit",
-              "ninePointUniformityPct": 89.8,
-              "areaUniformityPct": 78.3,
-              "deviation10PctArea": 3.41
+              "ninePointUniformityPct": 89.7859,
+              "areaUniformityPct": 78.2729,
+              "deviation10PctArea": 3.4121
             }
           }
         }
       ],
       "metricsSource": {
-        "file": "uniformity_metrics_from_png.json",
-        "sha256": "88f9b20a81f31c94d8f9b0fa598ac249ad13044fa4b8dfb14673e47368e081f6",
-        "bytes": 5223,
-        "batch": "2026-11-02-unif-9phones"
+        "file": "uniformity_metrics.json",
+        "sha256": "02ac45cf0e225099dada59a3b61a2f02de1b1890804e5396c2086a6cdf2834ba",
+        "bytes": 20913,
+        "batch": "2026-11-02-unif-fullprec"
       }
     },
     {
@@ -913,17 +913,17 @@
           "referenceNits": 300,
           "metrics": {
             "luminance": {
-              "typical": 302.9,
+              "typical": 302.882822,
               "unit": "nit",
-              "ninePointUniformityPct": 92.1,
-              "areaUniformityPct": 86.8,
-              "deviation10PctArea": 0.14
+              "ninePointUniformityPct": 92.1036,
+              "areaUniformityPct": 86.8419,
+              "deviation10PctArea": 0.1416
             },
             "colorTemperature": {
-              "typical": 6493.0,
+              "typical": 6493.297,
               "unit": "K",
-              "ninePointSpreadK": 266.0,
-              "areaSpreadK": 348.0
+              "ninePointSpreadK": 266.112,
+              "areaSpreadK": 348.291
             }
           }
         },
@@ -934,17 +934,17 @@
           "referenceNits": 100,
           "metrics": {
             "luminance": {
-              "typical": 0.37,
+              "typical": 0.370006,
               "unit": "nit",
-              "ninePointUniformityPct": 94.4,
-              "areaUniformityPct": 86.0,
-              "deviation10PctArea": 0.3
+              "ninePointUniformityPct": 94.3504,
+              "areaUniformityPct": 85.9809,
+              "deviation10PctArea": 0.2965
             },
             "colorTemperature": {
-              "typical": 6448.0,
+              "typical": 6447.735,
               "unit": "K",
-              "ninePointSpreadK": 530.0,
-              "areaSpreadK": 853.0
+              "ninePointSpreadK": 530.046,
+              "areaSpreadK": 853.454
             }
           }
         },
@@ -955,20 +955,20 @@
           "referenceNits": 10,
           "metrics": {
             "luminance": {
-              "typical": 0.109,
+              "typical": 0.108782,
               "unit": "nit",
-              "ninePointUniformityPct": 85.3,
-              "areaUniformityPct": 74.5,
-              "deviation10PctArea": 6.93
+              "ninePointUniformityPct": 85.2962,
+              "areaUniformityPct": 74.4566,
+              "deviation10PctArea": 6.926
             }
           }
         }
       ],
       "metricsSource": {
-        "file": "uniformity_metrics_from_png.json",
-        "sha256": "88f9b20a81f31c94d8f9b0fa598ac249ad13044fa4b8dfb14673e47368e081f6",
-        "bytes": 5223,
-        "batch": "2026-11-02-unif-9phones"
+        "file": "uniformity_metrics.json",
+        "sha256": "02ac45cf0e225099dada59a3b61a2f02de1b1890804e5396c2086a6cdf2834ba",
+        "bytes": 20913,
+        "batch": "2026-11-02-unif-fullprec"
       }
     },
     {
@@ -983,17 +983,17 @@
           "referenceNits": 300,
           "metrics": {
             "luminance": {
-              "typical": 306.1,
+              "typical": 306.066373,
               "unit": "nit",
-              "ninePointUniformityPct": 95.6,
-              "areaUniformityPct": 93.6,
+              "ninePointUniformityPct": 95.619,
+              "areaUniformityPct": 93.5923,
               "deviation10PctArea": 0.0
             },
             "colorTemperature": {
-              "typical": 6649.0,
+              "typical": 6649.396,
               "unit": "K",
-              "ninePointSpreadK": 213.0,
-              "areaSpreadK": 334.0
+              "ninePointSpreadK": 213.291,
+              "areaSpreadK": 333.861
             }
           }
         },
@@ -1004,17 +1004,17 @@
           "referenceNits": 100,
           "metrics": {
             "luminance": {
-              "typical": 0.376,
+              "typical": 0.37577,
               "unit": "nit",
-              "ninePointUniformityPct": 95.5,
-              "areaUniformityPct": 91.4,
+              "ninePointUniformityPct": 95.463,
+              "areaUniformityPct": 91.4472,
               "deviation10PctArea": 0.0
             },
             "colorTemperature": {
-              "typical": 6657.0,
+              "typical": 6656.507,
               "unit": "K",
-              "ninePointSpreadK": 154.0,
-              "areaSpreadK": 523.0
+              "ninePointSpreadK": 153.969,
+              "areaSpreadK": 522.629
             }
           }
         },
@@ -1025,20 +1025,20 @@
           "referenceNits": 10,
           "metrics": {
             "luminance": {
-              "typical": 0.0433,
+              "typical": 0.04325,
               "unit": "nit",
-              "ninePointUniformityPct": 94.5,
-              "areaUniformityPct": 85.3,
-              "deviation10PctArea": 0.13
+              "ninePointUniformityPct": 94.5469,
+              "areaUniformityPct": 85.3158,
+              "deviation10PctArea": 0.1309
             }
           }
         }
       ],
       "metricsSource": {
-        "file": "uniformity_metrics_from_png.json",
-        "sha256": "88f9b20a81f31c94d8f9b0fa598ac249ad13044fa4b8dfb14673e47368e081f6",
-        "bytes": 5223,
-        "batch": "2026-11-02-unif-9phones"
+        "file": "uniformity_metrics.json",
+        "sha256": "02ac45cf0e225099dada59a3b61a2f02de1b1890804e5396c2086a6cdf2834ba",
+        "bytes": 20913,
+        "batch": "2026-11-02-unif-fullprec"
       }
     },
     {
@@ -1053,17 +1053,17 @@
           "referenceNits": 300,
           "metrics": {
             "luminance": {
-              "typical": 317.3,
+              "typical": 317.250415,
               "unit": "nit",
-              "ninePointUniformityPct": 94.2,
-              "areaUniformityPct": 91.3,
+              "ninePointUniformityPct": 94.2165,
+              "areaUniformityPct": 91.3248,
               "deviation10PctArea": 0.0
             },
             "colorTemperature": {
-              "typical": 7110.0,
+              "typical": 7110.328,
               "unit": "K",
-              "ninePointSpreadK": 168.0,
-              "areaSpreadK": 251.0
+              "ninePointSpreadK": 168.27,
+              "areaSpreadK": 250.791
             }
           }
         },
@@ -1074,32 +1074,32 @@
           "referenceNits": 100,
           "metrics": {
             "luminance": {
-              "typical": 0.405,
+              "typical": 0.404551,
               "unit": "nit",
-              "ninePointUniformityPct": 77.6,
-              "areaUniformityPct": 70.5,
-              "deviation10PctArea": 12.79
+              "ninePointUniformityPct": 77.5563,
+              "areaUniformityPct": 70.5081,
+              "deviation10PctArea": 12.7868
             },
             "colorTemperature": {
-              "typical": 7153.0,
+              "typical": 7152.647,
               "unit": "K",
-              "ninePointSpreadK": 1498.0,
-              "areaSpreadK": 2023.0
+              "ninePointSpreadK": 1497.596,
+              "areaSpreadK": 2022.76
             }
           }
         }
       ],
       "metricsSource": {
-        "file": "uniformity_metrics_from_png.json",
-        "sha256": "88f9b20a81f31c94d8f9b0fa598ac249ad13044fa4b8dfb14673e47368e081f6",
-        "bytes": 5223,
-        "batch": "2026-11-02-unif-9phones"
+        "file": "uniformity_metrics.json",
+        "sha256": "02ac45cf0e225099dada59a3b61a2f02de1b1890804e5396c2086a6cdf2834ba",
+        "bytes": 20913,
+        "batch": "2026-11-02-unif-fullprec"
       }
     },
     {
       "id": "oppo-find-x9s-pro",
       "name": "OPPO Find X9s Pro",
-      "metricSourceId": "x9s",
+      "metricSourceId": "x9sp",
       "conditions": [
         {
           "id": "300",
@@ -1108,17 +1108,17 @@
           "referenceNits": 300,
           "metrics": {
             "luminance": {
-              "typical": 309.5,
+              "typical": 309.542761,
               "unit": "nit",
-              "ninePointUniformityPct": 93.1,
-              "areaUniformityPct": 89.1,
-              "deviation10PctArea": 0.01
+              "ninePointUniformityPct": 93.1018,
+              "areaUniformityPct": 89.1381,
+              "deviation10PctArea": 0.0054
             },
             "colorTemperature": {
-              "typical": 6660.0,
+              "typical": 6659.926,
               "unit": "K",
-              "ninePointSpreadK": 96.0,
-              "areaSpreadK": 191.0
+              "ninePointSpreadK": 95.861,
+              "areaSpreadK": 190.988
             }
           }
         },
@@ -1129,10 +1129,10 @@
           "referenceNits": 100,
           "metrics": {
             "luminance": {
-              "typical": 0.388,
+              "typical": 0.388095,
               "unit": "nit",
-              "ninePointUniformityPct": 94.0,
-              "areaUniformityPct": 90.9,
+              "ninePointUniformityPct": 94.0453,
+              "areaUniformityPct": 90.8508,
               "deviation10PctArea": 0.0
             }
           }
@@ -1144,20 +1144,20 @@
           "referenceNits": 10,
           "metrics": {
             "luminance": {
-              "typical": 0.0438,
+              "typical": 0.043795,
               "unit": "nit",
-              "ninePointUniformityPct": 90.1,
-              "areaUniformityPct": 85.8,
+              "ninePointUniformityPct": 90.089,
+              "areaUniformityPct": 85.8027,
               "deviation10PctArea": 0.0
             }
           }
         }
       ],
       "metricsSource": {
-        "file": "uniformity_metrics_from_png.json",
-        "sha256": "88f9b20a81f31c94d8f9b0fa598ac249ad13044fa4b8dfb14673e47368e081f6",
-        "bytes": 5223,
-        "batch": "2026-11-02-unif-9phones"
+        "file": "uniformity_metrics.json",
+        "sha256": "02ac45cf0e225099dada59a3b61a2f02de1b1890804e5396c2086a6cdf2834ba",
+        "bytes": 20913,
+        "batch": "2026-11-02-unif-fullprec"
       }
     },
     {
@@ -1172,17 +1172,17 @@
           "referenceNits": 300,
           "metrics": {
             "luminance": {
-              "typical": 296.3,
+              "typical": 296.257949,
               "unit": "nit",
-              "ninePointUniformityPct": 97.3,
-              "areaUniformityPct": 92.4,
+              "ninePointUniformityPct": 97.2607,
+              "areaUniformityPct": 92.4389,
               "deviation10PctArea": 0.0
             },
             "colorTemperature": {
-              "typical": 7243.0,
+              "typical": 7242.773,
               "unit": "K",
-              "ninePointSpreadK": 313.0,
-              "areaSpreadK": 460.0
+              "ninePointSpreadK": 313.11,
+              "areaSpreadK": 460.413
             }
           }
         },
@@ -1193,11 +1193,11 @@
           "referenceNits": 100,
           "metrics": {
             "luminance": {
-              "typical": 0.38,
+              "typical": 0.380326,
               "unit": "nit",
-              "ninePointUniformityPct": 96.8,
-              "areaUniformityPct": 88.0,
-              "deviation10PctArea": 0.0
+              "ninePointUniformityPct": 96.8082,
+              "areaUniformityPct": 87.9593,
+              "deviation10PctArea": 0.0028
             }
           }
         },
@@ -1208,20 +1208,20 @@
           "referenceNits": 10,
           "metrics": {
             "luminance": {
-              "typical": 0.0301,
+              "typical": 0.030114,
               "unit": "nit",
-              "ninePointUniformityPct": 66.5,
-              "areaUniformityPct": 45.9,
-              "deviation10PctArea": 43.86
+              "ninePointUniformityPct": 66.4972,
+              "areaUniformityPct": 45.932,
+              "deviation10PctArea": 43.8608
             }
           }
         }
       ],
       "metricsSource": {
-        "file": "uniformity_metrics_from_png.json",
-        "sha256": "88f9b20a81f31c94d8f9b0fa598ac249ad13044fa4b8dfb14673e47368e081f6",
-        "bytes": 5223,
-        "batch": "2026-11-02-unif-9phones"
+        "file": "uniformity_metrics.json",
+        "sha256": "02ac45cf0e225099dada59a3b61a2f02de1b1890804e5396c2086a6cdf2834ba",
+        "bytes": 20913,
+        "batch": "2026-11-02-unif-fullprec"
       }
     },
     {
@@ -1236,17 +1236,17 @@
           "referenceNits": 300,
           "metrics": {
             "luminance": {
-              "typical": 285.4,
+              "typical": 285.393452,
               "unit": "nit",
-              "ninePointUniformityPct": 92.7,
-              "areaUniformityPct": 89.3,
+              "ninePointUniformityPct": 92.6739,
+              "areaUniformityPct": 89.2929,
               "deviation10PctArea": 0.0
             },
             "colorTemperature": {
-              "typical": 6780.0,
+              "typical": 6779.909,
               "unit": "K",
-              "ninePointSpreadK": 184.0,
-              "areaSpreadK": 352.0
+              "ninePointSpreadK": 183.67,
+              "areaSpreadK": 351.941
             }
           }
         },
@@ -1257,17 +1257,17 @@
           "referenceNits": 100,
           "metrics": {
             "luminance": {
-              "typical": 0.386,
+              "typical": 0.386321,
               "unit": "nit",
-              "ninePointUniformityPct": 89.5,
-              "areaUniformityPct": 85.9,
-              "deviation10PctArea": 0.01
+              "ninePointUniformityPct": 89.4795,
+              "areaUniformityPct": 85.9408,
+              "deviation10PctArea": 0.0146
             },
             "colorTemperature": {
-              "typical": 7035.0,
+              "typical": 7035.186,
               "unit": "K",
-              "ninePointSpreadK": 365.0,
-              "areaSpreadK": 652.0
+              "ninePointSpreadK": 365.214,
+              "areaSpreadK": 651.619
             }
           }
         },
@@ -1278,20 +1278,20 @@
           "referenceNits": 10,
           "metrics": {
             "luminance": {
-              "typical": 0.0419,
+              "typical": 0.041908,
               "unit": "nit",
-              "ninePointUniformityPct": 66.2,
-              "areaUniformityPct": 58.1,
-              "deviation10PctArea": 49.23
+              "ninePointUniformityPct": 66.2064,
+              "areaUniformityPct": 58.1009,
+              "deviation10PctArea": 49.2308
             }
           }
         }
       ],
       "metricsSource": {
-        "file": "uniformity_metrics_from_png.json",
-        "sha256": "88f9b20a81f31c94d8f9b0fa598ac249ad13044fa4b8dfb14673e47368e081f6",
-        "bytes": 5223,
-        "batch": "2026-11-02-unif-9phones"
+        "file": "uniformity_metrics.json",
+        "sha256": "02ac45cf0e225099dada59a3b61a2f02de1b1890804e5396c2086a6cdf2834ba",
+        "bytes": 20913,
+        "batch": "2026-11-02-unif-fullprec"
       }
     },
     {
@@ -1306,17 +1306,17 @@
           "referenceNits": 300,
           "metrics": {
             "luminance": {
-              "typical": 303.6,
+              "typical": 303.621938,
               "unit": "nit",
-              "ninePointUniformityPct": 92.6,
-              "areaUniformityPct": 89.9,
+              "ninePointUniformityPct": 92.6173,
+              "areaUniformityPct": 89.9245,
               "deviation10PctArea": 0.0
             },
             "colorTemperature": {
-              "typical": 6515.0,
+              "typical": 6514.776,
               "unit": "K",
-              "ninePointSpreadK": 220.0,
-              "areaSpreadK": 305.0
+              "ninePointSpreadK": 219.731,
+              "areaSpreadK": 305.19
             }
           }
         },
@@ -1327,17 +1327,17 @@
           "referenceNits": 100,
           "metrics": {
             "luminance": {
-              "typical": 0.37,
+              "typical": 0.370332,
               "unit": "nit",
-              "ninePointUniformityPct": 95.6,
-              "areaUniformityPct": 91.2,
+              "ninePointUniformityPct": 95.5577,
+              "areaUniformityPct": 91.2309,
               "deviation10PctArea": 0.0
             },
             "colorTemperature": {
-              "typical": 6486.0,
+              "typical": 6486.34,
               "unit": "K",
-              "ninePointSpreadK": 163.0,
-              "areaSpreadK": 372.0
+              "ninePointSpreadK": 163.366,
+              "areaSpreadK": 372.04
             }
           }
         },
@@ -1348,21 +1348,21 @@
           "referenceNits": 10,
           "metrics": {
             "luminance": {
-              "typical": 0.0487,
+              "typical": 0.048746,
               "unit": "nit",
-              "ninePointUniformityPct": 78.9,
-              "areaUniformityPct": 66.0,
-              "deviation10PctArea": 18.52
+              "ninePointUniformityPct": 78.9185,
+              "areaUniformityPct": 65.9871,
+              "deviation10PctArea": 18.5195
             }
           }
         }
       ],
       "display": "outer",
       "metricsSource": {
-        "file": "uniformity_metrics_from_png.json",
-        "sha256": "88f9b20a81f31c94d8f9b0fa598ac249ad13044fa4b8dfb14673e47368e081f6",
-        "bytes": 5223,
-        "batch": "2026-11-02-unif-9phones"
+        "file": "uniformity_metrics.json",
+        "sha256": "02ac45cf0e225099dada59a3b61a2f02de1b1890804e5396c2086a6cdf2834ba",
+        "bytes": 20913,
+        "batch": "2026-11-02-unif-fullprec"
       }
     }
   ],

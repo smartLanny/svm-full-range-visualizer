@@ -197,8 +197,8 @@ def run(args):
             sid = spec.get("sourceId") or known_source.get(device_id)
             if not sid:
                 fail(f"{device_id}: 不知道它在指标文件里的 id，请在 options.devices 里写 sourceId（文件里有：{'、'.join(source_ids)}）")
-            if known_source.get(device_id) and known_source[device_id] != sid:
-                fail(f"{device_id}: 库里记录的源 id 是 {known_source[device_id]}，options 写的是 {sid}")
+            if known_source.get(device_id) and known_source[device_id] != sid and not replace:
+                fail(f"{device_id}: 库里记录的源 id 是 {known_source[device_id]}，options 写的是 {sid}（确需改源 id 请写 \"replace\": true）")
             mine = {k: v for k, v in rows.items() if k[0] == sid}
             if not mine:
                 fail(f"指标文件里没有 {sid}（{device_id}）的默认条件记录（文件里有：{'、'.join(source_ids)}）")
@@ -263,6 +263,7 @@ def run(args):
                 # keep white readings already attached to a condition that stays
                 whites = {c["id"]: {k: v for k, v in c.items() if k.startswith("whiteMeasured")} for c in old}
                 entry["conditions"] = [{**c, **whites.get(c["id"], {})} for c in conditions]
+                entry["metricSourceId"] = sid
                 entry["metricsSource"] = {**source, **({"batch": args.batch} if args.batch else {})}
                 levels = "、".join(f"{c['id']} nits" for c in conditions)
                 verb = "新增" if status == "created" else "替换"

@@ -4,6 +4,25 @@
 
 <!-- db:import 在这一行下面插入新条目，不要删除这一行 -->
 
+## 2026.11.02.3 · `2026-11-02-unif-fullprec`
+
+均匀度指标换成全精度：9 台仅指标机型改用视频项目的 uniformity_metrics.json
+
+- 均匀度：iPhone 17 Pro Max 替换仅指标数据（300 nits、100 nits、10 nits，无热力图；源 id ip17pm）
+- 均匀度：一加 15 替换仅指标数据（300 nits、100 nits、10 nits，无热力图；源 id op15）
+- 均匀度：OPPO Find X9 Ultra 替换仅指标数据（300 nits、100 nits，无热力图；源 id x9u）
+- 均匀度：OPPO Find X9s Pro 替换仅指标数据（300 nits、100 nits、10 nits，无热力图；源 id x9sp）
+- 均匀度：华为 Mate 70 Air 替换仅指标数据（300 nits、100 nits、10 nits，无热力图；源 id m70a）
+- 均匀度：华为 Mate 80 RS 替换仅指标数据（300 nits、100 nits、10 nits，无热力图；源 id m80rs）
+- 均匀度：华为 Pura 80 Ultra 替换仅指标数据（300 nits、100 nits、10 nits，无热力图；源 id p80u）
+- 均匀度：小米 15 Ultra 替换仅指标数据（300 nits、100 nits、10 nits，无热力图；源 id mi15u）
+- 均匀度：荣耀 Magic V5 替换仅指标数据（300 nits、100 nits、10 nits，无热力图；源 id mv5）
+- 数量：不变（只更新了已有数据的来源或附加字段）
+- 改动的数据文件：`data/uniformity/index.json`
+- 批次：`data/batches/2026-11-02-unif-fullprec/`（1 个输入，批次日期 2026-11-02；哈希与逐项核对见 audit.json）
+
+> 上一批（2026-11-02-unif-9phones）是从均匀性对比图标题按显示精度抄的；这一批直接用生成这些图的 uniformity_metrics.json（render.py 输出，12 台 61 条）。转录值与本文件四舍五入后逐项一致，这里只是换成全精度。库内已有热力图的 3 台只做核对、不改。OPPO Find X9s Pro 的源 id 按文件改为 x9sp。荣耀 Magic V5 为外屏。非默认条件（防窥开、关闭自适应）不导入。
+
 ## 2026.11.02.2 · `2026-11-02-unif-9phones`
 
 均匀度指标：iPhone 17 Pro Max、一加 15、OPPO Find X9 Ultra / X9s Pro、华为 Mate 70 Air / Mate 80 RS / Pura 80 Ultra、小米 15 Ultra、荣耀 Magic V5 外屏
