@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { formatRoute, legacyRoute, parseRoute, type Route } from './lib/route';
+import { formatRoute, legacyRoute, parseRoute, ROUTE_EVENT, type Route } from './lib/route';
 import { loadCatalog, useAsync } from './lib/data';
 import { Shell } from './components/Shell';
 import { Home } from './pages/Home';
@@ -21,7 +21,11 @@ function useRoute(): Route {
   useEffect(() => {
     const on = () => setHash(window.location.hash);
     window.addEventListener('hashchange', on);
-    return () => window.removeEventListener('hashchange', on);
+    window.addEventListener(ROUTE_EVENT, on);
+    return () => {
+      window.removeEventListener('hashchange', on);
+      window.removeEventListener(ROUTE_EVENT, on);
+    };
   }, []);
   return useMemo(() => parseRoute(hash), [hash]);
 }

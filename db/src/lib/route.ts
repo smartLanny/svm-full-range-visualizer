@@ -80,6 +80,17 @@ export function formatRoute(r: Route): string {
   }
 }
 
+/**
+ * Replace the current hash without a history entry (search box, filters) and tell the router: a
+ * replaceState fires no hashchange, so without the event the router would keep the old route and a
+ * later link to the same address (the logo's #/) would change nothing on the page.
+ */
+export const ROUTE_EVENT = 'screendb:route';
+export function replaceRoute(r: Route): void {
+  window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}${formatRoute(r)}`);
+  window.dispatchEvent(new Event(ROUTE_EVENT));
+}
+
 export const deviceHref = (id: string, section: Section | null = null) => formatRoute({ page: 'device', id, section });
 export const compareHref = (ids: string[]) => formatRoute({ page: 'compare', ids });
 

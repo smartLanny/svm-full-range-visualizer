@@ -1,7 +1,7 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ChevronRight, Search, X } from 'lucide-react';
 import type { Catalog, DataType, Device } from '../../catalog/types';
-import { deviceHref, formatRoute } from '../lib/route';
+import { deviceHref, replaceRoute } from '../lib/route';
 import { filterDevices, matchReason } from '../lib/search';
 import { DataVersion } from '../components/Shell';
 import { loadUniformity, uniformityAsset, useAsync } from '../lib/data';
@@ -126,6 +126,11 @@ function HeroSpotlight({ catalog }: { catalog: Catalog }) {
 export function Home({ catalog, q: q0, has: has0 }: { catalog: Catalog; q: string; has: DataType | null }) {
   const [q, setQ] = useState(q0);
   const [has, setHas] = useState<DataType | null>(has0);
+  // Follow the address when it changes from outside (logo link to #/, back / forward, a pasted link).
+  useEffect(() => {
+    setQ(q0);
+    setHas(has0);
+  }, [q0, has0]);
   const list = useMemo(() => filterDevices(catalog, q, has), [catalog, q, has]);
   const wide = useMedia('(min-width: 1280px)');
   const c = catalog.counts;
@@ -134,7 +139,7 @@ export function Home({ catalog, q: q0, has: has0 }: { catalog: Catalog; q: strin
     setQ(nq);
     setHas(nh);
     // Shareable URL without filling the history with every keystroke.
-    window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}${formatRoute({ page: 'home', q: nq, has: nh })}`);
+    replaceRoute({ page: 'home', q: nq, has: nh });
   };
 
   return (
