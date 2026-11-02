@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "id": "2026-11-02-unif-9phones",
+  "date": "2026-11-02",
+  "title": "均匀度指标：iPhone 17 Pro Max、一加 15、OPPO Find X9 Ultra / X9s Pro、华为 Mate 70 Air / Mate 80 RS / Pura 80 Ultra、小米 15 Ultra、荣耀 Magic V5 外屏",
+  "notes": "数值抄自视频项目 render.py 统一重算后输出的「均匀性对比图」PNG 标题（9 点 VESA/IDMS，面均匀性 Black Mura：1mm 滤波、去边、P0.1/P99.9），按图上显示的精度（百分比 0.1、偏离面积 0.01、色温 1 K）。同一批图里库内已有的 3 台与 index.json 逐项一致。荣耀 Magic V5 为外屏。10 nits G20 未扣反光。",
+  "inputs": [
+    {
+      "path": "uniformity_metrics_from_png.json",
+      "sha256": "88f9b20a81f31c94d8f9b0fa598ac249ad13044fa4b8dfb14673e47368e081f6",
+      "bytes": 5223,
+      "type": "uniformity-metrics",
+      "devices": ["iphone-17-pro-max", "oneplus-15", "oppo-find-x9-ultra", "oppo-find-x9s-pro", "huawei-mate-70-air", "huawei-mate-80-rs", "huawei-pura-80-ultra", "xiaomi-15-ultra", "honor-magic-v5"],
+      "notes": "由均匀性对比图（render.py 输出）标题逐项转录",
+      "options": {
+        "devices": {
+          "iphone-17-pro-max": {"sourceId": "ip17pm"},
+          "oneplus-15": {"sourceId": "op15"},
+          "oppo-find-x9-ultra": {"sourceId": "x9u"},
+          "oppo-find-x9s-pro": {"sourceId": "x9s"},
+          "huawei-mate-70-air": {"sourceId": "m70a"},
+          "huawei-mate-80-rs": {"sourceId": "m80rs"},
+          "huawei-pura-80-ultra": {"sourceId": "p80u"},
+          "xiaomi-15-ultra": {"sourceId": "mi15u"},
+          "honor-magic-v5": {"sourceId": "mv5", "display": "outer"}
+        }
+      }
+    }
+  ]
+}

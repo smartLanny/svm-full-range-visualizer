@@ -158,6 +158,12 @@
       "aliases": []
     },
     {
+      "id": "huawei-pura-80-ultra",
+      "name": { "zh": "华为 Pura 80 Ultra", "en": "Huawei Pura 80 Ultra" },
+      "brand": "huawei",
+      "aliases": ["p80u", "Pura80 Ultra"]
+    },
+    {
       "id": "huawei-pura70",
       "name": { "zh": "华为 Pura70", "en": "Huawei Pura 70" },
       "brand": "huawei",

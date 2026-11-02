@@ -154,7 +154,7 @@ export function buildCatalog(root = REPO_ROOT) {
     for (const c of m.conditions ?? []) {
       d.uniformity.push({
         condition: c.id, label: c.label, pattern: c.pattern ?? null, referenceNits: c.referenceNits ?? null,
-        display: 'main', state: 'default', stateBasis: 'convention', unit: null, maps: [], metrics: Object.keys(c.metrics ?? {}),
+        display: m.display ?? 'main', state: 'default', stateBasis: 'convention', unit: null, maps: [], metrics: Object.keys(c.metrics ?? {}),
         ...whiteOf(c),
       });
     }

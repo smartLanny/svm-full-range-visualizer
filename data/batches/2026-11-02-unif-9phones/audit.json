@@ -1,0 +1,525 @@
+{
+  "schemaVersion": 1,
+  "batch": "2026-11-02-unif-9phones",
+  "importedOn": "2026-11-02",
+  "tool": "pipeline/db_import.mjs",
+  "inputs": [
+    {
+      "type": "uniformity-metrics",
+      "path": "uniformity_metrics_from_png.json",
+      "sha256": "88f9b20a81f31c94d8f9b0fa598ac249ad13044fa4b8dfb14673e47368e081f6",
+      "bytes": 5223,
+      "devices": [
+        "iphone-17-pro-max",
+        "oneplus-15",
+        "oppo-find-x9-ultra",
+        "oppo-find-x9s-pro",
+        "huawei-mate-70-air",
+        "huawei-mate-80-rs",
+        "huawei-pura-80-ultra",
+        "xiaomi-15-ultra",
+        "honor-magic-v5"
+      ],
+      "foundIn": "inbox",
+      "importer": "pipeline/import/uniformity_metrics.py",
+      "changedFiles": [
+        "data/uniformity/index.json"
+      ],
+      "warnings": [],
+      "details": {
+        "importer": "pipeline/import/uniformity_metrics.py",
+        "source": {
+          "file": "uniformity_metrics_from_png.json",
+          "sha256": "88f9b20a81f31c94d8f9b0fa598ac249ad13044fa4b8dfb14673e47368e081f6",
+          "bytes": 5223
+        },
+        "devices": [
+          {
+            "device": "iphone-17-pro-max",
+            "sourceId": "ip17pm",
+            "status": "created",
+            "conditions": [
+              "300",
+              "100",
+              "10"
+            ],
+            "metrics": {
+              "10": {
+                "luminance": {
+                  "typical": 0.0312,
+                  "unit": "nit",
+                  "ninePointUniformityPct": 87.6,
+                  "areaUniformityPct": 80.1,
+                  "deviation10PctArea": 1.02
+                }
+              },
+              "100": {
+                "luminance": {
+                  "typical": 0.383,
+                  "unit": "nit",
+                  "ninePointUniformityPct": 92.6,
+                  "areaUniformityPct": 87.8,
+                  "deviation10PctArea": 0.09
+                },
+                "colorTemperature": {
+                  "typical": 6490,
+                  "unit": "K",
+                  "ninePointSpreadK": 278,
+                  "areaSpreadK": 506
+                }
+              },
+              "300": {
+                "luminance": {
+                  "typical": 304.5,
+                  "unit": "nit",
+                  "ninePointUniformityPct": 94.1,
+                  "areaUniformityPct": 90.5,
+                  "deviation10PctArea": 0
+                },
+                "colorTemperature": {
+                  "typical": 6557,
+                  "unit": "K",
+                  "ninePointSpreadK": 163,
+                  "areaSpreadK": 309
+                }
+              }
+            }
+          },
+          {
+            "device": "oneplus-15",
+            "sourceId": "op15",
+            "status": "created",
+            "conditions": [
+              "300",
+              "100",
+              "10"
+            ],
+            "metrics": {
+              "10": {
+                "luminance": {
+                  "typical": 0.0433,
+                  "unit": "nit",
+                  "ninePointUniformityPct": 94.5,
+                  "areaUniformityPct": 85.3,
+                  "deviation10PctArea": 0.13
+                }
+              },
+              "100": {
+                "luminance": {
+                  "typical": 0.376,
+                  "unit": "nit",
+                  "ninePointUniformityPct": 95.5,
+                  "areaUniformityPct": 91.4,
+                  "deviation10PctArea": 0
+                },
+                "colorTemperature": {
+                  "typical": 6657,
+                  "unit": "K",
+                  "ninePointSpreadK": 154,
+                  "areaSpreadK": 523
+                }
+              },
+              "300": {
+                "luminance": {
+                  "typical": 306.1,
+                  "unit": "nit",
+                  "ninePointUniformityPct": 95.6,
+                  "areaUniformityPct": 93.6,
+                  "deviation10PctArea": 0
+                },
+                "colorTemperature": {
+                  "typical": 6649,
+                  "unit": "K",
+                  "ninePointSpreadK": 213,
+                  "areaSpreadK": 334
+                }
+              }
+            }
+          },
+          {
+            "device": "oppo-find-x9-ultra",
+            "sourceId": "x9u",
+            "status": "created",
+            "conditions": [
+              "300",
+              "100"
+            ],
+            "metrics": {
+              "100": {
+                "luminance": {
+                  "typical": 0.405,
+                  "unit": "nit",
+                  "ninePointUniformityPct": 77.6,
+                  "areaUniformityPct": 70.5,
+                  "deviation10PctArea": 12.79
+                },
+                "colorTemperature": {
+                  "typical": 7153,
+                  "unit": "K",
+                  "ninePointSpreadK": 1498,
+                  "areaSpreadK": 2023
+                }
+              },
+              "300": {
+                "luminance": {
+                  "typical": 317.3,
+                  "unit": "nit",
+                  "ninePointUniformityPct": 94.2,
+                  "areaUniformityPct": 91.3,
+                  "deviation10PctArea": 0
+                },
+                "colorTemperature": {
+                  "typical": 7110,
+                  "unit": "K",
+                  "ninePointSpreadK": 168,
+                  "areaSpreadK": 251
+                }
+              }
+            }
+          },
+          {
+            "device": "oppo-find-x9s-pro",
+            "sourceId": "x9s",
+            "status": "created",
+            "conditions": [
+              "300",
+              "100",
+              "10"
+            ],
+            "metrics": {
+              "10": {
+                "luminance": {
+                  "typical": 0.0438,
+                  "unit": "nit",
+                  "ninePointUniformityPct": 90.1,
+                  "areaUniformityPct": 85.8,
+                  "deviation10PctArea": 0
+                }
+              },
+              "100": {
+                "luminance": {
+                  "typical": 0.388,
+                  "unit": "nit",
+                  "ninePointUniformityPct": 94,
+                  "areaUniformityPct": 90.9,
+                  "deviation10PctArea": 0
+                }
+              },
+              "300": {
+                "luminance": {
+                  "typical": 309.5,
+                  "unit": "nit",
+                  "ninePointUniformityPct": 93.1,
+                  "areaUniformityPct": 89.1,
+                  "deviation10PctArea": 0.01
+                },
+                "colorTemperature": {
+                  "typical": 6660,
+                  "unit": "K",
+                  "ninePointSpreadK": 96,
+                  "areaSpreadK": 191
+                }
+              }
+            }
+          },
+          {
+            "device": "huawei-mate-70-air",
+            "sourceId": "m70a",
+            "status": "created",
+            "conditions": [
+              "300",
+              "100",
+              "10"
+            ],
+            "metrics": {
+              "10": {
+                "luminance": {
+                  "typical": 0.109,
+                  "unit": "nit",
+                  "ninePointUniformityPct": 85.3,
+                  "areaUniformityPct": 74.5,
+                  "deviation10PctArea": 6.93
+                }
+              },
+              "100": {
+                "luminance": {
+                  "typical": 0.37,
+                  "unit": "nit",
+                  "ninePointUniformityPct": 94.4,
+                  "areaUniformityPct": 86,
+                  "deviation10PctArea": 0.3
+                },
+                "colorTemperature": {
+                  "typical": 6448,
+                  "unit": "K",
+                  "ninePointSpreadK": 530,
+                  "areaSpreadK": 853
+                }
+              },
+              "300": {
+                "luminance": {
+                  "typical": 302.9,
+                  "unit": "nit",
+                  "ninePointUniformityPct": 92.1,
+                  "areaUniformityPct": 86.8,
+                  "deviation10PctArea": 0.14
+                },
+                "colorTemperature": {
+                  "typical": 6493,
+                  "unit": "K",
+                  "ninePointSpreadK": 266,
+                  "areaSpreadK": 348
+                }
+              }
+            }
+          },
+          {
+            "device": "huawei-mate-80-rs",
+            "sourceId": "m80rs",
+            "status": "created",
+            "conditions": [
+              "300",
+              "100",
+              "10"
+            ],
+            "metrics": {
+              "10": {
+                "luminance": {
+                  "typical": 0.0699,
+                  "unit": "nit",
+                  "ninePointUniformityPct": 89.8,
+                  "areaUniformityPct": 78.3,
+                  "deviation10PctArea": 3.41
+                }
+              },
+              "100": {
+                "luminance": {
+                  "typical": 0.379,
+                  "unit": "nit",
+                  "ninePointUniformityPct": 86,
+                  "areaUniformityPct": 74.5,
+                  "deviation10PctArea": 8.75
+                },
+                "colorTemperature": {
+                  "typical": 6252,
+                  "unit": "K",
+                  "ninePointSpreadK": 1099,
+                  "areaSpreadK": 1642
+                }
+              },
+              "300": {
+                "luminance": {
+                  "typical": 334.4,
+                  "unit": "nit",
+                  "ninePointUniformityPct": 94.7,
+                  "areaUniformityPct": 91.6,
+                  "deviation10PctArea": 0
+                },
+                "colorTemperature": {
+                  "typical": 6151,
+                  "unit": "K",
+                  "ninePointSpreadK": 202,
+                  "areaSpreadK": 386
+                }
+              }
+            }
+          },
+          {
+            "device": "huawei-pura-80-ultra",
+            "sourceId": "p80u",
+            "status": "created",
+            "conditions": [
+              "300",
+              "100",
+              "10"
+            ],
+            "metrics": {
+              "10": {
+                "luminance": {
+                  "typical": 0.0301,
+                  "unit": "nit",
+                  "ninePointUniformityPct": 66.5,
+                  "areaUniformityPct": 45.9,
+                  "deviation10PctArea": 43.86
+                }
+              },
+              "100": {
+                "luminance": {
+                  "typical": 0.38,
+                  "unit": "nit",
+                  "ninePointUniformityPct": 96.8,
+                  "areaUniformityPct": 88,
+                  "deviation10PctArea": 0
+                }
+              },
+              "300": {
+                "luminance": {
+                  "typical": 296.3,
+                  "unit": "nit",
+                  "ninePointUniformityPct": 97.3,
+                  "areaUniformityPct": 92.4,
+                  "deviation10PctArea": 0
+                },
+                "colorTemperature": {
+                  "typical": 7243,
+                  "unit": "K",
+                  "ninePointSpreadK": 313,
+                  "areaSpreadK": 460
+                }
+              }
+            }
+          },
+          {
+            "device": "xiaomi-15-ultra",
+            "sourceId": "mi15u",
+            "status": "created",
+            "conditions": [
+              "300",
+              "100",
+              "10"
+            ],
+            "metrics": {
+              "10": {
+                "luminance": {
+                  "typical": 0.0419,
+                  "unit": "nit",
+                  "ninePointUniformityPct": 66.2,
+                  "areaUniformityPct": 58.1,
+                  "deviation10PctArea": 49.23
+                }
+              },
+              "100": {
+                "luminance": {
+                  "typical": 0.386,
+                  "unit": "nit",
+                  "ninePointUniformityPct": 89.5,
+                  "areaUniformityPct": 85.9,
+                  "deviation10PctArea": 0.01
+                },
+                "colorTemperature": {
+                  "typical": 7035,
+                  "unit": "K",
+                  "ninePointSpreadK": 365,
+                  "areaSpreadK": 652
+                }
+              },
+              "300": {
+                "luminance": {
+                  "typical": 285.4,
+                  "unit": "nit",
+                  "ninePointUniformityPct": 92.7,
+                  "areaUniformityPct": 89.3,
+                  "deviation10PctArea": 0
+                },
+                "colorTemperature": {
+                  "typical": 6780,
+                  "unit": "K",
+                  "ninePointSpreadK": 184,
+                  "areaSpreadK": 352
+                }
+              }
+            }
+          },
+          {
+            "device": "honor-magic-v5",
+            "sourceId": "mv5",
+            "status": "created",
+            "conditions": [
+              "300",
+              "100",
+              "10"
+            ],
+            "metrics": {
+              "10": {
+                "luminance": {
+                  "typical": 0.0487,
+                  "unit": "nit",
+                  "ninePointUniformityPct": 78.9,
+                  "areaUniformityPct": 66,
+                  "deviation10PctArea": 18.52
+                }
+              },
+              "100": {
+                "luminance": {
+                  "typical": 0.37,
+                  "unit": "nit",
+                  "ninePointUniformityPct": 95.6,
+                  "areaUniformityPct": 91.2,
+                  "deviation10PctArea": 0
+                },
+                "colorTemperature": {
+                  "typical": 6486,
+                  "unit": "K",
+                  "ninePointSpreadK": 163,
+                  "areaSpreadK": 372
+                }
+              },
+              "300": {
+                "luminance": {
+                  "typical": 303.6,
+                  "unit": "nit",
+                  "ninePointUniformityPct": 92.6,
+                  "areaUniformityPct": 89.9,
+                  "deviation10PctArea": 0
+                },
+                "colorTemperature": {
+                  "typical": 6515,
+                  "unit": "K",
+                  "ninePointSpreadK": 220,
+                  "areaSpreadK": 305
+                }
+              }
+            }
+          }
+        ],
+        "white": [],
+        "skippedNonDefaultRows": [],
+        "index": {
+          "path": "data/uniformity/index.json",
+          "sha256Before": "fb6131580452bfd720c5c7412a75c75d25eaca266711a63b8cca1e3030cbd66d",
+          "sha256After": "74392bdf402caad825f7c4e93bac4772ba3e50a76ff62451d8858da99598f17d",
+          "changed": true
+        },
+        "rounding": "Same as the atlas's scripts/uniformity/export_maps.py: luminance typical 6 decimals, percentages 4, colour temperature 3.",
+        "warnings": []
+      }
+    }
+  ],
+  "files": [
+    {
+      "path": "data/uniformity/index.json",
+      "sha256Before": "fb6131580452bfd720c5c7412a75c75d25eaca266711a63b8cca1e3030cbd66d",
+      "sha256After": "74392bdf402caad825f7c4e93bac4772ba3e50a76ff62451d8858da99598f17d"
+    }
+  ],
+  "counts": {
+    "before": {
+      "devices": 25,
+      "svmRecords": 21,
+      "angleProfiles": 8,
+      "angleProfilesMeasured": 7,
+      "uniformityConditions": 9,
+      "uniformityMaps": 15,
+      "reflectanceSamples": 32
+    },
+    "after": {
+      "devices": 26,
+      "svmRecords": 21,
+      "angleProfiles": 8,
+      "angleProfilesMeasured": 7,
+      "uniformityConditions": 35,
+      "uniformityMaps": 15,
+      "reflectanceSamples": 32
+    },
+    "delta": {
+      "devices": 1,
+      "svmRecords": 0,
+      "angleProfiles": 0,
+      "angleProfilesMeasured": 0,
+      "uniformityConditions": 26,
+      "uniformityMaps": 0,
+      "reflectanceSamples": 0
+    }
+  },
+  "requiresStandaloneRebuild": false
+}

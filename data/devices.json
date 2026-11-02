@@ -5,9 +5,9 @@
   "inputs": {
     "public/datasets/manifest.json": "28ead38e1e9036de5b4e813000947961bd8d9c7ae931b502c808540b04cf94b4",
     "data/angle/summary.json": "f5f8514c14e23f3f15bf3c317851220d3c3825714fd8baca072bb95e6d760431",
-    "data/uniformity/index.json": "fb6131580452bfd720c5c7412a75c75d25eaca266711a63b8cca1e3030cbd66d",
+    "data/uniformity/index.json": "74392bdf402caad825f7c4e93bac4772ba3e50a76ff62451d8858da99598f17d",
     "data/reflectance/index.json": "395a40def7c94286de548e88195acdc297e8df5d6ec907a3d5133e989f85a6fc",
-    "data/catalog-overrides.json": "a68d254178a91c3ae63e089d2945b89e66165f4a3f52564e46f268cafb907565"
+    "data/catalog-overrides.json": "3f299d42f29ae01aed850eecb63a58de646bec9aeb13c2ebc872f9b65a87eda9"
   },
   "vocabulary": {
     "dataTypes": {
@@ -155,17 +155,17 @@
     }
   },
   "counts": {
-    "devices": 25,
+    "devices": 26,
     "svmRecords": 21,
     "angleProfiles": 8,
     "angleProfilesMeasured": 7,
-    "uniformityConditions": 9,
+    "uniformityConditions": 35,
     "uniformityMaps": 15,
     "reflectanceSamples": 32,
     "devicesWith": {
       "svm": 8,
       "angle": 5,
-      "uniformity": 3,
+      "uniformity": 12,
       "reflectance": 24
     }
   },
@@ -702,9 +702,8 @@
           "status": "complete"
         },
         "uniformity": {
-          "status": "pending-import",
-          "sourceId": "ip17pm",
-          "note": "atlas 标为「仅指标」（视频项目中的 id：ip17pm），但指标数值没有导出，本库暂无数据。"
+          "status": "metrics-only",
+          "sourceId": "ip17pm"
         },
         "reflectance": {
           "status": "complete"
@@ -743,7 +742,52 @@
           "unit": "gv3"
         }
       ],
-      "uniformity": [],
+      "uniformity": [
+        {
+          "condition": "300",
+          "label": "300 nits 白场",
+          "pattern": "全白场",
+          "referenceNits": 300,
+          "display": "main",
+          "state": "default",
+          "stateBasis": "convention",
+          "unit": null,
+          "maps": [],
+          "metrics": [
+            "luminance",
+            "colorTemperature"
+          ]
+        },
+        {
+          "condition": "100",
+          "label": "100 nits G20",
+          "pattern": "G20",
+          "referenceNits": 100,
+          "display": "main",
+          "state": "default",
+          "stateBasis": "convention",
+          "unit": null,
+          "maps": [],
+          "metrics": [
+            "luminance",
+            "colorTemperature"
+          ]
+        },
+        {
+          "condition": "10",
+          "label": "10 nits G20",
+          "pattern": "G20",
+          "referenceNits": 10,
+          "display": "main",
+          "state": "default",
+          "stateBasis": "convention",
+          "unit": null,
+          "maps": [],
+          "metrics": [
+            "luminance"
+          ]
+        }
+      ],
       "reflectance": [
         {
           "condition": "as-measured",
@@ -934,9 +978,8 @@
           "status": "not-measured"
         },
         "uniformity": {
-          "status": "pending-import",
-          "sourceId": "m80rs",
-          "note": "atlas 标为「仅指标」（视频项目中的 id：m80rs），但指标数值没有导出，本库暂无数据。"
+          "status": "metrics-only",
+          "sourceId": "m80rs"
         },
         "reflectance": {
           "status": "complete"
@@ -985,7 +1028,52 @@
         }
       ],
       "angle": [],
-      "uniformity": [],
+      "uniformity": [
+        {
+          "condition": "300",
+          "label": "300 nits 白场",
+          "pattern": "全白场",
+          "referenceNits": 300,
+          "display": "main",
+          "state": "default",
+          "stateBasis": "convention",
+          "unit": null,
+          "maps": [],
+          "metrics": [
+            "luminance",
+            "colorTemperature"
+          ]
+        },
+        {
+          "condition": "100",
+          "label": "100 nits G20",
+          "pattern": "G20",
+          "referenceNits": 100,
+          "display": "main",
+          "state": "default",
+          "stateBasis": "convention",
+          "unit": null,
+          "maps": [],
+          "metrics": [
+            "luminance",
+            "colorTemperature"
+          ]
+        },
+        {
+          "condition": "10",
+          "label": "10 nits G20",
+          "pattern": "G20",
+          "referenceNits": 10,
+          "display": "main",
+          "state": "default",
+          "stateBasis": "convention",
+          "unit": null,
+          "maps": [],
+          "metrics": [
+            "luminance"
+          ]
+        }
+      ],
       "reflectance": [
         {
           "condition": "as-measured",
@@ -1024,9 +1112,8 @@
           "status": "not-measured"
         },
         "uniformity": {
-          "status": "pending-import",
-          "sourceId": "m70a",
-          "note": "atlas 标为「仅指标」（视频项目中的 id：m70a），但指标数值没有导出，本库暂无数据。"
+          "status": "metrics-only",
+          "sourceId": "m70a"
         },
         "reflectance": {
           "status": "complete"
@@ -1075,7 +1162,52 @@
         }
       ],
       "angle": [],
-      "uniformity": [],
+      "uniformity": [
+        {
+          "condition": "300",
+          "label": "300 nits 白场",
+          "pattern": "全白场",
+          "referenceNits": 300,
+          "display": "main",
+          "state": "default",
+          "stateBasis": "convention",
+          "unit": null,
+          "maps": [],
+          "metrics": [
+            "luminance",
+            "colorTemperature"
+          ]
+        },
+        {
+          "condition": "100",
+          "label": "100 nits G20",
+          "pattern": "G20",
+          "referenceNits": 100,
+          "display": "main",
+          "state": "default",
+          "stateBasis": "convention",
+          "unit": null,
+          "maps": [],
+          "metrics": [
+            "luminance",
+            "colorTemperature"
+          ]
+        },
+        {
+          "condition": "10",
+          "label": "10 nits G20",
+          "pattern": "G20",
+          "referenceNits": 10,
+          "display": "main",
+          "state": "default",
+          "stateBasis": "convention",
+          "unit": null,
+          "maps": [],
+          "metrics": [
+            "luminance"
+          ]
+        }
+      ],
       "reflectance": [
         {
           "condition": "as-measured",
@@ -1112,7 +1244,8 @@
           "status": "not-measured"
         },
         "uniformity": {
-          "status": "not-measured"
+          "status": "metrics-only",
+          "sourceId": "mv5"
         },
         "reflectance": {
           "status": "complete"
@@ -1120,7 +1253,52 @@
       },
       "svm": [],
       "angle": [],
-      "uniformity": [],
+      "uniformity": [
+        {
+          "condition": "300",
+          "label": "300 nits 白场",
+          "pattern": "全白场",
+          "referenceNits": 300,
+          "display": "outer",
+          "state": "default",
+          "stateBasis": "convention",
+          "unit": null,
+          "maps": [],
+          "metrics": [
+            "luminance",
+            "colorTemperature"
+          ]
+        },
+        {
+          "condition": "100",
+          "label": "100 nits G20",
+          "pattern": "G20",
+          "referenceNits": 100,
+          "display": "outer",
+          "state": "default",
+          "stateBasis": "convention",
+          "unit": null,
+          "maps": [],
+          "metrics": [
+            "luminance",
+            "colorTemperature"
+          ]
+        },
+        {
+          "condition": "10",
+          "label": "10 nits G20",
+          "pattern": "G20",
+          "referenceNits": 10,
+          "display": "outer",
+          "state": "default",
+          "stateBasis": "convention",
+          "unit": null,
+          "maps": [],
+          "metrics": [
+            "luminance"
+          ]
+        }
+      ],
       "reflectance": [
         {
           "condition": "inner-display",
@@ -1212,7 +1390,8 @@
           "status": "not-measured"
         },
         "uniformity": {
-          "status": "not-measured"
+          "status": "metrics-only",
+          "sourceId": "op15"
         },
         "reflectance": {
           "status": "complete"
@@ -1220,7 +1399,52 @@
       },
       "svm": [],
       "angle": [],
-      "uniformity": [],
+      "uniformity": [
+        {
+          "condition": "300",
+          "label": "300 nits 白场",
+          "pattern": "全白场",
+          "referenceNits": 300,
+          "display": "main",
+          "state": "default",
+          "stateBasis": "convention",
+          "unit": null,
+          "maps": [],
+          "metrics": [
+            "luminance",
+            "colorTemperature"
+          ]
+        },
+        {
+          "condition": "100",
+          "label": "100 nits G20",
+          "pattern": "G20",
+          "referenceNits": 100,
+          "display": "main",
+          "state": "default",
+          "stateBasis": "convention",
+          "unit": null,
+          "maps": [],
+          "metrics": [
+            "luminance",
+            "colorTemperature"
+          ]
+        },
+        {
+          "condition": "10",
+          "label": "10 nits G20",
+          "pattern": "G20",
+          "referenceNits": 10,
+          "display": "main",
+          "state": "default",
+          "stateBasis": "convention",
+          "unit": null,
+          "maps": [],
+          "metrics": [
+            "luminance"
+          ]
+        }
+      ],
       "reflectance": [
         {
           "condition": "as-measured",
@@ -1393,7 +1617,8 @@
           "status": "not-measured"
         },
         "uniformity": {
-          "status": "not-measured"
+          "status": "metrics-only",
+          "sourceId": "x9u"
         },
         "reflectance": {
           "status": "complete"
@@ -1401,7 +1626,38 @@
       },
       "svm": [],
       "angle": [],
-      "uniformity": [],
+      "uniformity": [
+        {
+          "condition": "300",
+          "label": "300 nits 白场",
+          "pattern": "全白场",
+          "referenceNits": 300,
+          "display": "main",
+          "state": "default",
+          "stateBasis": "convention",
+          "unit": null,
+          "maps": [],
+          "metrics": [
+            "luminance",
+            "colorTemperature"
+          ]
+        },
+        {
+          "condition": "100",
+          "label": "100 nits G20",
+          "pattern": "G20",
+          "referenceNits": 100,
+          "display": "main",
+          "state": "default",
+          "stateBasis": "convention",
+          "unit": null,
+          "maps": [],
+          "metrics": [
+            "luminance",
+            "colorTemperature"
+          ]
+        }
+      ],
       "reflectance": [
         {
           "condition": "as-measured",
@@ -1437,7 +1693,8 @@
           "status": "not-measured"
         },
         "uniformity": {
-          "status": "not-measured"
+          "status": "metrics-only",
+          "sourceId": "x9s"
         },
         "reflectance": {
           "status": "complete"
@@ -1445,7 +1702,51 @@
       },
       "svm": [],
       "angle": [],
-      "uniformity": [],
+      "uniformity": [
+        {
+          "condition": "300",
+          "label": "300 nits 白场",
+          "pattern": "全白场",
+          "referenceNits": 300,
+          "display": "main",
+          "state": "default",
+          "stateBasis": "convention",
+          "unit": null,
+          "maps": [],
+          "metrics": [
+            "luminance",
+            "colorTemperature"
+          ]
+        },
+        {
+          "condition": "100",
+          "label": "100 nits G20",
+          "pattern": "G20",
+          "referenceNits": 100,
+          "display": "main",
+          "state": "default",
+          "stateBasis": "convention",
+          "unit": null,
+          "maps": [],
+          "metrics": [
+            "luminance"
+          ]
+        },
+        {
+          "condition": "10",
+          "label": "10 nits G20",
+          "pattern": "G20",
+          "referenceNits": 10,
+          "display": "main",
+          "state": "default",
+          "stateBasis": "convention",
+          "unit": null,
+          "maps": [],
+          "metrics": [
+            "luminance"
+          ]
+        }
+      ],
       "reflectance": [
         {
           "condition": "as-measured",
@@ -1537,7 +1838,8 @@
           "status": "not-measured"
         },
         "uniformity": {
-          "status": "not-measured"
+          "status": "metrics-only",
+          "sourceId": "mi15u"
         },
         "reflectance": {
           "status": "complete"
@@ -1545,7 +1847,52 @@
       },
       "svm": [],
       "angle": [],
-      "uniformity": [],
+      "uniformity": [
+        {
+          "condition": "300",
+          "label": "300 nits 白场",
+          "pattern": "全白场",
+          "referenceNits": 300,
+          "display": "main",
+          "state": "default",
+          "stateBasis": "convention",
+          "unit": null,
+          "maps": [],
+          "metrics": [
+            "luminance",
+            "colorTemperature"
+          ]
+        },
+        {
+          "condition": "100",
+          "label": "100 nits G20",
+          "pattern": "G20",
+          "referenceNits": 100,
+          "display": "main",
+          "state": "default",
+          "stateBasis": "convention",
+          "unit": null,
+          "maps": [],
+          "metrics": [
+            "luminance",
+            "colorTemperature"
+          ]
+        },
+        {
+          "condition": "10",
+          "label": "10 nits G20",
+          "pattern": "G20",
+          "referenceNits": 10,
+          "display": "main",
+          "state": "default",
+          "stateBasis": "convention",
+          "unit": null,
+          "maps": [],
+          "metrics": [
+            "luminance"
+          ]
+        }
+      ],
       "reflectance": [
         {
           "condition": "as-measured",
@@ -1736,6 +2083,85 @@
           "sourceName": "一加 13 Pro"
         }
       ]
+    },
+    {
+      "id": "huawei-pura-80-ultra",
+      "name": {
+        "zh": "华为 Pura 80 Ultra",
+        "en": "Huawei Pura 80 Ultra"
+      },
+      "brand": "huawei",
+      "aliases": [
+        "p80u",
+        "Pura80 Ultra"
+      ],
+      "displays": [
+        "main"
+      ],
+      "units": [],
+      "availability": {
+        "svm": {
+          "status": "not-measured"
+        },
+        "angle": {
+          "status": "not-measured"
+        },
+        "uniformity": {
+          "status": "metrics-only",
+          "sourceId": "p80u"
+        },
+        "reflectance": {
+          "status": "not-measured"
+        }
+      },
+      "svm": [],
+      "angle": [],
+      "uniformity": [
+        {
+          "condition": "300",
+          "label": "300 nits 白场",
+          "pattern": "全白场",
+          "referenceNits": 300,
+          "display": "main",
+          "state": "default",
+          "stateBasis": "convention",
+          "unit": null,
+          "maps": [],
+          "metrics": [
+            "luminance",
+            "colorTemperature"
+          ]
+        },
+        {
+          "condition": "100",
+          "label": "100 nits G20",
+          "pattern": "G20",
+          "referenceNits": 100,
+          "display": "main",
+          "state": "default",
+          "stateBasis": "convention",
+          "unit": null,
+          "maps": [],
+          "metrics": [
+            "luminance"
+          ]
+        },
+        {
+          "condition": "10",
+          "label": "10 nits G20",
+          "pattern": "G20",
+          "referenceNits": 10,
+          "display": "main",
+          "state": "default",
+          "stateBasis": "convention",
+          "unit": null,
+          "maps": [],
+          "metrics": [
+            "luminance"
+          ]
+        }
+      ],
+      "reflectance": []
     },
     {
       "id": "huawei-pura70",

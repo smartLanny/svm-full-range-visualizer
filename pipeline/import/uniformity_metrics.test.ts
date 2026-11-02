@@ -2,7 +2,7 @@
  * pipeline/import/uniformity_metrics.py — regression against the current index, metrics-only
  * devices, measured white, and refusals. All runs use a temporary copy of the database.
  *
- * The numbers for iPhone 17 Pro Max / Mate 90 below are SYNTHETIC test values (the real ones are
+ * The numbers for iPhone 16 Pro Max / Mate 90 below are SYNTHETIC test values (the real ones are
  * still on the user's NAS); they only ever exist inside the temporary fixture.
  */
 import fs from 'fs';
@@ -33,12 +33,12 @@ function rowsFromIndex(index: any): Row[] {
   return rows;
 }
 
-const SYNTH_IP17PM: Row[] = [
-  { id: 'ip17pm', level: '300', kind: 'lum', cond: '', typ: 301.2345678, u9: 91.23456, ua: 87.65432, dev10: 0.12345 },
-  { id: 'ip17pm', level: '300', kind: 'cct', cond: '', typ: 6612.34567, d9: 120.1234, da: 250.9876 },
-  { id: 'ip17pm', level: '100', kind: 'lum', cond: '', typ: 0.3512, u9: 93.1, ua: 89.2, dev10: 0 },
-  { id: 'ip17pm', level: '10', kind: 'lum', cond: '', typ: 0.0307, u9: 85, ua: 77.7, dev10: 3.2 },
-  { id: 'ip17pm', level: '100', kind: 'lum', cond: '防窥', typ: 0.2, u9: 50, ua: 40, dev10: 9 },
+const SYNTH_IP16PM: Row[] = [
+  { id: 'ip16pm', level: '300', kind: 'lum', cond: '', typ: 301.2345678, u9: 91.23456, ua: 87.65432, dev10: 0.12345 },
+  { id: 'ip16pm', level: '300', kind: 'cct', cond: '', typ: 6612.34567, d9: 120.1234, da: 250.9876 },
+  { id: 'ip16pm', level: '100', kind: 'lum', cond: '', typ: 0.3512, u9: 93.1, ua: 89.2, dev10: 0 },
+  { id: 'ip16pm', level: '10', kind: 'lum', cond: '', typ: 0.0307, u9: 85, ua: 77.7, dev10: 3.2 },
+  { id: 'ip16pm', level: '100', kind: 'lum', cond: '防窥', typ: 0.2, u9: 50, ua: 40, dev10: 9 },
 ];
 
 let fx: Fixture | null = null;
@@ -78,11 +78,11 @@ describe('uniformity_metrics.py', () => {
   });
 
   it('imports a metrics-only device; the catalog then shows 仅指标', () => {
-    const r = run(SYNTH_IP17PM, { devices: ['iphone-17-pro-max'] });
+    const r = run(SYNTH_IP16PM, { devices: { 'iphone-16-pro-max': { sourceId: 'ip16pm' } } });
     expect(r.status, r.stderr).toBe(0);
     expect(r.result.changedFiles).toEqual([INDEX]);
-    const entry = index().metricsOnly.find((m: { id: string }) => m.id === 'iphone-17-pro-max');
-    expect(entry.metricSourceId).toBe('ip17pm');
+    const entry = index().metricsOnly.find((m: { id: string }) => m.id === 'iphone-16-pro-max');
+    expect(entry.metricSourceId).toBe('ip16pm');
     expect(entry.metricsSource).toMatchObject({ file: '视频项目/data/uniformity_metrics.json', batch: '2026-11-05-test' });
     expect(entry.conditions.map((c: { id: string }) => c.id)).toEqual(['300', '100', '10']);
     expect(entry.conditions[0]).toEqual({
@@ -94,18 +94,18 @@ describe('uniformity_metrics.py', () => {
     });
     expect(Object.keys(entry.conditions[1].metrics)).toEqual(['luminance']);
     // the 防窥 row is not a default-condition row: listed, not imported
-    expect(r.result.audit.skippedNonDefaultRows).toEqual([{ id: 'ip17pm', level: '100', kind: 'lum', cond: '防窥' }]);
-    expect(r.result.changelog[0]).toContain('iPhone 17 Pro Max 新增仅指标数据（300 nits、100 nits、10 nits');
+    expect(r.result.audit.skippedNonDefaultRows).toEqual([{ id: 'ip16pm', level: '100', kind: 'lum', cond: '防窥' }]);
+    expect(r.result.changelog[0]).toContain('iPhone 16 Pro Max 新增仅指标数据（300 nits、100 nits、10 nits');
 
     // second run: nothing changes
     const before = fs.readFileSync(fx!.path(INDEX));
-    const again = run(SYNTH_IP17PM, { devices: ['iphone-17-pro-max'] });
+    const again = run(SYNTH_IP16PM, { devices: { 'iphone-16-pro-max': { sourceId: 'ip16pm' } } });
     expect(again.result.changedFiles).toEqual([]);
     expect(fs.readFileSync(fx!.path(INDEX)).equals(before)).toBe(true);
 
     fx!.writeJson('data/devices.json', buildCatalog(fx!.root));
-    const ip17 = fx!.readJson('data/devices.json').devices.find((d: { id: string }) => d.id === 'iphone-17-pro-max');
-    expect(ip17.availability.uniformity).toEqual({ status: 'metrics-only', sourceId: 'ip17pm' });
+    const ip17 = fx!.readJson('data/devices.json').devices.find((d: { id: string }) => d.id === 'iphone-16-pro-max');
+    expect(ip17.availability.uniformity).toEqual({ status: 'metrics-only', sourceId: 'ip16pm' });
     expect(ip17.uniformity.map((e: { condition: string; maps: unknown[] }) => [e.condition, e.maps.length])).toEqual([['300', 0], ['100', 0], ['10', 0]]);
     // db:check objects only because the index changed outside db:import (hash chain + data version)
     const errors = runCheck({ root: fx!.root }).errors;
@@ -115,12 +115,12 @@ describe('uniformity_metrics.py', () => {
   });
 
   it('refuses to overwrite different metrics unless replace is set', () => {
-    expect(run(SYNTH_IP17PM, { devices: ['iphone-17-pro-max'] }).status).toBe(0);
-    const changed = SYNTH_IP17PM.map((x) => (x.level === '10' && x.kind === 'lum' ? { ...x, ua: 70 } : x));
-    const r = run(changed, { devices: ['iphone-17-pro-max'] });
+    expect(run(SYNTH_IP16PM, { devices: { 'iphone-16-pro-max': { sourceId: 'ip16pm' } } }).status).toBe(0);
+    const changed = SYNTH_IP16PM.map((x) => (x.level === '10' && x.kind === 'lum' ? { ...x, ua: 70 } : x));
+    const r = run(changed, { devices: { 'iphone-16-pro-max': { sourceId: 'ip16pm' } } });
     expect(r.status).toBe(1);
     expect(r.stderr).toMatch(/已存在且不同；原始数据不覆盖/);
-    const ok = run(changed, { devices: ['iphone-17-pro-max'], replace: true });
+    const ok = run(changed, { devices: { 'iphone-16-pro-max': { sourceId: 'ip16pm' } }, replace: true });
     expect(ok.status, ok.stderr).toBe(0);
     expect(ok.result.audit.devices[0].status).toBe('replaced');
   });
@@ -156,8 +156,8 @@ describe('uniformity_metrics.py', () => {
   });
 
   it('refuses unknown devices, unknown source ids and files without a device list', () => {
-    expect(run(SYNTH_IP17PM, { devices: ['some-new-phone'] }).stderr).toMatch(/some-new-phone 不在 data\/catalog-overrides\.json 中/);
-    expect(run(SYNTH_IP17PM, { devices: { 'huawei-mate-90-pro-max': {} } }).stderr).toMatch(/请在 options\.devices 里写 sourceId（文件里有：ip17pm）/);
-    expect(run(SYNTH_IP17PM, {}).stderr).toMatch(/没有列出要导入的机型/);
+    expect(run(SYNTH_IP16PM, { devices: ['some-new-phone'] }).stderr).toMatch(/some-new-phone 不在 data\/catalog-overrides\.json 中/);
+    expect(run(SYNTH_IP16PM, { devices: { 'huawei-mate-90-pro-max': {} } }).stderr).toMatch(/请在 options\.devices 里写 sourceId（文件里有：ip16pm）/);
+    expect(run(SYNTH_IP16PM, {}).stderr).toMatch(/没有列出要导入的机型/);
   });
 });

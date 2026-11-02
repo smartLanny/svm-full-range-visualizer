@@ -119,6 +119,7 @@ export function RankingPage({ catalog, cond: cond0, by: by0 }: { catalog: Catalo
                         className="block truncate text-[15px] font-medium text-ink-1 hover:text-accent-hover hover:underline"
                       >
                         {r.device.name.zh}
+                        {r.display && <span className="ml-1.5 text-xs font-normal text-ink-3">{r.display === 'outer' ? '外屏' : '内屏'}</span>}
                       </a>
                       <div className="mt-0.5 truncate text-[11px] tabular-nums text-ink-3">
                         {r.typical !== null && <>典型 {fmtSig(r.typical)} nits</>}

@@ -45,6 +45,9 @@ function tree(root: string) {
   return out;
 }
 
+/** Batches already imported into the repository's data (the fixture starts from them). */
+const BASE_BATCHES: string[] = JSON.parse(fs.readFileSync(path.join(ROOT, 'data/version.json'), 'utf8')).batches ?? [];
+
 let fx: Fixture | null = null;
 afterEach(() => { fx?.cleanup(); fx = null; });
 
@@ -79,8 +82,8 @@ function fullBatch(f: Fixture, edit: (b: any) => void = () => {}) {
   };
   const csv = fs.readFileSync(path.join(ROOT, 'test-fixtures/iphone_duo_inner_revision91.csv'));
   const metrics = JSON.stringify([
-    { id: 'ip17pm', level: '300', kind: 'lum', cond: '', typ: 301.2, u9: 91.2, ua: 87.6, dev10: 0.1 },
-    { id: 'ip17pm', level: '100', kind: 'lum', cond: '', typ: 0.3512, u9: 93.1, ua: 89.2, dev10: 0 },
+    { id: 'ip16pm', level: '300', kind: 'lum', cond: '', typ: 301.2, u9: 91.2, ua: 87.6, dev10: 0.1 },
+    { id: 'ip16pm', level: '100', kind: 'lum', cond: '', typ: 0.3512, u9: 93.1, ua: 89.2, dev10: 0 },
   ]);
   const batch = {
     schemaVersion: 1,
@@ -90,7 +93,7 @@ function fullBatch(f: Fixture, edit: (b: any) => void = () => {}) {
     notes: '只在临时目录里存在。',
     inputs: [
       { ...inbox('飞书导出/iPhone Duo 内屏.csv', csv), type: 'svm-feishu-csv', devices: ['iphone-duo'], options: example.inputs[0].options },
-      { ...inbox('视频项目/data/uniformity_metrics.json', metrics), type: 'uniformity-metrics', devices: ['iphone-17-pro-max'], options: { devices: ['iphone-17-pro-max'] } },
+      { ...inbox('视频项目/data/uniformity_metrics.json', metrics), type: 'uniformity-metrics', devices: ['iphone-16-pro-max'], options: { devices: { 'iphone-16-pro-max': { sourceId: 'ip16pm' } } } },
       { type: 'uniformity-white', devices: ['xiaomi-17-ultra'], notes: '合成白场读数', options: { white: { 'xiaomi-17-ultra': { '100': { nits: 101.5, note: '合成测试值' } } } } },
       {
         ...inbox('反射率.xml', syntheticXml([{ id: '900', name: 'iPhone Duo 内屏（合成）', scale: 0.9 }])), type: 'reflectance-xml', devices: ['iphone-duo'],
@@ -142,15 +145,15 @@ describe('db:import', () => {
     // SVM records are byte-identical to the committed ones
     for (const file of DUO.slice(0, 2)) expect(fs.readFileSync(f.path(`public/datasets/${file}`)).equals(fs.readFileSync(path.join(ROOT, 'public/datasets', file)))).toBe(true);
     const version = f.readJson('data/version.json');
-    expect(version).toMatchObject({ dataVersion: '2026.11.05', date: '2026-11-05', batch: ID, batches: [ID] });
+    expect(version).toMatchObject({ dataVersion: '2026.11.05', date: '2026-11-05', batch: ID, batches: [...BASE_BATCHES, ID] });
     expect(version.counts).toEqual(f.readJson('data/devices.json').counts);
     const changelog = fs.readFileSync(f.path('data/CHANGELOG.md'), 'utf8');
     expect(changelog.indexOf(`## 2026.11.05 · \`${ID}\``)).toBeLessThan(changelog.indexOf('## 2026.11.02 · 基线'));
     expect(changelog).toContain('频闪：新增 iPhone Duo 内屏 · 普通 120Hz（iPhoneDuo_inner_120hz.json，432 个实测格、0 个空格）');
-    expect(changelog).toContain('均匀度：iPhone 17 Pro Max 新增仅指标数据（300 nits、100 nits，无热力图；源 id ip17pm）');
+    expect(changelog).toContain('均匀度：iPhone 16 Pro Max 新增仅指标数据（300 nits、100 nits，无热力图；源 id ip16pm）');
     expect(changelog).toContain('均匀度：小米 17 Ultra 徕卡 100 nits 档记录实测白场 101.5 nits');
     expect(changelog).toContain('反射率：新增 iPhone Duo · 内屏（XML 样品 900');
-    expect(changelog).toMatch(/数量：频闪记录 17 → 19；均匀度档位 9 → 11；反射率样品 32 → 33/);
+    expect(changelog).toMatch(/数量：频闪记录 17 → 19；均匀度档位 35 → 37；反射率样品 32 → 33/);
 
     const audit = f.readJson(`data/batches/${ID}/audit.json`);
     expect(audit.inputs.map((i: { foundIn: string }) => i.foundIn)).toEqual(['inbox', 'inbox', 'batch', 'inbox']);
@@ -163,7 +166,7 @@ describe('db:import', () => {
 
     const catalog = f.readJson('data/devices.json');
     const dev = (id: string) => catalog.devices.find((d: { id: string }) => d.id === id);
-    expect(dev('iphone-17-pro-max').availability.uniformity.status).toBe('metrics-only');
+    expect(dev('iphone-16-pro-max').availability.uniformity.status).toBe('metrics-only');
     expect(dev('iphone-duo').availability.reflectance.status).toBe('complete');
     const check = runCheck({ root: f.root });
     expect(check.errors).toEqual([]);
@@ -193,7 +196,7 @@ describe('db:import', () => {
     const r = cli([p, '--root', f.root, '--today', '2026-11-05']);
     expect(r.status, r.stderr).toBe(0);
     expect(r.summary.dataVersion).toBe('2026.11.05.2');
-    expect(f.readJson('data/version.json').batches).toEqual([ID, '2026-11-05-white-only']);
+    expect(f.readJson('data/version.json').batches).toEqual([...BASE_BATCHES, ID, '2026-11-05-white-only']);
     expect(runCheck({ root: f.root }).errors).toEqual([]);
   });
 
@@ -230,14 +233,14 @@ describe('db:import', () => {
     fx = makeFixture();
     const r = cli(['--record', '可视角同步到独立项目新提交（测试）', '--root', fx.root, '--today', '2026-11-07']);
     expect(r.status, r.stderr).toBe(0);
-    expect(fx.readJson('data/version.json')).toMatchObject({ dataVersion: '2026.11.07', batch: null, batches: [] });
+    expect(fx.readJson('data/version.json')).toMatchObject({ dataVersion: '2026.11.07', batch: null, batches: BASE_BATCHES });
     expect(fs.readFileSync(fx.path('data/CHANGELOG.md'), 'utf8')).toContain('## 2026.11.07 · 记录\n\n可视角同步到独立项目新提交（测试）');
     expect(runCheck({ root: fx.root }).errors).toEqual([]);
   });
 });
 
 describe('batch validation', () => {
-  const ids = new Set(['iphone-duo', 'iphone-17-pro-max']);
+  const ids = new Set(['iphone-duo', 'iphone-16-pro-max']);
   const base = () => JSON.parse(JSON.stringify(example));
 
   it('the example batch is valid', () => {
@@ -245,7 +248,7 @@ describe('batch validation', () => {
   });
 
   it('NAS paths must be relative, without .. or a mount point / home folder', () => {
-    expect(pathProblems('手机数据整理/01单机数据/iPhone 17 Pro Max/均匀性/300nits.txt')).toEqual([]);
+    expect(pathProblems('手机数据整理/01单机数据/iPhone 16 Pro Max/均匀性/300nits.txt')).toEqual([]);
     expect(pathProblems('/Volumes/dav/某人/反射率.xml')[0]).toMatch(/绝对路径/);
     expect(pathProblems('Volumes/dav/反射率.xml')[0]).toMatch(/像是挂载点或用户目录/);
     expect(pathProblems('Users/someone/x.csv')[0]).toMatch(/像是挂载点或用户目录/);
@@ -258,7 +261,7 @@ describe('batch validation', () => {
   it('absolute paths or private words anywhere in the batch, unknown devices and mismatched device lists are reported', () => {
     const b = base();
     b.notes = '原文件在 /Volumes/dav/某人/飞书 下';
-    b.inputs[0].devices = ['iphone-duo', 'iphone-17-pro-max'];
+    b.inputs[0].devices = ['iphone-duo', 'iphone-16-pro-max'];
     b.inputs[1].devices = ['nokia-1'];
     b.expect = { svmRecords: '+4' };
     const p = validateBatch(b, { deviceIds: ids, words: ['revision 91'] });

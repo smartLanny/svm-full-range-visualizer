@@ -13,7 +13,7 @@ Input format (as read by the atlas's scripts/uniformity/export_maps.py): a JSON 
 Only default-condition rows ("cond" empty) are imported; other rows are listed in the audit.
 
 Options (inputs[].options in a batch file):
-  {"devices": {"iphone-17-pro-max": {"sourceId": "ip17pm"}} | ["iphone-17-pro-max"],
+  {"devices": {"iphone-17-pro-max": {"sourceId": "ip17pm"}, "honor-magic-v5": {"sourceId": "mv5", "display": "outer"}} | ["iphone-17-pro-max"],
    "white": {"xiaomi-17-ultra": {"100": {"nits": 101.2, "note": "复测白场"}}},
    "replace": false}
 
@@ -247,6 +247,10 @@ def run(args):
                 result_index["metricsOnly"].append(entry)
                 if was_not_recorded:
                     warnings.append(f"{device_id} 原记为「未测」（notRecorded），现有指标，改为仅指标")
+            if spec.get("display"):
+                if spec["display"] not in ("main", "inner", "outer"):
+                    fail(f"{device_id}: display 应是 main / inner / outer（写的是 {spec['display']!r}）")
+                entry["display"] = spec["display"]
             old = entry.get("conditions") or []
             stripped_old = [{k: v for k, v in c.items() if not k.startswith("whiteMeasured")} for c in old]
             if old and stripped_old == conditions:

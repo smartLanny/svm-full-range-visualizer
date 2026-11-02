@@ -765,19 +765,605 @@
       "id": "iphone-17-pro-max",
       "name": "iPhone 17 Pro Max",
       "metricSourceId": "ip17pm",
-      "conditions": []
+      "conditions": [
+        {
+          "id": "300",
+          "label": "300 nits 白场",
+          "pattern": "全白场",
+          "referenceNits": 300,
+          "metrics": {
+            "luminance": {
+              "typical": 304.5,
+              "unit": "nit",
+              "ninePointUniformityPct": 94.1,
+              "areaUniformityPct": 90.5,
+              "deviation10PctArea": 0.0
+            },
+            "colorTemperature": {
+              "typical": 6557.0,
+              "unit": "K",
+              "ninePointSpreadK": 163.0,
+              "areaSpreadK": 309.0
+            }
+          }
+        },
+        {
+          "id": "100",
+          "label": "100 nits G20",
+          "pattern": "G20",
+          "referenceNits": 100,
+          "metrics": {
+            "luminance": {
+              "typical": 0.383,
+              "unit": "nit",
+              "ninePointUniformityPct": 92.6,
+              "areaUniformityPct": 87.8,
+              "deviation10PctArea": 0.09
+            },
+            "colorTemperature": {
+              "typical": 6490.0,
+              "unit": "K",
+              "ninePointSpreadK": 278.0,
+              "areaSpreadK": 506.0
+            }
+          }
+        },
+        {
+          "id": "10",
+          "label": "10 nits G20",
+          "pattern": "G20",
+          "referenceNits": 10,
+          "metrics": {
+            "luminance": {
+              "typical": 0.0312,
+              "unit": "nit",
+              "ninePointUniformityPct": 87.6,
+              "areaUniformityPct": 80.1,
+              "deviation10PctArea": 1.02
+            }
+          }
+        }
+      ],
+      "metricsSource": {
+        "file": "uniformity_metrics_from_png.json",
+        "sha256": "88f9b20a81f31c94d8f9b0fa598ac249ad13044fa4b8dfb14673e47368e081f6",
+        "bytes": 5223,
+        "batch": "2026-11-02-unif-9phones"
+      }
     },
     {
       "id": "huawei-mate-80-rs",
       "name": "华为 Mate 80 RS",
       "metricSourceId": "m80rs",
-      "conditions": []
+      "conditions": [
+        {
+          "id": "300",
+          "label": "300 nits 白场",
+          "pattern": "全白场",
+          "referenceNits": 300,
+          "metrics": {
+            "luminance": {
+              "typical": 334.4,
+              "unit": "nit",
+              "ninePointUniformityPct": 94.7,
+              "areaUniformityPct": 91.6,
+              "deviation10PctArea": 0.0
+            },
+            "colorTemperature": {
+              "typical": 6151.0,
+              "unit": "K",
+              "ninePointSpreadK": 202.0,
+              "areaSpreadK": 386.0
+            }
+          }
+        },
+        {
+          "id": "100",
+          "label": "100 nits G20",
+          "pattern": "G20",
+          "referenceNits": 100,
+          "metrics": {
+            "luminance": {
+              "typical": 0.379,
+              "unit": "nit",
+              "ninePointUniformityPct": 86.0,
+              "areaUniformityPct": 74.5,
+              "deviation10PctArea": 8.75
+            },
+            "colorTemperature": {
+              "typical": 6252.0,
+              "unit": "K",
+              "ninePointSpreadK": 1099.0,
+              "areaSpreadK": 1642.0
+            }
+          }
+        },
+        {
+          "id": "10",
+          "label": "10 nits G20",
+          "pattern": "G20",
+          "referenceNits": 10,
+          "metrics": {
+            "luminance": {
+              "typical": 0.0699,
+              "unit": "nit",
+              "ninePointUniformityPct": 89.8,
+              "areaUniformityPct": 78.3,
+              "deviation10PctArea": 3.41
+            }
+          }
+        }
+      ],
+      "metricsSource": {
+        "file": "uniformity_metrics_from_png.json",
+        "sha256": "88f9b20a81f31c94d8f9b0fa598ac249ad13044fa4b8dfb14673e47368e081f6",
+        "bytes": 5223,
+        "batch": "2026-11-02-unif-9phones"
+      }
     },
     {
       "id": "huawei-mate-70-air",
       "name": "华为 Mate 70 Air",
       "metricSourceId": "m70a",
-      "conditions": []
+      "conditions": [
+        {
+          "id": "300",
+          "label": "300 nits 白场",
+          "pattern": "全白场",
+          "referenceNits": 300,
+          "metrics": {
+            "luminance": {
+              "typical": 302.9,
+              "unit": "nit",
+              "ninePointUniformityPct": 92.1,
+              "areaUniformityPct": 86.8,
+              "deviation10PctArea": 0.14
+            },
+            "colorTemperature": {
+              "typical": 6493.0,
+              "unit": "K",
+              "ninePointSpreadK": 266.0,
+              "areaSpreadK": 348.0
+            }
+          }
+        },
+        {
+          "id": "100",
+          "label": "100 nits G20",
+          "pattern": "G20",
+          "referenceNits": 100,
+          "metrics": {
+            "luminance": {
+              "typical": 0.37,
+              "unit": "nit",
+              "ninePointUniformityPct": 94.4,
+              "areaUniformityPct": 86.0,
+              "deviation10PctArea": 0.3
+            },
+            "colorTemperature": {
+              "typical": 6448.0,
+              "unit": "K",
+              "ninePointSpreadK": 530.0,
+              "areaSpreadK": 853.0
+            }
+          }
+        },
+        {
+          "id": "10",
+          "label": "10 nits G20",
+          "pattern": "G20",
+          "referenceNits": 10,
+          "metrics": {
+            "luminance": {
+              "typical": 0.109,
+              "unit": "nit",
+              "ninePointUniformityPct": 85.3,
+              "areaUniformityPct": 74.5,
+              "deviation10PctArea": 6.93
+            }
+          }
+        }
+      ],
+      "metricsSource": {
+        "file": "uniformity_metrics_from_png.json",
+        "sha256": "88f9b20a81f31c94d8f9b0fa598ac249ad13044fa4b8dfb14673e47368e081f6",
+        "bytes": 5223,
+        "batch": "2026-11-02-unif-9phones"
+      }
+    },
+    {
+      "id": "oneplus-15",
+      "name": "一加 15",
+      "metricSourceId": "op15",
+      "conditions": [
+        {
+          "id": "300",
+          "label": "300 nits 白场",
+          "pattern": "全白场",
+          "referenceNits": 300,
+          "metrics": {
+            "luminance": {
+              "typical": 306.1,
+              "unit": "nit",
+              "ninePointUniformityPct": 95.6,
+              "areaUniformityPct": 93.6,
+              "deviation10PctArea": 0.0
+            },
+            "colorTemperature": {
+              "typical": 6649.0,
+              "unit": "K",
+              "ninePointSpreadK": 213.0,
+              "areaSpreadK": 334.0
+            }
+          }
+        },
+        {
+          "id": "100",
+          "label": "100 nits G20",
+          "pattern": "G20",
+          "referenceNits": 100,
+          "metrics": {
+            "luminance": {
+              "typical": 0.376,
+              "unit": "nit",
+              "ninePointUniformityPct": 95.5,
+              "areaUniformityPct": 91.4,
+              "deviation10PctArea": 0.0
+            },
+            "colorTemperature": {
+              "typical": 6657.0,
+              "unit": "K",
+              "ninePointSpreadK": 154.0,
+              "areaSpreadK": 523.0
+            }
+          }
+        },
+        {
+          "id": "10",
+          "label": "10 nits G20",
+          "pattern": "G20",
+          "referenceNits": 10,
+          "metrics": {
+            "luminance": {
+              "typical": 0.0433,
+              "unit": "nit",
+              "ninePointUniformityPct": 94.5,
+              "areaUniformityPct": 85.3,
+              "deviation10PctArea": 0.13
+            }
+          }
+        }
+      ],
+      "metricsSource": {
+        "file": "uniformity_metrics_from_png.json",
+        "sha256": "88f9b20a81f31c94d8f9b0fa598ac249ad13044fa4b8dfb14673e47368e081f6",
+        "bytes": 5223,
+        "batch": "2026-11-02-unif-9phones"
+      }
+    },
+    {
+      "id": "oppo-find-x9-ultra",
+      "name": "OPPO Find X9 Ultra",
+      "metricSourceId": "x9u",
+      "conditions": [
+        {
+          "id": "300",
+          "label": "300 nits 白场",
+          "pattern": "全白场",
+          "referenceNits": 300,
+          "metrics": {
+            "luminance": {
+              "typical": 317.3,
+              "unit": "nit",
+              "ninePointUniformityPct": 94.2,
+              "areaUniformityPct": 91.3,
+              "deviation10PctArea": 0.0
+            },
+            "colorTemperature": {
+              "typical": 7110.0,
+              "unit": "K",
+              "ninePointSpreadK": 168.0,
+              "areaSpreadK": 251.0
+            }
+          }
+        },
+        {
+          "id": "100",
+          "label": "100 nits G20",
+          "pattern": "G20",
+          "referenceNits": 100,
+          "metrics": {
+            "luminance": {
+              "typical": 0.405,
+              "unit": "nit",
+              "ninePointUniformityPct": 77.6,
+              "areaUniformityPct": 70.5,
+              "deviation10PctArea": 12.79
+            },
+            "colorTemperature": {
+              "typical": 7153.0,
+              "unit": "K",
+              "ninePointSpreadK": 1498.0,
+              "areaSpreadK": 2023.0
+            }
+          }
+        }
+      ],
+      "metricsSource": {
+        "file": "uniformity_metrics_from_png.json",
+        "sha256": "88f9b20a81f31c94d8f9b0fa598ac249ad13044fa4b8dfb14673e47368e081f6",
+        "bytes": 5223,
+        "batch": "2026-11-02-unif-9phones"
+      }
+    },
+    {
+      "id": "oppo-find-x9s-pro",
+      "name": "OPPO Find X9s Pro",
+      "metricSourceId": "x9s",
+      "conditions": [
+        {
+          "id": "300",
+          "label": "300 nits 白场",
+          "pattern": "全白场",
+          "referenceNits": 300,
+          "metrics": {
+            "luminance": {
+              "typical": 309.5,
+              "unit": "nit",
+              "ninePointUniformityPct": 93.1,
+              "areaUniformityPct": 89.1,
+              "deviation10PctArea": 0.01
+            },
+            "colorTemperature": {
+              "typical": 6660.0,
+              "unit": "K",
+              "ninePointSpreadK": 96.0,
+              "areaSpreadK": 191.0
+            }
+          }
+        },
+        {
+          "id": "100",
+          "label": "100 nits G20",
+          "pattern": "G20",
+          "referenceNits": 100,
+          "metrics": {
+            "luminance": {
+              "typical": 0.388,
+              "unit": "nit",
+              "ninePointUniformityPct": 94.0,
+              "areaUniformityPct": 90.9,
+              "deviation10PctArea": 0.0
+            }
+          }
+        },
+        {
+          "id": "10",
+          "label": "10 nits G20",
+          "pattern": "G20",
+          "referenceNits": 10,
+          "metrics": {
+            "luminance": {
+              "typical": 0.0438,
+              "unit": "nit",
+              "ninePointUniformityPct": 90.1,
+              "areaUniformityPct": 85.8,
+              "deviation10PctArea": 0.0
+            }
+          }
+        }
+      ],
+      "metricsSource": {
+        "file": "uniformity_metrics_from_png.json",
+        "sha256": "88f9b20a81f31c94d8f9b0fa598ac249ad13044fa4b8dfb14673e47368e081f6",
+        "bytes": 5223,
+        "batch": "2026-11-02-unif-9phones"
+      }
+    },
+    {
+      "id": "huawei-pura-80-ultra",
+      "name": "华为 Pura 80 Ultra",
+      "metricSourceId": "p80u",
+      "conditions": [
+        {
+          "id": "300",
+          "label": "300 nits 白场",
+          "pattern": "全白场",
+          "referenceNits": 300,
+          "metrics": {
+            "luminance": {
+              "typical": 296.3,
+              "unit": "nit",
+              "ninePointUniformityPct": 97.3,
+              "areaUniformityPct": 92.4,
+              "deviation10PctArea": 0.0
+            },
+            "colorTemperature": {
+              "typical": 7243.0,
+              "unit": "K",
+              "ninePointSpreadK": 313.0,
+              "areaSpreadK": 460.0
+            }
+          }
+        },
+        {
+          "id": "100",
+          "label": "100 nits G20",
+          "pattern": "G20",
+          "referenceNits": 100,
+          "metrics": {
+            "luminance": {
+              "typical": 0.38,
+              "unit": "nit",
+              "ninePointUniformityPct": 96.8,
+              "areaUniformityPct": 88.0,
+              "deviation10PctArea": 0.0
+            }
+          }
+        },
+        {
+          "id": "10",
+          "label": "10 nits G20",
+          "pattern": "G20",
+          "referenceNits": 10,
+          "metrics": {
+            "luminance": {
+              "typical": 0.0301,
+              "unit": "nit",
+              "ninePointUniformityPct": 66.5,
+              "areaUniformityPct": 45.9,
+              "deviation10PctArea": 43.86
+            }
+          }
+        }
+      ],
+      "metricsSource": {
+        "file": "uniformity_metrics_from_png.json",
+        "sha256": "88f9b20a81f31c94d8f9b0fa598ac249ad13044fa4b8dfb14673e47368e081f6",
+        "bytes": 5223,
+        "batch": "2026-11-02-unif-9phones"
+      }
+    },
+    {
+      "id": "xiaomi-15-ultra",
+      "name": "小米 15 Ultra",
+      "metricSourceId": "mi15u",
+      "conditions": [
+        {
+          "id": "300",
+          "label": "300 nits 白场",
+          "pattern": "全白场",
+          "referenceNits": 300,
+          "metrics": {
+            "luminance": {
+              "typical": 285.4,
+              "unit": "nit",
+              "ninePointUniformityPct": 92.7,
+              "areaUniformityPct": 89.3,
+              "deviation10PctArea": 0.0
+            },
+            "colorTemperature": {
+              "typical": 6780.0,
+              "unit": "K",
+              "ninePointSpreadK": 184.0,
+              "areaSpreadK": 352.0
+            }
+          }
+        },
+        {
+          "id": "100",
+          "label": "100 nits G20",
+          "pattern": "G20",
+          "referenceNits": 100,
+          "metrics": {
+            "luminance": {
+              "typical": 0.386,
+              "unit": "nit",
+              "ninePointUniformityPct": 89.5,
+              "areaUniformityPct": 85.9,
+              "deviation10PctArea": 0.01
+            },
+            "colorTemperature": {
+              "typical": 7035.0,
+              "unit": "K",
+              "ninePointSpreadK": 365.0,
+              "areaSpreadK": 652.0
+            }
+          }
+        },
+        {
+          "id": "10",
+          "label": "10 nits G20",
+          "pattern": "G20",
+          "referenceNits": 10,
+          "metrics": {
+            "luminance": {
+              "typical": 0.0419,
+              "unit": "nit",
+              "ninePointUniformityPct": 66.2,
+              "areaUniformityPct": 58.1,
+              "deviation10PctArea": 49.23
+            }
+          }
+        }
+      ],
+      "metricsSource": {
+        "file": "uniformity_metrics_from_png.json",
+        "sha256": "88f9b20a81f31c94d8f9b0fa598ac249ad13044fa4b8dfb14673e47368e081f6",
+        "bytes": 5223,
+        "batch": "2026-11-02-unif-9phones"
+      }
+    },
+    {
+      "id": "honor-magic-v5",
+      "name": "荣耀 Magic V5",
+      "metricSourceId": "mv5",
+      "conditions": [
+        {
+          "id": "300",
+          "label": "300 nits 白场",
+          "pattern": "全白场",
+          "referenceNits": 300,
+          "metrics": {
+            "luminance": {
+              "typical": 303.6,
+              "unit": "nit",
+              "ninePointUniformityPct": 92.6,
+              "areaUniformityPct": 89.9,
+              "deviation10PctArea": 0.0
+            },
+            "colorTemperature": {
+              "typical": 6515.0,
+              "unit": "K",
+              "ninePointSpreadK": 220.0,
+              "areaSpreadK": 305.0
+            }
+          }
+        },
+        {
+          "id": "100",
+          "label": "100 nits G20",
+          "pattern": "G20",
+          "referenceNits": 100,
+          "metrics": {
+            "luminance": {
+              "typical": 0.37,
+              "unit": "nit",
+              "ninePointUniformityPct": 95.6,
+              "areaUniformityPct": 91.2,
+              "deviation10PctArea": 0.0
+            },
+            "colorTemperature": {
+              "typical": 6486.0,
+              "unit": "K",
+              "ninePointSpreadK": 163.0,
+              "areaSpreadK": 372.0
+            }
+          }
+        },
+        {
+          "id": "10",
+          "label": "10 nits G20",
+          "pattern": "G20",
+          "referenceNits": 10,
+          "metrics": {
+            "luminance": {
+              "typical": 0.0487,
+              "unit": "nit",
+              "ninePointUniformityPct": 78.9,
+              "areaUniformityPct": 66.0,
+              "deviation10PctArea": 18.52
+            }
+          }
+        }
+      ],
+      "display": "outer",
+      "metricsSource": {
+        "file": "uniformity_metrics_from_png.json",
+        "sha256": "88f9b20a81f31c94d8f9b0fa598ac249ad13044fa4b8dfb14673e47368e081f6",
+        "bytes": 5223,
+        "batch": "2026-11-02-unif-9phones"
+      }
     }
   ],
   "notRecorded": [

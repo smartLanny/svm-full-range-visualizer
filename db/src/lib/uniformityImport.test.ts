@@ -2,7 +2,7 @@
  * The page reads what the uniformity importer writes: a metrics-only import (numbers, no heatmaps)
  * must show up on the device page with its own numbers, not as 「仅指标」 with nothing under it.
  *
- * The iPhone 17 Pro Max numbers are SYNTHETIC test values (the real ones are still on the user's
+ * The iPhone 16 Pro Max numbers are SYNTHETIC test values (the real ones are still on the user's
  * NAS). They exist only in the temporary fixture; data/ is never touched.
  */
 import { afterEach, describe, expect, it } from 'vitest';
@@ -14,9 +14,9 @@ import type { UniformityIndex } from './types';
 import { gammaReadout, uniformityViews } from './uniformity';
 
 const SYNTH = [
-  { id: 'ip17pm', level: '300', kind: 'lum', cond: '', typ: 301.2345678, u9: 91.23456, ua: 87.65432, dev10: 0.12345 },
-  { id: 'ip17pm', level: '300', kind: 'cct', cond: '', typ: 6612.34567, d9: 120.1234, da: 250.9876 },
-  { id: 'ip17pm', level: '100', kind: 'lum', cond: '', typ: 0.3512, u9: 93.1, ua: 89.2, dev10: 0 },
+  { id: 'ip16pm', level: '300', kind: 'lum', cond: '', typ: 301.2345678, u9: 91.23456, ua: 87.65432, dev10: 0.12345 },
+  { id: 'ip16pm', level: '300', kind: 'cct', cond: '', typ: 6612.34567, d9: 120.1234, da: 250.9876 },
+  { id: 'ip16pm', level: '100', kind: 'lum', cond: '', typ: 0.3512, u9: 93.1, ua: 89.2, dev10: 0 },
 ];
 
 let fx: Fixture | null = null;
@@ -26,19 +26,19 @@ afterEach(() => {
 });
 
 describe('metrics-only uniformity import → database page', () => {
-  it('before the import iPhone 17 Pro Max has no views (pending import)', () => {
+  it('before the import iPhone 16 Pro Max has no views (not measured yet)', () => {
     fx = makeFixture();
     const index = fx.readJson<UniformityIndex>('data/uniformity/index.json');
     const catalog = buildCatalog(fx.root) as unknown as Catalog;
-    const d = catalog.devices.find((x) => x.id === 'iphone-17-pro-max')!;
-    expect(d.availability.uniformity.status).toBe('pending-import');
+    const d = catalog.devices.find((x) => x.id === 'iphone-16-pro-max')!;
+    expect(d.availability.uniformity.status).toBe('not-measured');
     expect(uniformityViews(d, index)).toEqual([]);
   });
 
   it('after the import the page finds the imported conditions and numbers', () => {
     fx = makeFixture();
     writeJsonFile(fx.path('metrics.json'), SYNTH);
-    writeJsonFile(fx.path('opts.json'), { devices: ['iphone-17-pro-max'] });
+    writeJsonFile(fx.path('opts.json'), { devices: { 'iphone-16-pro-max': { sourceId: 'ip16pm' } } });
     const r = runPython('pipeline/import/uniformity_metrics.py', [
       '--root', fx.root, '--options', fx.path('opts.json'), '--metrics', fx.path('metrics.json'),
       '--source-name', '视频项目/data/uniformity_metrics.json', '--batch', '2026-11-05-test',
@@ -47,7 +47,7 @@ describe('metrics-only uniformity import → database page', () => {
 
     const index = fx.readJson<UniformityIndex>('data/uniformity/index.json');
     const catalog = buildCatalog(fx.root) as unknown as Catalog;
-    const d = catalog.devices.find((x) => x.id === 'iphone-17-pro-max')!;
+    const d = catalog.devices.find((x) => x.id === 'iphone-16-pro-max')!;
     expect(d.availability.uniformity.status).toBe('metrics-only');
 
     const views = uniformityViews(d, index);

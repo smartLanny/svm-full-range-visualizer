@@ -11,8 +11,13 @@ const index = read<UniformityIndex>('data/uniformity/index.json');
 describe('uniformity leaderboard', () => {
   it('ranks measured devices best first and lists the rest as missing', () => {
     const r = rankUniformity(catalog.devices, index, '300', 'area');
-    expect(r.rows.map((x) => x.device.id)).toEqual(['iphone-18-pro-max', 'xiaomi-17-ultra', 'xiaomi-18-pro-max']);
-    expect(r.rows.map((x) => x.rank)).toEqual([1, 2, 3]);
+    expect(r.rows).toHaveLength(12);
+    expect(r.rows[0].device.id).toBe('iphone-18-pro-max');
+    expect(r.rows.at(-1)!.device.id).toBe('xiaomi-18-pro-max');
+    // 一加 15 and 小米 17 Ultra both 93.6 %: same rank
+    const tie = r.rows.filter((x) => ['oneplus-15', 'xiaomi-17-ultra'].includes(x.device.id));
+    expect(tie.map((x) => x.rank)).toEqual([2, 2]);
+    expect(r.rows.find((x) => x.device.id === 'honor-magic-v5')!.display).toBe('outer');
     expect(r.rows.length + r.missing.length).toBe(catalog.devices.length);
     expect(r.rows[0].reference).toBeNull(); // white field: no Gamma reference
   });

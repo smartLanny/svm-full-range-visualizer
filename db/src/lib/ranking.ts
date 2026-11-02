@@ -65,6 +65,8 @@ export interface RankRow {
   reference: number | null;
   areaUniformity: number | null;
   hasMap: boolean;
+  /** Inner / outer screen of a foldable, else null. */
+  display: 'inner' | 'outer' | null;
 }
 
 export interface Ranking {
@@ -115,6 +117,7 @@ export function rankUniformity(devices: Device[], index: UniformityIndex, cond: 
       reference: lum ? (gammaReadout(view.cond, lum.typical)?.ref ?? null) : null,
       areaUniformity: lum?.areaUniformityPct ?? null,
       hasMap: !!view.cond.maps?.luminance,
+      display: view.entry.display === 'inner' || view.entry.display === 'outer' ? view.entry.display : null,
     });
   }
   rows.sort((a, b) => (meta.higherIsBetter ? b.value - a.value : a.value - b.value) || a.device.name.zh.localeCompare(b.device.name.zh, 'zh'));

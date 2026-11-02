@@ -1,21 +1,23 @@
 {
   "schemaVersion": 1,
-  "dataVersion": "2026.11.02",
+  "dataVersion": "2026.11.02.2",
   "date": "2026-11-02",
-  "batch": null,
-  "batches": [],
+  "batch": "2026-11-02-unif-9phones",
+  "batches": [
+    "2026-11-02-unif-9phones"
+  ],
   "counts": {
-    "devices": 25,
+    "devices": 26,
     "svmRecords": 21,
     "angleProfiles": 8,
     "angleProfilesMeasured": 7,
-    "uniformityConditions": 9,
+    "uniformityConditions": 35,
     "uniformityMaps": 15,
     "reflectanceSamples": 32,
     "devicesWith": {
       "svm": 8,
       "angle": 5,
-      "uniformity": 3,
+      "uniformity": 12,
       "reflectance": 24
     }
   }
