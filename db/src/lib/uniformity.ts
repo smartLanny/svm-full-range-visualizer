@@ -86,12 +86,29 @@ export interface UniformityView {
   cond: UniformityCondition;
 }
 
-export function uniformityViews(device: Device, index: UniformityIndex | null): UniformityView[] {
+/** Screens of a device with uniformity data, in the device's own screen order (one for most phones). */
+export function uniformityDisplays(device: Device): DisplayKey[] {
+  const have = new Set(device.uniformity.map((e) => e.display));
+  const order = [...device.displays, ...have].filter((d, i, all) => all.indexOf(d) === i);
+  return order.filter((d) => have.has(d));
+}
+
+/** 「内屏」/「外屏」 for a foldable's screen; empty for the main screen. */
+export const DISPLAY_LABEL: Record<string, string> = { inner: '内屏', outer: '外屏', main: '' };
+
+/**
+ * The uniformity conditions of one screen of a device (default: its first screen). A foldable has one
+ * index entry per screen (same id, "display" inner / outer; no "display" = main screen).
+ */
+export function uniformityViews(device: Device, index: UniformityIndex | null, display?: DisplayKey): UniformityView[] {
   if (!index) return [];
-  // Heatmap devices first; metrics-only devices (numbers imported without heatmaps) otherwise.
-  const phone = index.phones.find((p) => p.id === device.id) ?? index.metricsOnly?.find((p) => p.id === device.id);
+  const screen = display ?? uniformityDisplays(device)[0] ?? 'main';
+  const same = (p: { id: string; display?: string }) => p.id === device.id && (p.display ?? 'main') === screen;
+  // Heatmap entries first; metrics-only entries (numbers imported without heatmaps) otherwise.
+  const phone = index.phones.find(same) ?? index.metricsOnly?.find(same);
   if (!phone) return [];
   return device.uniformity.flatMap((entry) => {
+    if (entry.display !== screen) return [];
     const cond = phone.conditions.find((c) => c.id === entry.condition);
     return cond ? [{ entry, cond }] : [];
   });

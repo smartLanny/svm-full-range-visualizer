@@ -11,8 +11,11 @@ manifest.json: {"schemaVersion": 1, "colorStops": [...], "maps": {"<key>": {"sou
 "measurementSource", "measurementSourceSha256", "measurementResolution"}}}.
 
 Options (inputs[].options in a batch file):
-  {"devices": {"iphone-17-pro-max": {"sourceId": "ip17pm"}, "honor-magic-v5": {"sourceId": "mv5", "display": "outer"}},
+  {"devices": {"iphone-17-pro-max": {"sourceId": "ip17pm"},
+               "honor-magic-v5": [{"sourceId": "mv5", "display": "outer"}, {"sourceId": "mv5i", "display": "inner"}]},
    "replace": false}
+A device with two screens has one index entry per screen (same id, "display": "inner" / "outer";
+no "display" means the main screen). Without "display" in options, a device's only entry is meant.
 
 Per device listed:
   * metrics-only device (index "metricsOnly"): the heatmaps must have been made with exactly the
@@ -97,8 +100,9 @@ def run(args):
     used = set()
 
     audit_devices, changelog, writes = [], [], {}
-    for device_id, spec in devices.items():
-        spec = spec or {}
+    # one device may list several screens: {"honor-magic-v5": [{"sourceId": "mv5", "display": "outer"}, {..., "display": "inner"}]}
+    specs = [(d, s or {}) for d, v in devices.items() for s in (v if isinstance(v, list) else [v])]
+    for device_id, spec in specs:
         if device_id not in names:
             fail(f"机型 {device_id} 不在 data/catalog-overrides.json 中")
         sid = spec.get("sourceId")
@@ -140,9 +144,15 @@ def run(args):
                 writes[name] = data
             conditions.append(cond)
 
-        phone = next((p for p in result.get("phones", []) if p["id"] == device_id), None)
-        metrics_only = next((m for m in result.get("metricsOnly", []) if m["id"] == device_id), None)
-        display = spec.get("display") or (metrics_only or {}).get("display") or (phone or {}).get("display")
+        # the entry for this screen: same id and display (an entry without "display" is the main screen);
+        # without a display in options, a device's only entry is meant whatever its screen
+        existing = [e for e in result.get("phones", []) + result.get("metricsOnly", []) if e["id"] == device_id]
+        display = spec.get("display") or (existing[0].get("display") if len(existing) == 1 else None) or "main"
+        same = lambda e: e["id"] == device_id and (e.get("display") or "main") == display  # noqa: E731
+        phone = next((p for p in result.get("phones", []) if same(p)), None)
+        metrics_only = next((m for m in result.get("metricsOnly", []) if same(m)), None)
+        if len(specs) > 1 and sum(1 for d, sp in specs if d == device_id and (sp.get("display") or "main") == display) > 1:
+            fail(f"{device_id}: 屏幕 {display} 列了两次")
         entry = {"id": device_id, "name": names[device_id], "heatmapStatus": "has-maps",
                  **({"display": display} if display and display != "main" else {}),
                  "mapsSource": {**source, **({"batch": args.batch} if args.batch else {})}, "conditions": conditions}
@@ -170,7 +180,7 @@ def run(args):
             if diffs and not replace:
                 fail(f"{device_id}: 热力图包的指标与库里的不同（{'；'.join(diffs)}）：热力图和数字必须出自同一次计算")
             status = "promoted"
-            result["metricsOnly"] = [m for m in result["metricsOnly"] if m["id"] != device_id]
+            result["metricsOnly"] = [m for m in result["metricsOnly"] if not same(m)]
         else:
             old = []
             result["notRecorded"] = [m for m in result.get("notRecorded", []) if m["id"] != device_id]
@@ -178,14 +188,15 @@ def run(args):
             whites = {c["id"]: {k: v for k, v in c.items() if k.startswith("whiteMeasured")} for c in old}
             entry["conditions"] = [{**c, **whites.get(c["id"], {})} for c in conditions]
             if phone is not None:
-                result["phones"] = [entry if p["id"] == device_id else p for p in result["phones"]]
+                result["phones"] = [entry if same(p) else p for p in result["phones"]]
             else:
                 result.setdefault("phones", []).append(entry)
             levels = "、".join(f"{c['id']} nits" for c in conditions)
             n = sum(len(c["maps"]) for c in conditions)
             verb = {"created": "新增", "promoted": "补上", "replaced": "替换"}[status]
-            changelog.append(f"均匀度：{names[device_id]} {verb}热力图 {n} 张（{levels}；源 id {sid}）")
-        audit_devices.append({"device": device_id, "sourceId": sid, "status": status,
+            screen = {"inner": " 内屏", "outer": " 外屏"}.get(display, "")
+            changelog.append(f"均匀度：{names[device_id]}{screen} {verb}热力图 {n} 张（{levels}；源 id {sid}）")
+        audit_devices.append({"device": device_id, "display": display, "sourceId": sid, "status": status,
                               "maps": sorted(m["sourceKey"] for c in conditions for m in c["maps"].values())})
 
     extra = sorted(set(manifest["maps"]) - used)

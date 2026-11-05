@@ -158,6 +158,7 @@ export function buildCatalog(root = REPO_ROOT) {
         ...whiteOf(c),
       });
     }
+    if (unifStatus.get(d.id)?.status === 'complete') continue; // another screen of it has heatmaps
     unifStatus.set(d.id, (m.conditions ?? []).length
       ? { status: 'metrics-only', sourceId: m.metricSourceId }
       : { status: 'pending-import', sourceId: m.metricSourceId, note: `atlas 标为「仅指标」（视频项目中的 id：${m.metricSourceId}），但指标数值没有导出，本库暂无数据。` });

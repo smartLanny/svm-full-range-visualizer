@@ -291,12 +291,18 @@ export function runCheck({ root = REPO_ROOT } = {}) {
       }
     }
     // catalog ↔ index
+    // one entry per device and screen (a foldable may have an inner and an outer entry; no display = main)
     const idx = new Map();
-    for (const phone of unif.phones ?? []) for (const c of phone.conditions ?? []) idx.set(`${phone.id}/${c.id}`, c);
-    for (const m of unif.metricsOnly ?? []) for (const c of m.conditions ?? []) idx.set(`${m.id}/${c.id}`, c);
+    const screens = new Set();
+    for (const phone of [...(unif.phones ?? []), ...(unif.metricsOnly ?? [])]) {
+      const s = `${phone.id}/${phone.display ?? 'main'}`;
+      if (screens.has(s)) uni.err(`${phone.id}: 屏幕 ${phone.display ?? 'main'} 在 index.json 里有两条均匀度记录`);
+      screens.add(s);
+      for (const c of phone.conditions ?? []) idx.set(`${s}/${c.id}`, c);
+    }
     const used = new Set();
     for (const { d, e } of entriesOf('uniformity')) {
-      const k = `${d.id}/${e.condition}`;
+      const k = `${d.id}/${e.display}/${e.condition}`;
       const c = idx.get(k);
       if (!c) { uni.err(`${d.id}: 均匀度条件 ${e.condition} 不在 index.json 中`); continue; }
       if (used.has(k)) uni.err(`${k} 在目录中出现两次`);
@@ -310,11 +316,12 @@ export function runCheck({ root = REPO_ROOT } = {}) {
     for (const k of idx.keys()) if (!used.has(k)) uni.err(`index.json 的 ${k} 不属于目录里的任何机型`);
     const status = (id) => devices.find((d) => d.id === id)?.availability?.uniformity?.status;
     for (const m of unif.metricsOnly ?? []) {
+      if ((unif.phones ?? []).some((p) => p.id === m.id)) continue; // another screen of it has heatmaps: complete
       const s = status(m.id);
       if (s !== ((m.conditions ?? []).length ? 'metrics-only' : 'pending-import')) uni.err(`${m.id}: atlas 标为仅指标，目录状态却是 ${s}`);
     }
     for (const m of unif.notRecorded ?? []) if (status(m.id) !== 'not-measured') uni.err(`${m.id}: atlas 记为未测，目录状态却是 ${status(m.id)}`);
-    uni.info(`${(unif.phones ?? []).length} 台有热力图，${mapCount}/${assets.length} 张热力图哈希一致；仅指标 ${(unif.metricsOnly ?? []).filter((m) => (m.conditions ?? []).length).length} 台、已测待导入 ${(unif.metricsOnly ?? []).filter((m) => !(m.conditions ?? []).length).length} 台、记为未测 ${(unif.notRecorded ?? []).length} 台`);
+    uni.info(`${new Set((unif.phones ?? []).map((p) => p.id)).size} 台有热力图，${mapCount}/${assets.length} 张热力图哈希一致；仅指标 ${(unif.metricsOnly ?? []).filter((m) => (m.conditions ?? []).length).length} 台、已测待导入 ${(unif.metricsOnly ?? []).filter((m) => !(m.conditions ?? []).length).length} 台、记为未测 ${(unif.notRecorded ?? []).length} 台`);
   }
 
   // ======================================================================================

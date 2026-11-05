@@ -136,7 +136,18 @@ def load_rows(raw):
     return default, other
 
 
+def screens_of(index, device_id):
+    return [e for g in ("phones", "metricsOnly") for e in index.get(g, []) if e.get("id") == device_id]
+
+
+def single_screen(index, device_id, what):
+    """This importer addresses a device by id: refuse a device with one entry per screen (inner / outer)."""
+    if len(screens_of(index, device_id)) > 1:
+        fail(f"{device_id} 有内外两块屏各一条均匀度记录，{what}还不支持分屏：请用 uniformity-maps 导入（options 里写 display）")
+
+
 def find_condition(index, device_id, cond_id):
+    single_screen(index, device_id, "白场读数")
     for group in ("phones", "metricsOnly"):
         for phone in index.get(group, []):
             if phone.get("id") == device_id:
@@ -194,6 +205,7 @@ def run(args):
             if device_id not in names:
                 fail(f"机型 {device_id} 不在 data/catalog-overrides.json 中：先在 devices 里加上它")
             spec = spec or {}
+            single_screen(result_index, device_id, "指标导入")
             sid = spec.get("sourceId") or known_source.get(device_id)
             if not sid:
                 fail(f"{device_id}: 不知道它在指标文件里的 id，请在 options.devices 里写 sourceId（文件里有：{'、'.join(source_ids)}）")

@@ -49,9 +49,10 @@ export interface UniformityCondition {
 export interface UniformityIndex {
   schemaVersion: number;
   colorStops: [number, [number, number, number]][];
-  phones: { id: string; name: string; conditions: UniformityCondition[] }[];
+  /** One entry per device and screen: a foldable has two with the same id and display inner / outer. */
+  phones: { id: string; name: string; display?: 'main' | 'inner' | 'outer'; conditions: UniformityCondition[] }[];
   /** Devices with numbers but no heatmaps (pipeline/import/uniformity_metrics.py); empty conditions = pending import. */
-  metricsOnly?: { id: string; name: string; metricSourceId?: string; conditions: UniformityCondition[] }[];
+  metricsOnly?: { id: string; name: string; display?: 'main' | 'inner' | 'outer'; metricSourceId?: string; conditions: UniformityCondition[] }[];
 }
 
 export interface ReflectanceCurve {
